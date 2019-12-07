@@ -686,6 +686,20 @@ OPTIMIZECAST:
             break;
 
             case GT_CAST:
+                // Morph "(IntegralType1)(IntegralType2)x" to "(IntegralType1)x"
+                GenTreeCast* childCast = oper->AsCast();
+                if (varTypeIsIntegral(childCast->CastToType()) &&
+                    varTypeIsIntegral(dstType) &&
+                    varTypeIsIntegral(childCast->CastOp()->TypeGet()) && // make sure it's not double/float
+                    genTypeSize(childCast->CastToType()) >= dstSize &&
+                    !childCast->gtOverflow())
+                {
+                    childCast->gtCastType = tree->AsCast()->gtCastType;
+                    childCast->gtType     = tree->TypeGet();
+                    oper                  = childCast;
+                    goto REMOVE_CAST;
+                }
+
                 /* Check for two consecutive casts into the same dstType */
                 if (!tree->gtOverflow())
                 {
@@ -12513,6 +12527,24 @@ DONE_MORPHING_CHILDREN:
 
                 op1 = op2;
                 op2 = tree->AsOp()->gtOp2;
+            }
+
+            if (tree->OperIs(GT_AND, GT_OR, GT_XOR) && op1->OperIs(GT_CAST) && op2->OperIs(GT_CAST))
+            {
+                GenTreeCast* op1Cast = op1->AsCast();
+                GenTreeCast* op2Cast = op2->AsCast();
+                if (varTypeIsIntegral(op1Cast->CastToType()) &&
+                    varTypeIsIntegral(op2Cast->CastToType()) &&
+                    varTypeIsIntegral(op1Cast->CastOp()->TypeGet()) &&
+                    varTypeIsIntegral(op2Cast->CastOp()->TypeGet()))
+                {
+                    GenTreeCast* widerCast = (genTypeSize(op1Cast->CastToType()) >= genTypeSize(op2Cast->CastToType())) ? op1Cast : op2Cast;
+                    tree->AsOp()->gtOp1    = op1Cast->CastOp();
+                    tree->AsOp()->gtOp2    = op2Cast->CastOp();
+                    GenTreeCast* newTree   = gtNewCastNode(tree->TypeGet(), tree, op1Cast->CastOp()->IsUnsigned() || op2Cast->CastOp()->IsUnsigned(), widerCast->CastToType());
+                    INDEBUG(newTree->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+                    return newTree;
+                }
             }
 
             /* See if we can fold GT_ADD nodes. */
