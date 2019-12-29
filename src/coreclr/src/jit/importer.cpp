@@ -4015,6 +4015,47 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_Nullable_GetUnderlyingType:
+            {
+                // Optimize `Nullable.GetUnderlyingType(typeof(T))`
+                if (impStackTop().val->IsCall())
+                {
+                    GenTreeCall* call = impStackTop().val->AsCall();
+                    if (call->gtCallMethHnd == eeFindHelper(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE))
+                    {
+                        CORINFO_CLASS_HANDLE hClass = gtGetHelperArgClassHandle(call->gtCallArgs->GetNode());
+                        if (hClass == NO_CLASS_HANDLE)
+                        {
+                            break;
+                        }
+
+                        call = impPopStack().val->AsCall();
+                        GenTree* argNode = call->gtCallArgs->GetNode();
+                        if (info.compCompHnd->getBoxHelper(hClass) == CORINFO_HELP_BOX_NULLABLE)
+                        {
+                            CORINFO_CLASS_HANDLE underlyingClass = info.compCompHnd->getTypeForBox(hClass);
+                            if (argNode->IsIntegralConst())
+                            {
+                                argNode->AsIntCon()->SetIconValue(reinterpret_cast<ssize_t>(underlyingClass));
+                            }
+                            else
+                            {
+                                assert(argNode->OperIs(GT_RUNTIMELOOKUP));
+                                argNode->AsRuntimeLookup()->gtHnd =
+                                    reinterpret_cast<CORINFO_GENERIC_HANDLE>(underlyingClass);
+                            }
+                            retNode = call;
+                        }
+                        else
+                        {
+                            // return null for non-Nullable argument
+                            retNode = gtNewIconNode(0, TYP_REF);
+                        }
+                    }
+                }
+                break;
+            }
+
             case NI_System_Type_get_IsValueType:
             {
                 // Optimize
@@ -4341,6 +4382,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             if (strcmp(methodName, "get_IsValueType") == 0)
             {
                 result = NI_System_Type_get_IsValueType;
+            }
+        }
+        else if (strcmp(className, "Nullable") == 0)
+        {
+            if (strcmp(methodName, "GetUnderlyingType") == 0)
+            {
+                result = NI_System_Nullable_GetUnderlyingType;
             }
         }
     }

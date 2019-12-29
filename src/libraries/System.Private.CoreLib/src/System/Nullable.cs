@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Runtime.Versioning;
+using System.Runtime.CompilerServices;
 
 namespace System
 {
@@ -96,6 +97,7 @@ namespace System
 
         // If the type provided is not a Nullable Type, return null.
         // Otherwise, returns the underlying type of the Nullable type
+        [Intrinsic]
         public static Type? GetUnderlyingType(Type nullableType)
         {
             if ((object)nullableType == null)
