@@ -1018,6 +1018,10 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr)
     {
         overflows = false;
     }
+    else if (expr->OperIs(GT_AND, GT_UMOD))
+    {
+        overflows = false;
+    }
     else if (expr->OperGet() == GT_COMMA)
     {
         overflows = ComputeDoesOverflow(block, expr->gtEffectiveVal());
@@ -1121,6 +1125,11 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
     else if (expr->OperGet() == GT_ADD)
     {
         range = ComputeRangeForBinOp(block, expr->AsOp(), monIncreasing DEBUGARG(indent + 1));
+    }
+    // these operators basically limit indexer to theirs op2, e.g. a[i & 0xF] => 0xF
+    else if (expr->OperIs(GT_AND, GT_UMOD))
+    {
+        range = ComputeRange(block, expr->gtGetOp2(), monIncreasing DEBUGARG(indent + 1));
     }
     // If phi, then compute the range for arguments, calling the result "dependent" when looping begins.
     else if (expr->OperGet() == GT_PHI)
