@@ -1018,6 +1018,10 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr)
     {
         overflows = false;
     }
+    else if (expr->OperIs(GT_AND))
+    {
+        overflows = false;
+    }
     else if (expr->OperGet() == GT_COMMA)
     {
         overflows = ComputeDoesOverflow(block, expr->gtEffectiveVal());
@@ -1106,6 +1110,16 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monotonic 
     else if (expr->OperGet() == GT_ADD)
     {
         range = ComputeRangeForBinOp(block, expr->AsOp(), monotonic DEBUGARG(indent + 1));
+    }
+    // GT_AND operator limits upper limit with its op2
+    else if (expr->OperIs(GT_AND))
+    {
+        range = ComputeRange(block, expr->gtGetOp2(), monotonic DEBUGARG(indent + 1));
+        if (range.LowerLimit().IsConstant())
+        {
+            // [i % cns] means range is [0..cns]
+            range.LowerLimit() = Limit(Limit::keConstant, 0);
+        }
     }
     // If phi, then compute the range for arguments, calling the result "dependent" when looping begins.
     else if (expr->OperGet() == GT_PHI)
