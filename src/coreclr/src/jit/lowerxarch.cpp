@@ -840,6 +840,63 @@ void Lowering::LowerHWIntrinsicCC(GenTreeHWIntrinsic* node, NamedIntrinsic newIn
     }
 }
 
+GenTree* Lowering::LowerMultiplyAddToFma(GenTreeOp* node)
+{
+    assert(node->OperIs(GT_ADD, GT_SUB) && varTypeIsFloating(node->TypeGet()));
+    GenTree* argX = nullptr;
+    GenTree* argY = nullptr;
+    GenTree* argZ = nullptr;
+    if (node->gtGetOp1()->OperIs(GT_MUL))
+    {
+        // (x * y) +- z
+        argX = node->gtGetOp1()->AsOp()->gtGetOp1();
+        argY = node->gtGetOp1()->AsOp()->gtGetOp2();
+        argZ = node->gtGetOp2();
+    }
+    else if(node->gtGetOp2()->OperIs(GT_MUL))
+    {
+        // z +- (x * y)
+        argX = node->gtGetOp2()->AsOp()->gtGetOp1();
+        argY = node->gtGetOp2()->AsOp()->gtGetOp2();
+        argZ = node->gtGetOp1();
+    }
+    else
+    {
+        // Should we handle `x / cns +- y` -> `x * 1/cns +- y`
+        return node;
+    }
+
+    GenTreeHWIntrinsic* op1 = comp->gtNewSimdHWIntrinsicNode(TYP_SIMD16, argX, NI_Vector128_CreateScalarUnsafe, node->TypeGet(), 16);
+    GenTreeHWIntrinsic* op2 = comp->gtNewSimdHWIntrinsicNode(TYP_SIMD16, argY, NI_Vector128_CreateScalarUnsafe, node->TypeGet(), 16);
+    GenTreeHWIntrinsic* op3 = comp->gtNewSimdHWIntrinsicNode(TYP_SIMD16, argZ, NI_Vector128_CreateScalarUnsafe, node->TypeGet(), 16);
+
+    //LowerHWIntrinsic(op1);
+    //LowerHWIntrinsic(op2);
+    //LowerHWIntrinsic(op3);
+
+    GenTreeHWIntrinsic* res = comp->gtNewSimdHWIntrinsicNode(TYP_SIMD16, op1, op2, op3, NI_FMA_MultiplyAddScalar, node->TypeGet(), 16);
+
+    //LowerHWIntrinsic(res);
+
+    GenTreeHWIntrinsic* hwFma = comp->gtNewSimdHWIntrinsicNode(node->TypeGet(), res, NI_Vector128_ToScalar, node->TypeGet(), 16);
+
+    //LowerHWIntrinsic(hwFma);
+
+    //LIR::Use use;
+    //if (!BlockRange().TryGetUse(node, &use))
+    //{
+    //    return nullptr;
+    //}
+
+    InsertTreeBeforeAndContainCheck(node, hwFma);
+    BlockRange().Remove(node);
+
+    // replace the original divmod node with the new divmod tree
+    //use.ReplaceWith(comp, hwFma);
+
+    return hwFma;
+}
+
 //----------------------------------------------------------------------------------------------
 // LowerFusedMultiplyAdd: Changes NI_FMA_MultiplyAddScalar produced by Math(F).FusedMultiplyAdd
 //     to a better FMA intrinsics if there are GT_NEG around in order to eliminate them.

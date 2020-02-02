@@ -517,6 +517,7 @@ void Lowering::LowerSIMD(GenTreeSIMD* simdNode)
 #endif // FEATURE_SIMD
 
 #ifdef FEATURE_HW_INTRINSICS
+
 //----------------------------------------------------------------------------------------------
 // Lowering::LowerHWIntrinsic: Perform containment analysis for a hardware intrinsic node.
 //
@@ -527,6 +528,13 @@ void Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
 {
     ContainCheckHWIntrinsic(node);
 }
+
+GenTree* Lowering::LowerMultiplyAddToFma(GenTreeOp* node)
+{
+    //TODO: implement
+    return node;
+}
+
 #endif // FEATURE_HW_INTRINSICS
 
 //------------------------------------------------------------------------

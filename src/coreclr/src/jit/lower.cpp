@@ -127,9 +127,30 @@ GenTree* Lowering::LowerNode(GenTree* node)
             }
             break;
 
+        case GT_SUB:
         case GT_ADD:
-            LowerAdd(node->AsOp());
+        {
+#ifdef FEATURE_HW_INTRINSICS
+            if (varTypeIsFloating(node->TypeGet()))
+            {
+                node = LowerMultiplyAddToFma(node->AsOp());
+                if (node->OperIsHWIntrinsic())
+                {
+                    //return node;
+                }
+            }
+#endif
+
+            if (node->OperIs(GT_ADD))
+            {
+                LowerAdd(node->AsOp());
+            }
+            else if (node->OperIs(GT_SUB))
+            {
+                ContainCheckBinary(node->AsOp());
+            }
             break;
+        }
 
 #if !defined(TARGET_64BIT)
         case GT_ADD_LO:
@@ -137,7 +158,6 @@ GenTree* Lowering::LowerNode(GenTree* node)
         case GT_SUB_LO:
         case GT_SUB_HI:
 #endif
-        case GT_SUB:
         case GT_AND:
         case GT_OR:
         case GT_XOR:
