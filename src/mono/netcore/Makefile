@@ -4,6 +4,7 @@ DOTNET_MONO = ../../../.dotnet-mono/dotnet
 
 CORECLR_TESTS_CONFIG=Release
 MONO_RUNTIME_CONFIG=Release
+COREFX_TESTS_CONFIG=Release
 
 # auto detect configurations for mono runtime and coreclr tests
 ifeq ($(words $(wildcard ../../../artifacts/bin/mono/*.*.*)), 1)
@@ -14,7 +15,11 @@ ifeq ($(words $(wildcard ../../../artifacts/tests/coreclr/*.*.*)), 1)
 	CORECLR_TESTS_CONFIG := $(word 3,$(subst ., ,$(notdir $(wildcard ../../../artifacts/tests/coreclr/*.*.*))))
 endif
 
-MONO_PROJ=/p:CoreClrTestConfig=$(CORECLR_TESTS_CONFIG) /p:Configuration=$(MONO_RUNTIME_CONFIG) ../mono.proj
+ifeq ($(words $(wildcard ../../../artifacts/bin/testhost/*-*-*-*)), 1)
+	COREFX_TESTS_CONFIG := $(word 3,$(subst -, ,$(notdir $(wildcard ../../../artifacts/bin/testhost/*-*-*-*))))
+endif
+
+MONO_PROJ=/p:CoreClrTestConfig=$(CORECLR_TESTS_CONFIG) /p:CoreFxTesthostConfig=$(COREFX_TESTS_CONFIG) /p:Configuration=$(MONO_RUNTIME_CONFIG) ../mono.proj
 
 # run sample using local .dotnet-mono
 run-sample: patch-mono-dotnet
@@ -32,6 +37,14 @@ runtime:
 # call it if you want to use $(DOTNET_MONO) in this Makefile
 patch-mono-dotnet:
 	$(DOTNET) msbuild /t:PatchLocalMonoDotnet $(MONO_PROJ)
+
+# precompile bcl in .dotnet-mono
+aot-mono-dotnet:
+	$(DOTNET) msbuild /t:PrecompileLocalMonoDotnetBcl $(MONO_PROJ)
+
+# precompile corefx tests
+aot-corefx-tests:
+	$(DOTNET) msbuild /t:PrecompileCoreFxTests $(MONO_PROJ)
 
 # run specific coreclr test, e.g.:
 # make run-tests-coreclr CoreClrTest="bash ../../artifacts/tests/coreclr/OSX.x64.Release/JIT/opt/InstructionCombining/DivToMul/DivToMul.sh"

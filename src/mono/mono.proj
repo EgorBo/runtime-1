@@ -18,6 +18,9 @@
     <_CoreClrFileName Condition="'$(_CoreClrFileName)' == ''">libcoreclr.so</_CoreClrFileName>
     <CoreClrTestConfig Condition="'$(CoreClrTestConfig)' == ''">$(Configuration)</CoreClrTestConfig>
     <CoreClrTestCoreRoot>$(ArtifactsDir)tests\coreclr\$(OSGroup).$(Platform).$(CoreClrTestConfig)\Tests\Core_Root</CoreClrTestCoreRoot>
+    <CoreFxTesthostConfig Condition="'$(CoreFxTesthostConfig)' == ''">$(Configuration)</CoreFxTesthostConfig>
+    <CoreFxTesthost>$(ArtifactsDir)bin\testhost\$(NetCoreAppCurrent)-$(OSGroup)-$(CoreFxTesthostConfig)-$(Platform)\</CoreFxTesthost>
+    <CoreFxTesthostRuntimeDir>$(CoreFxTesthost)shared\Microsoft.NETCore.App\$(PackageVersion)</CoreFxTesthostRuntimeDir>
   </PropertyGroup>
 
   <!-- OSX/Linux Mono runtime build -->
@@ -111,6 +114,50 @@
           DestinationFolder="$([System.IO.Directory]::GetDirectories('$(LocalMonoDotnetDir)\shared\Microsoft.NETCore.App')[0])" />
   </Target>
 
+
+  <!-- Precompile (AOT) managed libs in .dotnet-mono\shared\Microsoft.NETCore.App\**\*.dll -->
+  <Target Name="PrecompileLocalMonoDotnetBcl" DependsOnTargets="PrepareLocalMonoDotnetBclForAot">
+    <CallTarget Targets="PrecompileAssembly"/>
+  </Target>
+  <Target Name="PrepareLocalMonoDotnetBclForAot" DependsOnTargets="PatchLocalMonoDotnet">
+    <PropertyGroup>
+      <MonoExec>$(LocalMonoDotnet)</MonoExec>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssembliesToPrecompile 
+          Include="$(LocalMonoDotnetDir)\shared\Microsoft.NETCore.App\**\*.dll"
+          Exclude="$(LocalMonoDotnetDir)\shared\Microsoft.NETCore.App\**\System.Runtime.WindowsRuntime.dll" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Precompile (AOT) $(ArtifactsDir)bin\**\*Tests\**\System.*.dll -->
+  <Target Name="PrecompileCoreFxTests" DependsOnTargets="PrepareCoreFxTestsForAot">
+    <CallTarget Targets="PrecompileAssembly"/>
+  </Target>
+  <Target Name="PrepareCoreFxTestsForAot" DependsOnTargets="PatchCoreFxTesthost">
+    <PropertyGroup>
+      <MonoExec>$(CoreFxTesthost)dotnet</MonoExec>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssembliesToPrecompile
+          Include="$(ArtifactsDir)bin\**\*Tests\**\System.*.dll"
+          Exclude="$(ArtifactsDir)bin\**\System.Utf8String.Experimental.Tests.dll" />
+    </ItemGroup>
+  </Target>
+  
+  <!-- Precompile (AssembliesToPrecompile) using (MonoExec) -->
+  <Target Name="PrecompileAssembly">
+   <PropertyGroup>
+      <EnvVars Condition="'$(OS)' != 'Windows_NT'">
+      <![CDATA[MONO_ENV_OPTIONS="--aot=mcpu=native"]]>
+      </EnvVars>
+      <EnvVars Condition="'$(OS)' == 'Windows_NT'">
+      <![CDATA[set "MONO_ENV_OPTIONS=--aot=mcpu=native && ]]>
+      </EnvVars>
+    </PropertyGroup>
+    <Exec Command="$(EnvVars) $(MonoExec) %(AssembliesToPrecompile.Identity)" ContinueOnError="WarnAndContinue" />
+  </Target>
+
   <!-- Copy Mono runtime bits to the coreclr's Core_Root in order to run runtime tests -->
   <Target Name="PatchCoreClrCoreRoot" DependsOnTargets="ValidateLocalDotnet">
     <Error Condition="!Exists('$(CoreClrTestCoreRoot)')" Text="Core_Root ($(CoreClrTestCoreRoot)) doesn't exist. Have you built coreclr tests in $(CoreClrTestConfig) configuration?" />
@@ -118,8 +165,21 @@
       <_MonoRuntimeArtifacts Include="$(BinDir)\*.*" />
     </ItemGroup>
     <Error Condition="@(_MonoRuntimeArtifacts->Count()) &lt; 2" Text="Mono artifacts were not found at $(BinDir)" />
+    <Message Importance="High" Text="Copying mono runtime bits to $(CoreClrTestCoreRoot)"/>
     <Copy SourceFiles="@(_MonoRuntimeArtifacts)"
           DestinationFolder="$(CoreClrTestCoreRoot)" />
+  </Target>
+
+  <!-- Copy Mono runtime bits to the corefx's testhost -->
+  <Target Name="PatchCoreFxTesthost" DependsOnTargets="ValidateLocalDotnet">
+    <Error Condition="!Exists('$(CoreFxTesthostRuntimeDir)')" Text="testhost ($(CoreFxTesthostRuntimeDir)) doesn't exist. Have you built corefx tests?" />
+    <ItemGroup>
+      <_MonoRuntimeArtifacts Include="$(BinDir)\*.*" />
+    </ItemGroup>
+    <Error Condition="@(_MonoRuntimeArtifacts->Count()) &lt; 2" Text="Mono artifacts were not found at $(BinDir)" />
+    <Message Importance="High" Text="Copying mono runtime bits to $(CoreFxTesthostRuntimeDir)"/>
+    <Copy SourceFiles="@(_MonoRuntimeArtifacts)"
+          DestinationFolder="$(CoreFxTesthostRuntimeDir)" />
   </Target>
 
   <!-- Copy Coreclr runtime bits back to Core_Root -->
