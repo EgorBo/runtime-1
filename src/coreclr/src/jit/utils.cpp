@@ -2296,6 +2296,90 @@ T GetUnsignedMagic(T d, bool* add /*out*/, int* shift /*out*/)
     return q2 + 1;     // resulting magic number
 }
 
+
+static void udivrem(int64_t n, int64_t p, int64_t& q, int64_t& r)
+{
+    r = n % p;
+    q = n / p;
+    if (p > 0 && r < 0 || p < 0 && r > 0)
+    {
+        q--;
+        r += p;
+    }
+}
+
+static int64_t multiplicativeInverse(int64_t a, int64_t modulo)
+{
+    int64_t r[2] = { modulo, a };
+    int64_t t[2] = { 0, 1 };
+
+    uint32_t i;
+    for (i = 0; r[i ^ 1] != 0; i ^= 1)
+    {
+        int64_t q = 0;
+        udivrem(r[i], r[i ^ 1], q, r[i]);
+        t[i] -= t[i ^ 1] * q;
+    }
+
+    if (r[i] != 1)
+        return 0;
+
+    if (t[i] < 0)
+        t[i] += modulo;
+
+    return t[i];
+}
+
+static int32_t clearLowBits(int32_t a, int32_t b)
+{
+    uint32_t clearMask = 0xFFFFFFFF << b;
+    return static_cast<int32_t>(static_cast<uint32_t>(a) & clearMask);
+}
+
+// __builtin_ctz ?
+int32_t TrailingZeroCount(uint32_t x)
+{
+    if (x == 0) return(32);
+    int32_t n = 1;
+    if ((x & 0x0000FFFF) == 0) { n = n + 16; x = x >> 16; }
+    if ((x & 0x000000FF) == 0) { n = n + 8; x = x >> 8; }
+    if ((x & 0x0000000F) == 0) { n = n + 4; x = x >> 4; }
+    if ((x & 0x00000003) == 0) { n = n + 2; x = x >> 2; }
+    return n - (x & 1);
+}
+
+bool CalculateMagicNumbers(int32_t D, int32_t& P, int32_t& A, int32_t& K, int32_t& Q)
+{
+    P = 0; A = 0; K = 0; Q = 0;
+
+    if (D == INT32_MIN)
+        return false; // the optimization won't work
+
+    if (D < 0)
+        D = -D; //  `rem %X, -C` is equivalent to `rem %X, C`
+
+    if (D == 0 || D == 1)
+        return false; // these cases are handled by the existing code
+
+    // TODO: if D is a power of two ->  `x & (c-1)`, see https://github.com/dotnet/coreclr/pull/25744
+
+    // Decompose D into D0 * 2^K
+    K = TrailingZeroCount(static_cast<uint32_t>(D));
+    int32_t D0 = D >> K;
+
+    int64_t minSignedI33 = -4294967296; // APInt::getSignedMinValue(32 + 1)
+    P = (int32_t)multiplicativeInverse(D0, minSignedI33);
+
+    // A = floor((2^(W - 1) - 1) / D0) & -2^K
+    A = (int32_t)(INT32_MAX / (uint32_t)D0);
+    A = clearLowBits(A, K);
+
+    // Q = floor((2 * A) / (2^K))
+    Q = (int32_t)(((uint32_t)(2 * A)) / (uint32_t)(1 << K));
+
+    return true;
+}
+
 uint32_t GetUnsigned32Magic(uint32_t d, bool* add /*out*/, int* shift /*out*/)
 {
     return GetUnsignedMagic<uint32_t>(d, add, shift);

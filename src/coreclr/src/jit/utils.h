@@ -751,6 +751,7 @@ private:
 
 namespace MagicDivide
 {
+bool CalculateMagicNumbers(int32_t D, int32_t& P, int32_t& A, int32_t& K, int32_t& Q);
 uint32_t GetUnsigned32Magic(uint32_t d, bool* add /*out*/, int* shift /*out*/);
 #ifdef TARGET_64BIT
 uint64_t GetUnsigned64Magic(uint64_t d, bool* add /*out*/, int* shift /*out*/);

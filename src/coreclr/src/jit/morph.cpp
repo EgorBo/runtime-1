@@ -11318,12 +11318,16 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
                 size_t  absDivisorValue = (divisorValue == SSIZE_T_MIN) ? static_cast<size_t>(divisorValue)
                                                                        : static_cast<size_t>(abs(divisorValue));
 
-                if (!isPow2(absDivisorValue))
-                {
-                    tree = fgMorphModToSubMulDiv(tree->AsOp());
-                    op1  = tree->AsOp()->gtOp1;
-                    op2  = tree->AsOp()->gtOp2;
-                }
+                //
+                // Don't decompose X % C too early fo XARCH
+                // Lowering should take care of it.
+                //
+                //if (!isPow2(absDivisorValue))
+                //{
+                //    tree = fgMorphModToSubMulDiv(tree->AsOp());
+                //    op1  = tree->AsOp()->gtOp1;
+                //    op2  = tree->AsOp()->gtOp2;
+                //}
             }
 #endif // !TARGET_ARM64
             break;
@@ -11957,6 +11961,50 @@ DONE_MORPHING_CHILDREN:
             }
 
             cns2 = op2;
+
+            // Transform x % c == 0 to a set of magic
+            // numbers and operators
+            // (the optimization should probably be
+            //  done in lowering instead)
+            //                                     
+            //                                      
+            //       EQ                    LT       
+            //      /  \                  /  \      
+            //    MOD   0      =>       ROR   Q     
+            //    / \                  /  \         
+            //   X   C               ADD   K      
+            //                      /  \            
+            //                    MUL   A           
+            //                   /  \               
+            //                  X    P              
+            //                                      
+            //                                      
+            if (oper == GT_EQ && op2->IsIntegralConst(0) &&
+                op1->OperIs(GT_MOD) && op1->AsOp()->gtGetOp2()->OperIs(GT_CNS_INT))
+            {
+                auto divCns = static_cast<int32_t>(op1->AsOp()->gtGetOp2()->AsIntCon()->IconValue());
+                // magic numbers
+                int32_t P = 0, A = 0, K = 0, Q = 0;
+                if (MagicDivide::CalculateMagicNumbers(divCns, P, A, K, Q))
+                {
+                    GenTree* newNode =
+                        gtNewOperNode(GT_ROR, TYP_INT,
+                            gtNewOperNode(GT_ADD, TYP_INT,
+                                gtNewOperNode(GT_MUL, TYP_INT,
+                                    op1->gtGetOp1(),
+                                    gtNewIconNode(P)),
+                                gtNewIconNode(A)),
+                            gtNewIconNode(K));
+
+                    INDEBUG(newNode->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+
+                    tree->ChangeOper(GT_LT);
+                    tree->gtFlags |= GTF_UNSIGNED;
+                    tree->AsOp()->gtOp1 = newNode;
+                    tree->AsOp()->gtOp2 = gtNewIconNode(Q + 1);
+                    return tree;
+                }
+            }
 
             /* Check for "(expr +/- icon1) ==/!= (non-zero-icon2)" */
 
