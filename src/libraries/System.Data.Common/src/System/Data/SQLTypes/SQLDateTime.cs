@@ -105,7 +105,7 @@ namespace System.Data.SqlTypes
         {
             if (year >= s_minYear && year <= s_maxYear && month >= 1 && month <= 12)
             {
-                int[] days = IsLeapYear(year) ? s_daysToMonth366 : s_daysToMonth365;
+                int[] days = DateTime.IsLeapYear(year) ? s_daysToMonth366 : s_daysToMonth365;
                 if (day >= 1 && day <= days[month] - days[month - 1])
                 {
                     int y = year - 1;
@@ -477,33 +477,6 @@ namespace System.Data.SqlTypes
         public static explicit operator SqlDateTime(SqlString x)
         {
             return x.IsNull ? SqlDateTime.Null : SqlDateTime.Parse(x.Value);
-        }
-
-
-
-        // Builtin functions
-
-
-        // utility functions
-        /*
-        private static void AssertValidSqlDateTime(SqlDateTime x) {
-            Debug.Assert(!x.IsNull, "!x.IsNull", "Datetime: Null");
-            Debug.Assert(x.m_day >= MinDay && x.m_day <= MaxDay, "day >= MinDay && day <= MaxDay",
-                           "DateTime: Day out of range");
-            Debug.Assert(x.m_time >= MinTime && x.m_time <= MaxTime, "time >= MinTime && time <= MaxTime",
-                           "DateTime: Time out of range");
-        }
-        */
-
-        // Checks whether a given year is a leap year. This method returns true if
-        // "year" is a leap year, or false if not.
-        //
-        // @param year The year to check.
-        // @return true if "year" is a leap year, false otherwise.
-        //
-        private static bool IsLeapYear(int year)
-        {
-            return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
         }
 
         // Overloading comparison operators
