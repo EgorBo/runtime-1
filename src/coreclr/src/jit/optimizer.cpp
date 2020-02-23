@@ -8800,6 +8800,241 @@ GenTree* Compiler::optIsBoolCond(GenTree* condBranch, GenTree** compPtr, bool* b
     return opr1;
 }
 
+GenTree* Compiler::GetReturnOrAssignGenTree(BasicBlock* block)
+{
+    // Make sure block is single statement
+    Statement* stmt = block->firstStmt();
+    if (stmt == nullptr || stmt->GetPrevStmt() != stmt || stmt->GetRootNode() == nullptr)
+    {
+        return nullptr;
+    }
+
+    if (stmt->GetRootNode()->OperIs(GT_RETURN, GT_ASG))
+    {
+        return stmt->GetRootNode();
+    }
+
+    return nullptr;
+}
+
+bool Compiler::GetAssignmentForBranchlessOpt(GenTree* node, GenTreeLclVar*& leftLcl, GenTreeLclVar*& rightLcl, ssize_t& cns)
+{
+    rightLcl = nullptr;
+    leftLcl  = nullptr;
+    cns      = 0;
+
+    if (!node->OperIs(GT_RETURN, GT_ASG) || !varTypeIsIntegral(node->TypeGet()))
+    {
+        return false;
+    }
+
+    GenTree* subNode = nullptr;
+    bool isReturn = node->OperIs(GT_RETURN);
+    if (!isReturn)
+    {
+        if (!node->gtGetOp1()->OperIs(GT_LCL_VAR))
+        {
+            return false;
+        }
+        leftLcl = node->gtGetOp1()->AsLclVar();
+        subNode = node->gtGetOp2();
+    }
+    else
+    {
+        subNode = node->gtGetOp1();
+    }
+
+    // case 1: assign or return `x + c`
+    if (subNode->OperIs(GT_ADD) &&
+        subNode->gtGetOp1()->OperIs(GT_LCL_VAR) &&
+        subNode->gtGetOp2()->IsIntegralConst())
+    {
+        rightLcl = subNode->gtGetOp1()->AsLclVar();
+        cns      = subNode->gtGetOp2()->AsIntCon()->IconValue();
+    }
+    // case 2: assign or return `x`;
+    else if (subNode->OperIs(GT_LCL_VAR))
+    {
+        rightLcl = subNode->AsLclVar();
+    }
+    // case 3: assign or return `c`;
+    else if (subNode->IsIntegralConst())
+    {
+        cns = subNode->AsIntCon()->IconValue();
+    }
+    else
+    {
+        return false;
+    }
+    return true;
+}
+
+GenTree* Compiler::GetAddNodeForBranchlessCondition(BasicBlock* trueBb, BasicBlock* falseBb, bool& requiresCmpFlip, GenTreeLclVar*& lclToAssign)
+{
+    if ((trueBb->countOfInEdges() != 1) ||
+        (falseBb->countOfInEdges() != 1) ||
+        (trueBb->bbFlags & BBF_DONT_REMOVE) ||
+        (falseBb->bbFlags & BBF_DONT_REMOVE))
+    {
+        // both blocks are used by someone else or shouldn't be removed
+        return nullptr;
+    }
+
+    GenTree* trueBbNode  = GetReturnOrAssignGenTree(trueBb);
+    GenTree* falseBbNode = GetReturnOrAssignGenTree(falseBb);
+
+    if ((trueBbNode == nullptr) || (falseBbNode == nullptr) ||
+        !trueBbNode->OperIs(falseBbNode->OperGet()) ||
+        !varTypeIsIntegral(trueBbNode))
+    {
+        return nullptr;
+    }
+
+    GenTreeLclVar* leftTrueLcl   = nullptr;
+    GenTreeLclVar* leftFalseLcl  = nullptr;
+    GenTreeLclVar* rightTrueLcl  = nullptr;
+    GenTreeLclVar* rightFalseLcl = nullptr;
+    ssize_t        trueAddCns    = 0;
+    ssize_t        falseAddCns   = 0;
+
+    if (!GetAssignmentForBranchlessOpt(trueBbNode, leftTrueLcl, rightTrueLcl, trueAddCns) ||
+        !GetAssignmentForBranchlessOpt(falseBbNode, leftFalseLcl, rightFalseLcl, falseAddCns))
+    {
+        return nullptr;
+    }
+
+    if (abs(trueAddCns - falseAddCns) != 1)
+    {
+        // This optimization only works when the difference between two constant is 1 (because it's what cmp returns)
+        return nullptr;
+    }
+
+    ssize_t addValue;
+    if (falseAddCns > trueAddCns)
+    {
+        addValue = trueAddCns;
+    }
+    else
+    {
+        addValue = falseAddCns;
+        requiresCmpFlip = true;
+    }
+
+    if (leftTrueLcl != nullptr && leftTrueLcl->GetLclNum() != leftFalseLcl->GetLclNum())
+    {
+        return nullptr;
+    }
+
+    lclToAssign = leftTrueLcl;
+
+    if ((rightTrueLcl == nullptr) && (rightFalseLcl == nullptr))
+    {
+        return gtNewIconNode(addValue, trueBbNode->gtGetOp1()->TypeGet());
+    }
+
+    if ((rightTrueLcl != nullptr) && (rightFalseLcl != nullptr) &&
+        (rightTrueLcl->GetLclNum() == rightFalseLcl->GetLclNum()))
+    {
+        //auto typ = trueBbNode->gtGetOp1()->TypeGet();
+        //return gtNewOperNode(GT_ADD, typ, gtCloneExpr(rightTrueLcl), gtNewIconNode(addValue, typ));
+        return nullptr;
+    }
+    return nullptr;
+}
+
+void Compiler::optBranchlessConditions()
+{
+    if (strcmp("MMM", info.compMethodName))
+    {
+        return;
+    }
+
+    for (BasicBlock* block = fgFirstBB; block; block = block->bbNext)
+    {
+        if (block->bbJumpKind != BBJ_COND || block->isEmpty() || block->bbStmtList == nullptr)
+        {
+            continue;
+        }
+
+        GenTree* rootNode    = nullptr;
+        bool     jtrueFound  = false;
+        for (Statement* stmt : block->Statements())
+        {
+            if (stmt == nullptr)
+                continue;
+            rootNode = stmt->GetRootNode();
+            if (rootNode != nullptr && rootNode->OperIs(GT_JTRUE))
+            {
+                assert(!jtrueFound);
+                jtrueFound = true;
+            }
+            // a block with GT_JTRUE stmt may contain other statements, e.g. GT_ASG
+        }
+
+        if (!jtrueFound)
+        {
+            continue;
+        }
+
+        GenTree*  rootSubNode = rootNode->gtGetOp1();
+        var_types typ         = rootSubNode->TypeGet();
+
+        if (rootSubNode == nullptr || !varTypeIsIntegral(typ))
+        {
+            continue;
+        }
+
+        BasicBlock* trueBb  = block->bbJumpDest;
+        BasicBlock* falseBb = block->bbNext;
+
+        assert((trueBb != nullptr) && (falseBb != nullptr));
+
+        // TODO: GT_TEST_ ?
+        if (!rootNode->OperIs(GT_JTRUE) ||
+            !rootSubNode->OperIs(GT_EQ, GT_NE, GT_LE, GT_LT, GT_GE, GT_GT) ||
+            (trueBb == falseBb))
+        {
+            continue;
+        }
+
+        GenTreeLclVar* lclToAssign     = nullptr;
+        bool           requiresCmpFlip = false;
+        GenTree* addNode               =
+            GetAddNodeForBranchlessCondition(trueBb, falseBb, requiresCmpFlip, lclToAssign);
+
+        if (addNode != nullptr)
+        {
+            fgRemoveRefPred(block->bbJumpDest, block);
+            fgRemoveRefPred(block->bbNext, block);
+
+            if (requiresCmpFlip)
+            {
+                rootSubNode->ChangeOper(GenTree::ReverseRelop(rootSubNode->OperGet()));
+            }
+
+            if (lclToAssign == nullptr)
+            {
+                block->bbJumpKind = BBJ_RETURN;
+                rootNode->ChangeOperUnchecked(GT_RETURN); // it was GT_JTRUE
+                rootNode->AsOp()->gtOp1 = gtNewOperNode(GT_ADD, typ, rootSubNode, addNode);
+            }
+            else
+            {
+
+                block->bbJumpKind = BBJ_NONE;
+                rootNode->ChangeOper(GT_ASG); // it was GT_JTRUE
+                rootNode->gtFlags = GTF_ASG;
+                rootNode->AsOp()->gtOp1 = gtCloneExpr(lclToAssign);
+                rootNode->AsOp()->gtOp2 = gtNewOperNode(GT_ADD, typ, rootSubNode, addNode);
+                fgRemoveStmt(trueBb, trueBb->firstStmt());
+                fgRemoveStmt(falseBb, falseBb->firstStmt());
+            }
+            rootNode->ChangeType(rootNode->gtGetOp1()->TypeGet());
+            block->bbJumpDest = nullptr;
+        }
+    }
+}
+
 void Compiler::optOptimizeBools()
 {
 #ifdef DEBUG

@@ -5734,6 +5734,11 @@ private:
     void optPerformHoistExpr(GenTree* expr, unsigned lnum);
 
 public:
+    bool GetAssignmentForBranchlessOpt(GenTree* node, GenTreeLclVar*& leftLcl, GenTreeLclVar*& rightLcl, ssize_t& cns);
+    GenTree* GetReturnOrAssignGenTree(BasicBlock* block);
+    GenTree* GetAddNodeForBranchlessCondition(BasicBlock* trueBlock, BasicBlock* falseBlock, bool& requiresCmpFlip, GenTreeLclVar*& lclToAssign);
+    void optBranchlessConditions();
+
     void optOptimizeBools();
 
 private:
