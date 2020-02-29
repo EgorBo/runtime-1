@@ -12319,6 +12319,31 @@ DONE_MORPHING_CHILDREN:
                     goto CM_ADD_OP;
                 }
 
+                //if (varTypeIsIntegral(tree->TypeGet()) && !(tree->gtFlags & GTF_SIDE_EFFECT))
+                //{
+                //    assert(!tree->gtOverflow());
+
+                //    // -a - -b => b - a
+                //    if (op1->OperIs(GT_NEG) && op2->OperIs(GT_NEG) && !gtIsActiveCSE_Candidate(op1) && !gtIsActiveCSE_Candidate(op2))
+                //    {
+                //        tree->AsOp()->gtOp1 = op2->gtGetOp1();
+                //        tree->AsOp()->gtOp2 = op1->gtGetOp1();
+                //        // update op1 and op2
+                //        op1 = tree->gtGetOp1();
+                //        op2 = tree->gtGetOp2();
+                //        break;
+                //    }
+
+                //    // a - -b => a + b
+                //    if (op2->OperIs(GT_NEG) && !gtIsActiveCSE_Candidate(op2))
+                //    {
+                //        tree->AsOp()->gtOp2 = op2->gtGetOp1();
+                //        tree->ChangeOper(GT_ADD);
+                //        op2  = tree->gtGetOp2();
+                //        oper = tree->OperGet();
+                //        goto CM_ADD_OP;
+                //    }
+                //}
                 /* No match - exit */
             }
             break;
@@ -12353,6 +12378,33 @@ DONE_MORPHING_CHILDREN:
 
                 break;
             }
+
+            //if (fgGlobalMorph && varTypeIsIntegral(tree->TypeGet()) && !(tree->gtFlags & GTF_SIDE_EFFECT))
+            //{
+            //    assert(!tree->gtOverflow());
+
+            //    // -a + b => b - a
+            //    if (op1->OperIs(GT_NEG) && !op2->OperIs(GT_NEG) && !gtIsActiveCSE_Candidate(op1))
+            //    {
+            //        tree->AsOp()->gtOp1 = op2;
+            //        tree->AsOp()->gtOp2 = op1->gtGetOp1();
+            //        tree->ChangeOper(GT_SUB);
+            //        op1  = tree->gtGetOp1();
+            //        op2  = tree->gtGetOp2();
+            //        oper = tree->OperGet();
+            //        break;
+            //    }
+
+            //    // a + -b => a - b
+            //    if (op2->OperIs(GT_NEG) && !op2->gtGetOp1()->IsIntegralConst() && !gtIsActiveCSE_Candidate(op2))
+            //    {
+            //        tree->AsOp()->gtOp2 = op2->gtGetOp1();
+            //        tree->ChangeOper(GT_SUB);
+            //        op2  = tree->gtGetOp2();
+            //        oper = tree->OperGet();
+            //        break;
+            //    }
+            //}
 
         CM_ADD_OP:
 
