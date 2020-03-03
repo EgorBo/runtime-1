@@ -400,6 +400,18 @@ typedef enum {
 	INTRINS_SSE_UADD_SATI8,
 	INTRINS_SSE_SADD_SATI16,
 	INTRINS_SSE_UADD_SATI16,
+	INTRINS_SSE_COMIEQSS,
+	INTRINS_SSE_UCOMIEQSS,
+	INTRINS_SSE_COMIGTSS,
+	INTRINS_SSE_UCOMIGTSS,
+	INTRINS_SSE_COMIGESS,
+	INTRINS_SSE_UCOMIGESS,
+	INTRINS_SSE_COMILTSS,
+	INTRINS_SSE_UCOMILTSS,
+	INTRINS_SSE_COMILESS,
+	INTRINS_SSE_UCOMILESS,
+	INTRINS_SSE_COMINEQSS,
+	INTRINS_SSE_UCOMINEQSS,
 #endif
 #ifdef TARGET_WASM
 	INTRINS_WASM_ANYTRUE_V16,
@@ -7519,7 +7531,66 @@ process_bb (EmitContext *ctx, MonoBasicBlock *bb)
 				g_assert_not_reached (); // will be needed for other types later
 			break;
 		}
-
+		case OP_SSE_COMIEQSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMIEQSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_COMIGTSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMIGTSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_COMIGESS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMIGESS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_COMILTSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMILTSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_COMILESS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMILESS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_COMINEQSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_COMINEQSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMIEQSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMIEQSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMIGTSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMIGTSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMIGESS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMIGESS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMILTSS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMILTSS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMILESS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMILESS), args, 2, dname);
+			break;
+		}
+		case OP_SSE_UCOMINEQS: {
+			LLVMValueRef args [] = { lhs, rhs };
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrins (ctx, INTRINS_SSE_UCOMINEQS), args, 2, dname);
+			break;
+		}
 		case OP_SSE_MOVEHL: {
 			if (ins->inst_c1 == MONO_TYPE_R4)
 				values [ins->dreg] = LLVMBuildShuffleVector (builder, lhs, rhs, create_const_vector_4_i32 (6, 7, 2, 3), "");
@@ -9440,6 +9511,18 @@ static IntrinsicDesc intrinsics[] = {
 	{INTRINS_SSE_ROUNDPD, "llvm.x86.sse41.round.pd"},
 	{INTRINS_SSE_PTESTZ, "llvm.x86.sse41.ptestz"},
 	{INTRINS_SSE_INSERTPS, "llvm.x86.sse41.insertps"},
+	{INTRINS_SSE_COMIEQSS, "llvm.x86.sse.comieq.ss"},
+	{INTRINS_SSE_UCOMIEQSS, "llvm.x86.sse.ucomieq.ss"},
+	{INTRINS_SSE_COMIGTSS, "llvm.x86.sse.comigt.ss"},
+	{INTRINS_SSE_UCOMIGTSS, "llvm.x86.sse.ucomigt.ss"},
+	{INTRINS_SSE_COMIGESS, "llvm.x86.sse.comige.ss"},
+	{INTRINS_SSE_UCOMIGESS, "llvm.x86.sse.ucomige.ss"},
+	{INTRINS_SSE_COMILTSS, "llvm.x86.sse.comilt.ss"},
+	{INTRINS_SSE_UCOMILTSS, "llvm.x86.sse.ucomilt.ss"},
+	{INTRINS_SSE_COMILESS, "llvm.x86.sse.comile.ss"},
+	{INTRINS_SSE_UCOMILESS, "llvm.x86.sse.ucomile.ss"},
+	{INTRINS_SSE_COMINEQSS, "llvm.x86.sse.comineq.ss"},
+	{INTRINS_SSE_UCOMINEQSS, "llvm.x86.sse.ucomineq.ss"},
 #if LLVM_API_VERSION >= 800
 	// these intrinsics were renamed in LLVM 8
 	{INTRINS_SSE_SADD_SATI8, "llvm.sadd.sat.v16i8"},
@@ -9764,6 +9847,22 @@ add_intrinsic (LLVMModuleRef module, int id)
 		arg_types [0] = type_to_simd_type (MONO_TYPE_I2);
 		arg_types [1] = type_to_simd_type (MONO_TYPE_I2);
 		AddFunc (module, name, ret_type, arg_types, 2);
+		break;
+	case INTRINS_SSE_COMIEQSS:
+	case INTRINS_SSE_UCOMIEQSS:
+	case INTRINS_SSE_COMIGTSS:
+	case INTRINS_SSE_UCOMIGTSS:
+	case INTRINS_SSE_COMIGESS:
+	case INTRINS_SSE_UCOMIGESS:
+	case INTRINS_SSE_COMILTSS:
+	case INTRINS_SSE_UCOMILTSS:
+	case INTRINS_SSE_COMILESS:
+	case INTRINS_SSE_UCOMILESS:
+	case INTRINS_SSE_COMINEQSS:
+	case INTRINS_SSE_UCOMINEQSS:
+		arg_types [0] = type_to_simd_type (MONO_TYPE_R4);
+		arg_types [1] = type_to_simd_type (MONO_TYPE_R4);
+		AddFunc (module, name, LLVMInt32Type (), arg_types, 2);
 		break;
 		/* SSE Binary ops */
 	case INTRINS_SSE_PADDSW:

@@ -645,6 +645,18 @@ static guint16 sse_methods [] = {
 	SN_AndNot,
 	SN_CompareEqual,
 	SN_CompareNotEqual,
+	SN_CompareScalarOrderedEqual,
+	SN_CompareScalarOrderedGreaterThan,
+	SN_CompareScalarOrderedGreaterThanOrEqual,
+	SN_CompareScalarOrderedLessThan,
+	SN_CompareScalarOrderedLessThanOrEqual,
+	SN_CompareScalarOrderedNotEqual,
+	SN_CompareScalarUnorderedEqual,
+	SN_CompareScalarUnorderedGreaterThan,
+	SN_CompareScalarUnorderedGreaterThanOrEqual,
+	SN_CompareScalarUnorderedLessThan,
+	SN_CompareScalarUnorderedLessThanOrEqual,
+	SN_CompareScalarUnorderedNotEqual,
 	SN_Divide,
 	SN_LoadAlignedVector128,
 	SN_LoadVector128,
@@ -773,6 +785,30 @@ emit_x86_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature 
 			return emit_simd_ins_for_sig (cfg, klass, OP_XCOMPARE_FP, CMP_NE, arg0_type, fsig, args);
 		case SN_CompareEqual:
 			return emit_simd_ins_for_sig (cfg, klass, OP_XCOMPARE_FP, CMP_EQ, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMIEQSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedGreaterThan:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMIGTSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedGreaterThanOrEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMIGESS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedLessThan:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMILTSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedLessThanOrEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMILESS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarOrderedNotEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_COMINEQSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMIEQSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedGreaterThan:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMIGTSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedGreaterThanOrEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMIGESS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedLessThan:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMILTSS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedLessThanOrEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMILESS, -1, arg0_type, fsig, args);
+		case SN_CompareScalarUnorderedNotEqual:
+			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_UCOMINEQS, -1, arg0_type, fsig, args);
 		case SN_And:
 			return emit_simd_ins_for_sig (cfg, klass, OP_SSE_AND, -1, arg0_type, fsig, args);
 		case SN_AndNot:
