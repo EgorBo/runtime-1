@@ -774,8 +774,24 @@ mini_emit_inst_for_method (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSign
 			int dreg = alloc_preg (cfg);
 			EMIT_NEW_BIALU_IMM (cfg, ins, OP_PADD_IMM, dreg, args [0]->dreg, MONO_STRUCT_OFFSET (MonoArray, vector));
 			return ins;
-		}
-		else if (!strcmp (cmethod->name, "GetElementSize")) {
+		} else if (!strcmp (cmethod->name, "IsValueOfElementType")) {
+			// arr_elem_reg = m_class_get_element_class (mono_handle_class (this));
+			int arr_elem_reg = alloc_preg(cfg);
+			MONO_EMIT_NEW_LOAD_MEMBASE_FAULT (cfg, arr_elem_reg, args [0]->dreg, MONO_STRUCT_OFFSET (MonoObject, vtable));
+			EMIT_NEW_LOAD_MEMBASE(cfg, ins, OP_LOAD_MEMBASE, arr_elem_reg, arr_elem_reg, MONO_STRUCT_OFFSET(MonoVTable, klass));
+			EMIT_NEW_LOAD_MEMBASE(cfg, ins, OP_LOAD_MEMBASE, arr_elem_reg, arr_elem_reg, MONO_STRUCT_OFFSET(MonoClass, element_class));
+			// value_reg = mono_handle_class (value);
+			int value_reg = alloc_preg(cfg);
+			MONO_EMIT_NEW_LOAD_MEMBASE_FAULT(cfg, value_reg, args[1]->dreg, MONO_STRUCT_OFFSET(MonoObject, vtable));
+			EMIT_NEW_LOAD_MEMBASE(cfg, ins, OP_LOAD_MEMBASE, value_reg, value_reg, MONO_STRUCT_OFFSET(MonoVTable, klass));
+			// arr_elem_reg == value_reg
+			EMIT_NEW_BIALU(cfg, ins, OP_COMPARE, -1, arr_elem_reg, value_reg);
+			MONO_INST_NEW(cfg, ins, OP_PCEQ);
+			ins->dreg = alloc_ireg(cfg);
+			ins->type = STACK_I4;
+			MONO_ADD_INS(cfg->cbb, ins);
+			return ins;
+		} else if (!strcmp (cmethod->name, "GetElementSize")) {
 			int vt_reg = alloc_preg (cfg);
 			int class_reg = alloc_preg (cfg);
 			int sizes_reg = alloc_ireg (cfg);

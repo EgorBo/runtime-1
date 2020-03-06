@@ -449,6 +449,7 @@ namespace System
 		[MethodImpl (MethodImplOptions.InternalCall)]
 		internal extern CorElementType GetCorElementTypeOfElementType();
 
+		[Intrinsic]
 		[MethodImpl (MethodImplOptions.InternalCall)]
 		extern bool IsValueOfElementType(object value);
 
