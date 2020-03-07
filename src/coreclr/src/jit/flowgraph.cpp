@@ -4171,6 +4171,10 @@ public:
     {
         Push(SLOT_ARRAYLEN);
     }
+    void PushStringLen()
+    {
+        Push(SLOT_STRINGLEN);
+    }
     void PushArgument(unsigned arg)
     {
         Push(SLOT_ARGUMENT + arg);
@@ -4192,6 +4196,10 @@ public:
     static bool IsArrayLen(unsigned value)
     {
         return value == SLOT_ARRAYLEN;
+    }
+    static bool IsStringLen(unsigned value)
+    {
+        return value == SLOT_STRINGLEN;
     }
     static bool IsArgument(unsigned value)
     {
@@ -4222,7 +4230,8 @@ private:
         SLOT_UNKNOWN  = 0,
         SLOT_CONSTANT = 1,
         SLOT_ARRAYLEN = 2,
-        SLOT_ARGUMENT = 3
+        SLOT_STRINGLEN = 3,
+        SLOT_ARGUMENT = 4,
     };
 
     void Push(int type)
@@ -4479,6 +4488,31 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         compInlineResult->Note(InlineObservation::CALLEE_LOOKS_LIKE_WRAPPER);
                     }
                 }
+
+                if (isInlining && makeInlineObservations && opcode == CEE_CALLVIRT)
+                {
+                    CORINFO_RESOLVED_TOKEN resolvedToken;
+                    impResolveToken(codeAddr, &resolvedToken, CORINFO_TOKENKIND_Method);
+
+                    CORINFO_CALL_INFO corinfo;
+                    info.compCompHnd->getCallInfo(&resolvedToken, nullptr, info.compMethodHnd, CORINFO_CALLINFO_CALLVIRT, &corinfo);
+
+                    // ugly hack to check if this CEE_CALLVIRT is actually `string.get_Length`
+                    if (corinfo.hMethod != nullptr &&
+                        corinfo.hMethod != (CORINFO_METHOD_HANDLE)0xcccccccccccccccc) //isInvalidHandle
+                    {
+                        const char* className;
+                        const char* methodName = eeGetMethodName(corinfo.hMethod, &className);
+                        if (!strcmp("System.String", className) && !strcmp("get_Length", methodName))
+                        {
+                            if (makeInlineObservations)
+                            {
+                                pushedStack.PushStringLen();
+                            }
+                        }
+                    }
+                }
+
             }
             break;
 
@@ -5148,6 +5182,15 @@ void Compiler::fgObserveInlineConstants(OPCODE opcode, const FgStack& stack, boo
         (FgStack::IsArrayLen(slot1) && FgStack::IsArgument(slot0)))
     {
         compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_RANGE_CHECK);
+    }
+
+    // Const string feeds String.Length
+    if ((FgStack::IsConstant(slot0) && FgStack::IsStringLen(slot1)) ||
+        (FgStack::IsConstant(slot1) && FgStack::IsStringLen(slot0)))
+    {
+        compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_STRLEN);
+        // TODO: check `oper` and `slot3` for const to apply the observation only const tests, e.g.:
+        // `cnsStr.Length > 0`  (CEE_CEQ, CEE_CGT, etc..)
     }
 
     // Check for an incoming arg that's a constant

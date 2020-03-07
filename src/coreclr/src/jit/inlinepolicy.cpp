@@ -315,6 +315,13 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 m_ConstantArgFeedsConstantTest++;
                 break;
 
+            case InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_STRLEN:
+                // We shouldn't see this for a prejit root since
+                // we don't know anything about callers.
+                assert(!m_IsPrejitRoot);
+                m_ConstantArgFeedsStrLen++;
+                break;
+
             case InlineObservation::CALLEE_BEGIN_OPCODE_SCAN:
             {
                 // Set up the state machine, if this inline is
@@ -658,6 +665,13 @@ double DefaultPolicy::DetermineMultiplier()
         multiplier += 3.0;
         JITDUMP("\nInline candidate has const arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
     }
+
+    if (m_ConstantArgFeedsStrLen > 0)
+    {
+        multiplier += 7.0; 
+        JITDUMP("\nInline candidate has const arg that feeds string.Length.  Multiplier increased to %g.", multiplier);
+    }
+
     // For prejit roots we do not see the call sites. To be suitably optimistic
     // assume that call sites may pass constants.
     else if (m_IsPrejitRoot && ((m_ArgFeedsConstantTest > 0) || (m_ArgFeedsTest > 0)))
@@ -1729,6 +1743,7 @@ void DiscretionaryPolicy::EstimateCodeSize()
          -0.238 * m_IsInstanceCtor +
          -5.357 * m_IsFromPromotableValueClass +
          -7.901 * (m_ConstantArgFeedsConstantTest > 0 ? 1 : 0)  +
+         -7.901 * (m_ConstantArgFeedsStrLen > 0 ? 1 : 0) +
           0.065 * m_CalleeNativeSizeEstimate;
     // clang-format on
 
@@ -1930,6 +1945,7 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_MethodIsMostlyLoadStore ? 1 : 0);
     fprintf(file, ",%u", m_ArgFeedsRangeCheck);
     fprintf(file, ",%u", m_ConstantArgFeedsConstantTest);
+    fprintf(file, ",%u", m_ConstantArgFeedsStrLen);
     fprintf(file, ",%d", m_CalleeNativeSizeEstimate);
     fprintf(file, ",%d", m_CallsiteNativeSizeEstimate);
     fprintf(file, ",%d", m_ModelCodeSizeEstimate);
