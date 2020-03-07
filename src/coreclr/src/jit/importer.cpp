@@ -4218,6 +4218,31 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_String_Equals:
+            {
+                if (sig->numArgs == 2)
+                {
+                    GenTree* arg0 = impStackTop(1).val;
+                    GenTree* arg1 = impStackTop(0).val;
+
+                    // Emit `true` if both arguments in String.Equals(string,string)
+                    // are exactly the same string literal
+                    if (arg0->OperIs(GT_CNS_STR) && arg1->OperIs(GT_CNS_STR))
+                    {
+                        GenTreeStrCon* arg0str = arg0->AsStrCon();
+                        GenTreeStrCon* arg1str = arg1->AsStrCon();
+                        if (arg0str->gtScpHnd == arg1str->gtScpHnd)
+                        {
+                            impPopStack();
+                            impPopStack();
+                            return gtNewIconNode((arg0str->gtSconCPX == arg1str->gtSconCPX) ? 1 : 0);
+                        }
+                        // NOTE: if gtScpHnds are different we can use info.compCompHnd->getStringLiteral
+                    }
+                }
+                break;
+            }
+
             case NI_System_GC_KeepAlive:
             {
                 retNode = gtNewOperNode(GT_KEEPALIVE, TYP_VOID, impPopStack().val);
@@ -4416,6 +4441,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             if (strcmp(methodName, "KeepAlive") == 0)
             {
                 result = NI_System_GC_KeepAlive;
+            }
+        }
+        else if (strcmp(className, "String") == 0)
+        {
+            if (strcmp(methodName, "Equals") == 0)
+            {
+                result = NI_System_String_Equals;
             }
         }
         else if (strcmp(className, "Type") == 0)
