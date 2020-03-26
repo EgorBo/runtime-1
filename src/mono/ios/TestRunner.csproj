@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <OutputPath>bin/TestRunner</OutputPath>
+    <TargetFramework>$(NetCoreAppCurrent)</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="TestRunner.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" Version="$(XUnitVersion)" />
+    <PackageReference Include="xunit.console" Version="$(XUnitVersion)" />
+    <PackageReference Include="xunit.core" Version="$(XUnitVersion)" />
+  </ItemGroup>
+
+</Project>
