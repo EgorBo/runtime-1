@@ -60,6 +60,9 @@ namespace System
         [MethodImpl(MethodImplOptions.InternalCall)]
         private extern string? IsInterned();
 
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        internal static extern string TryGetInternedString(ref char start, int length);
+
         public static string Intern(string str)
         {
             if (str == null)

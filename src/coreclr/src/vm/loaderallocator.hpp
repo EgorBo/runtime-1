@@ -538,6 +538,7 @@ public:
     STRINGREF *GetStringObjRefPtrFromUnicodeString(EEStringData *pStringData);
     void LazyInitStringLiteralMap();
     STRINGREF *IsStringInterned(STRINGREF *pString);
+    STRINGREF* TryGetInternedString(UINT16* ptr, INT32 length);
     STRINGREF *GetOrInternString(STRINGREF *pString);
     void CleanupStringLiteralMap();
 

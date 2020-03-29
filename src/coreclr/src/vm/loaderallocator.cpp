@@ -1756,6 +1756,25 @@ void LoaderAllocator::CleanupStringLiteralMap()
     }
 }
 
+STRINGREF* LoaderAllocator::TryGetInternedString(UINT16* start, INT32 length)
+{
+    CONTRACTL
+    {
+        GC_TRIGGERS;
+        THROWS;
+        MODE_COOPERATIVE;
+    }
+    CONTRACTL_END;
+
+    if (m_pStringLiteralMap == NULL)
+    {
+        LazyInitStringLiteralMap();
+    }
+    _ASSERTE(m_pStringLiteralMap);
+    EEStringData stringData = EEStringData(length, start);
+    return m_pStringLiteralMap->GetStringLiteral(&stringData, false, false);
+}
+
 STRINGREF *LoaderAllocator::IsStringInterned(STRINGREF *pString)
 {
     CONTRACTL

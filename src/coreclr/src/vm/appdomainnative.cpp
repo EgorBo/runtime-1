@@ -166,6 +166,24 @@ FCIMPL1(Object*, AppDomainNative::IsStringInterned, StringObject* pStringUNSAFE)
 }
 FCIMPLEND
 
+FCIMPL2(StringObject*, AppDomainNative::TryGetInternedString, UINT16* start, INT32 length)
+{
+    FCALL_CONTRACT;
+
+    STRINGREF* str = NULL;
+
+    HELPER_METHOD_FRAME_BEGIN_RET_1(str);
+
+    str = GetAppDomain()->TryGetInternedString(start, length);
+        
+    HELPER_METHOD_FRAME_END();
+    if (str == nullptr)
+        return nullptr;
+
+    return OBJECTREFToObject(*str);
+}
+FCIMPLEND
+
 FCIMPL1(Object*, AppDomainNative::GetOrInternString, StringObject* pStringUNSAFE)
 {
     FCALL_CONTRACT;

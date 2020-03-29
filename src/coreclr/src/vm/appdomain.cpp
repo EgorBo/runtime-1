@@ -1476,6 +1476,19 @@ STRINGREF *BaseDomain::IsStringInterned(STRINGREF *pString)
     return GetLoaderAllocator()->IsStringInterned(pString);
 }
 
+STRINGREF *BaseDomain::TryGetInternedString(UINT16 *start, INT32 length)
+{
+    CONTRACTL
+    {
+        GC_TRIGGERS;
+        THROWS;
+        MODE_COOPERATIVE;
+    }
+    CONTRACTL_END;
+
+    return GetLoaderAllocator()->TryGetInternedString(start, length);
+}
+
 STRINGREF *BaseDomain::GetOrInternString(STRINGREF *pString)
 {
     CONTRACTL

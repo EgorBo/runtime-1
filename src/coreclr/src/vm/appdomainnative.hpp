@@ -24,6 +24,7 @@ public:
     static FCDECL0(Object*, GetLoadedAssemblies);
     static FCDECL1(Object*, GetOrInternString, StringObject* pStringUNSAFE);
     static FCDECL1(Object*, IsStringInterned, StringObject* pString);
+    static FCDECL2(StringObject*, TryGetInternedString, UINT16* start, INT32 length);
 
 #ifdef FEATURE_APPX
     static INT32 QCALLTYPE IsAppXProcess();

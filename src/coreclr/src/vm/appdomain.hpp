@@ -1018,6 +1018,7 @@ public:
     }
 
     STRINGREF *IsStringInterned(STRINGREF *pString);
+    STRINGREF *TryGetInternedString(UINT16 *start, INT32 length);
     STRINGREF *GetOrInternString(STRINGREF *pString);
 
     // Returns an array of OBJECTREF* that can be used to store domain specific data.

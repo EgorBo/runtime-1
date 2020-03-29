@@ -325,6 +325,14 @@ namespace System
         {
             if (typeof(T) == typeof(char))
             {
+                unsafe
+                {
+                    string interned = string.TryGetInternedString(ref Unsafe.As<T, char>(ref _pointer.Value), _length);
+                    if (interned != null)
+                    {
+                        return interned;
+                    }
+                }
                 return new string(new ReadOnlySpan<char>(ref Unsafe.As<T, char>(ref _pointer.Value), _length));
             }
 #if FEATURE_UTF8STRING
