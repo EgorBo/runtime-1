@@ -17,11 +17,13 @@ BCL_EXCLUDES =\
 # 'System.Numerics.Vectors.Tests.dll'
 # NOTE: don't use tests suites with remote executor usages 
 # NOTE2: run 'run-tests-sim' after in order to deploy & run on a simulator
-run-System.Numerics.Vectors.Tests: mono-libraries-tests
+# NOTE3: make sure `mono-libraries-tests` is executed first
+run-System.Numerics.Vectors.Tests:
 	make aot-test \
 	TEST_DIR=System.Numerics.Vectors.Tests/netcoreapp5.0-Debug
 
 # rebuild mono, bcl and tests for iOS-$(MONO_ARCH)
+# Ignore Utf8String* build errors (TODO: fix)
 mono-libraries-tests:
 	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --subsetCategory mono-libraries /p:DisableCrossgen=true
 	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --buildtests --subsetCategory mono-libraries /p:DisableCrossgen=true
