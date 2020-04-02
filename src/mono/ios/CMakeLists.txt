@@ -3,10 +3,12 @@ cmake_minimum_required(VERSION 3.14.5)
 project(XunitTestRunner)
 
 file(GLOB TEST_DLLS ${MONO_APPDIR}/*.dll)
+file(GLOB TEST_DLLS_PDB ${MONO_APPDIR}/*.pdb)
 file(GLOB TEST_DLLS_AOT ${MONO_APPDIR}/*.dll.o)
 
 set(APP_RESOURCES
     ${TEST_DLLS}
+    ${TEST_DLLS_PDB}
 )
 
 add_executable(

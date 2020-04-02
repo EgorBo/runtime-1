@@ -10,9 +10,25 @@ ARTIFACTS_MONO=$(ARTIFACTS_BIN)/mono/iOS.$(MONO_ARCH).$(MONO_CONFIG)
 DOTNET := $(shell cd ../netcore && bash init-tools.sh | tail -1)
 SYSROOT := $(shell xcrun --sdk iphoneos --show-sdk-path)
 
+BCL_EXCLUDES =\
+	tmp-$(MONO_ARCH)/System.Runtime.WindowsRuntime.dll
+
+
+# sample: rebuild everything and run xunit tests for
+# 'System.Collections.NonGeneric.Tests.dll'
+# NOTE: don't use tests suites with remote executor usages (on device)
+run-System.Collections.NonGeneric.Tests: mono-libraries-tests
+	make aot-test \
+	TEST_DIR=System.Collections.NonGeneric.Tests/netcoreapp5.0-Debug
+
+# rebuild mono, bcl and tests for iOS-$(MONO_ARCH)
+mono-libraries-tests:
+	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --subsetCategory mono-libraries /p:DisableCrossgen=true
+	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --buildtests --subsetCategory mono-libraries /p:DisableCrossgen=true
+
 # copy all dlls into a tmp folder (tmp-$(MONO_ARCH)) including the whole BCL
 # and run AOT for them in parallel
-aot-test-$(MONO_ARCH): clean
+aot-test: clean
 	mkdir tmp-$(MONO_ARCH)
 	@if test -z "$(TEST_DIR)"; then echo "TEST_DIR is not set"; exit 1; fi
 	if [ ! -d "$(ARTIFACTS_BIN)$(TEST_DIR)" ]; then echo "$(ARTIFACTS_BIN)$(TEST_DIR) doesn't exist"; exit 1; fi
@@ -24,48 +40,6 @@ aot-test-$(MONO_ARCH): clean
 	make -j$(NPROCS) aot-dir
 	$(DOTNET) run -p appbuilder tmp-$(MONO_ARCH) modules.m
 	make xcode MONO_APPDIR=tmp-$(MONO_ARCH)
-
-BCL_EXCLUDES =\
-	tmp-$(MONO_ARCH)/System.Runtime.WindowsRuntime.dll
-
-aot-dir-%:
-	make aot-lib-$(MONO_ARCH) LIB=tmp-$(MONO_ARCH)/$*
-
-aot-dir: $(addprefix aot-dir-, $(notdir $(filter-out $(BCL_EXCLUDES), $(wildcard tmp-$(MONO_ARCH)/*.dll))))
-
-# sample: run xunit tests in System.Collections.NonGeneric.Tests.dll
-# NOTE: 'mono-libraries-tests' should be run first
-# NOTE2: don't use tests suites with remote executor usages (on device)
-run-System.Collections.NonGeneric.Tests:
-	make aot-test-$(MONO_ARCH) \
-	TEST_DIR=System.Collections.NonGeneric.Tests/netcoreapp5.0-Debug
-
-# no-op: we'll use regular jit for simulator
-aot-lib-x64:
-
-# run AOT compilation for $(LIB)
-aot-lib-arm64:
-	echo "[AOT] $(LIB)";
-	DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 MONO_PATH=tmp-$(MONO_ARCH) \
-	$(ARTIFACTS_MONO)/cross/./mono-aot-cross -O=gsharedvt,float32 --nollvm --debug \
-	--aot=mtriple=arm64-ios,static,asmonly,direct-icalls,no-direct-calls,dwarfdebug,full, $(LIB) && \
-	clang -isysroot $(SYSROOT) -miphoneos-version-min=$(MIN_IOS) -arch arm64 -c $(LIB).s -o $(LIB).o
-
-# rebuild mono, bcl and tests for iOS-$(MONO_ARCH)
-mono-libraries-tests:
-	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --subsetCategory mono-libraries /p:DisableCrossgen=true
-	 ../../.././build.sh -os iOS -arch $(MONO_ARCH) --buildtests --subsetCategory mono-libraries /p:DisableCrossgen=true
-
-# generate an xcode project
-xcode:
-	cmake -S. -BXcode -GXcode \
-	-DCMAKE_SYSTEM_NAME=iOS \
-	"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
-	-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MIN_IOS) \
-	-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
-	-DMONO_CONFIG=$(MONO_CONFIG) \
-	-DMONO_ARCH=$(MONO_ARCH) \
-	-DMONO_APPDIR=$(MONO_APPDIR)
 
 # build *.app and deploy to a simulator
 IOS_DEPLOY_SDK=iphonesimulator13.2
@@ -83,3 +57,31 @@ clean:
 	rm -rf tmp-*
 	rm -rf bin
 	rm -rf Xcode
+
+
+aot-dir-%:
+	make aot-lib-$(MONO_ARCH) LIB=tmp-$(MONO_ARCH)/$*
+
+aot-dir: $(addprefix aot-dir-, $(notdir $(filter-out $(BCL_EXCLUDES), $(wildcard tmp-$(MONO_ARCH)/*.dll))))
+
+# no-op: we'll use regular jit for simulator
+aot-lib-x64:
+
+# run AOT compilation for $(LIB)
+aot-lib-arm64:
+	echo "[AOT] $(LIB)";
+	DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 MONO_PATH=tmp-$(MONO_ARCH) \
+	$(ARTIFACTS_MONO)/cross/./mono-aot-cross -O=gsharedvt,float32 --nollvm --debug \
+	--aot=mtriple=arm64-ios,static,asmonly,direct-icalls,no-direct-calls,dwarfdebug,full, $(LIB) && \
+	clang -isysroot $(SYSROOT) -miphoneos-version-min=$(MIN_IOS) -arch arm64 -c $(LIB).s -o $(LIB).o
+
+# generate an xcode project
+xcode:
+	cmake -S. -BXcode -GXcode \
+	-DCMAKE_SYSTEM_NAME=iOS \
+	"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
+	-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MIN_IOS) \
+	-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
+	-DMONO_CONFIG=$(MONO_CONFIG) \
+	-DMONO_ARCH=$(MONO_ARCH) \
+	-DMONO_APPDIR=$(MONO_APPDIR)
