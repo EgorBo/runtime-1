@@ -29,9 +29,14 @@ UILabel *label;
     
     label = [[UILabel alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
     label.textColor = [UIColor greenColor];
-    label.font = [UIFont boldSystemFontOfSize: 30];
+    label.font = [UIFont boldSystemFontOfSize: 28];
     label.numberOfLines = 3;
     label.textAlignment = NSTextAlignmentCenter;
+#ifdef DEVICE
+    label.text = @"Loading...";
+#else
+    label.text = @"Jitting...\nit might take a while.";
+#endif
     [self.view addSubview:label];
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{

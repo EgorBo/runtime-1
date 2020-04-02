@@ -2,14 +2,10 @@ cmake_minimum_required(VERSION 3.14.5)
 
 project(XunitTestRunner)
 
-file(GLOB BCL_DLLS ${MONO_BCL}/*.dll)
-file(GLOB BCL_DLLS_AOT ${MONO_BCL}/*.dll.o)
-
-file(GLOB TEST_DLLS ${MONO_TEST}/*.dll)
-file(GLOB TEST_DLLS_AOT ${MONO_TEST}/*.dll.o)
+file(GLOB TEST_DLLS ${MONO_APPDIR}/*.dll)
+file(GLOB TEST_DLLS_AOT ${MONO_APPDIR}/*.dll.o)
 
 set(APP_RESOURCES
-    ${BCL_DLLS}
     ${TEST_DLLS}
 )
 
@@ -18,6 +14,7 @@ add_executable(
     main.m
     runtime.h
     runtime.m
+    modules.m
     ${APP_RESOURCES}
 )
 
@@ -52,6 +49,5 @@ target_link_libraries(
     "-force_load ../../../artifacts/bin/native/netcoreapp5.0-iOS-${MONO_CONFIG}-${MONO_ARCH}/libSystem.Native.a"
     "-force_load ../../../artifacts/bin/native/netcoreapp5.0-iOS-${MONO_CONFIG}-${MONO_ARCH}/libSystem.Net.Security.Native.a"
     "-force_load ../../../artifacts/bin/native/netcoreapp5.0-iOS-${MONO_CONFIG}-${MONO_ARCH}/libSystem.Security.Cryptography.Native.Apple.a"
-    ${BCL_DLLS_AOT}
     ${TEST_DLLS_AOT}
 )

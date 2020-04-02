@@ -21,7 +21,6 @@ get_bundle_path (void)
 {
     if (bundle_path)
         return bundle_path;
-
     NSBundle* main_bundle = [NSBundle mainBundle];
     NSString* path = [main_bundle bundlePath];
     bundle_path = strdup ([path UTF8String]);
@@ -194,7 +193,10 @@ register_dllmap (void)
     mono_dllmap_insert (NULL, "libSystem.Security.Cryptography.Native.Apple", NULL, "__Internal", NULL);
 }
 
+#if DEVICE
 void mono_jit_set_aot_mode (MonoAotMode mode);
+void mono_ios_register_modules (void);
+#endif
 
 void
 mono_ios_runtime_init (void)
@@ -222,11 +224,6 @@ mono_ios_runtime_init (void)
         managed_argv[argi] = [arg UTF8String];
     }
     
-    // default executable name if it's not set via arguments (last argument)
-    const char* executable = "TestRunner.dll";
-    if (argi > 1)
-        executable = managed_argv[argi - 1];
-
     stdout_log = os_log_create ("net.dot.mono", "stdout");
 
     bool wait_for_debugger = FALSE;
@@ -239,7 +236,7 @@ mono_ios_runtime_init (void)
 #if DEVICE
     // register modules
     mono_ios_register_modules ();
-    mono_ios_setup_execution_mode ();
+    mono_jit_set_aot_mode (MONO_AOT_MODE_FULL);
 #endif
     
     mono_debug_init (MONO_DEBUG_FORMAT_MONO);
@@ -258,9 +255,12 @@ mono_ios_runtime_init (void)
 
 #if DEVICE
     // device runtimes are configured to use lazy gc thread creation
+    //MONO_ENTER_GC_UNSAFE;
     mono_gc_init_finalizer_thread ();
+    //MONO_EXIT_GC_UNSAFE;
 #endif
-
+    
+    const char* executable = "TestRunner.dll";
     MonoAssembly *assembly = load_assembly (executable, NULL);
     assert (assembly);
     os_log_info (OS_LOG_DEFAULT, "Executable: %{public}s", executable);
