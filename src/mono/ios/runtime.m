@@ -16,6 +16,20 @@ static os_log_t stdout_log;
 
 static char *bundle_path;
 
+#if !TARGET_OS_WATCH
+#define MONO_ENTER_GC_UNSAFE
+#define MONO_EXIT_GC_UNSAFE
+#else
+#define MONO_ENTER_GC_UNSAFE	\
+	do {	\
+		gpointer __dummy;	\
+		gpointer __gc_unsafe_cookie = mono_threads_enter_gc_unsafe_region (&__dummy)	\
+
+#define MONO_EXIT_GC_UNSAFE	\
+		mono_threads_exit_gc_unsafe_region	(__gc_unsafe_cookie, &__dummy);	\
+	} while (0)
+#endif
+
 const char *
 get_bundle_path (void)
 {
@@ -255,9 +269,9 @@ mono_ios_runtime_init (void)
 
 #if DEVICE
     // device runtimes are configured to use lazy gc thread creation
-    //MONO_ENTER_GC_UNSAFE;
+    MONO_ENTER_GC_UNSAFE;
     mono_gc_init_finalizer_thread ();
-    //MONO_EXIT_GC_UNSAFE;
+    MONO_EXIT_GC_UNSAFE;
 #endif
     
     const char* executable = "TestRunner.dll";
