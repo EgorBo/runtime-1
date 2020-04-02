@@ -43,16 +43,27 @@ aot-test: clean
 	$(DOTNET) run -p appbuilder tmp-$(MONO_ARCH) modules.m
 	make xcode MONO_APPDIR=tmp-$(MONO_ARCH)
 
-# build *.app and deploy to a simulator
-IOS_DEPLOY_SDK=iphonesimulator13.2
-IOS_DEVICE="iPhone 11"
+
 run-tests-sim:
 	xcodebuild -project Xcode/XunitTestRunner.xcodeproj -arch x86_64 -sdk $(IOS_DEPLOY_SDK)
-	xcrun simctl shutdown $(IOS_DEVICE) || true
-	xcrun simctl boot $(IOS_DEVICE)
+
+# build *.app and deploy to a simulator
+# NOTE: remove `open -a Simulator` and add `--auto-exit` for "quite" mode
+IOS_SIM_SDK=iphonesimulator13.2
+IOS_SIM_DEVICE="iPhone 11"
+run-tests-sim:
+	xcodebuild -project Xcode/XunitTestRunner.xcodeproj -arch x86_64 -sdk $(IOS_SIM_SDK)
+	xcrun simctl shutdown $(IOS_SIM_DEVICE) || true
+	xcrun simctl boot $(IOS_SIM_DEVICE)
 	open -a Simulator
-	xcrun simctl install $(IOS_DEVICE) Xcode/Debug-iphonesimulator/XunitTestRunner.app
+	xcrun simctl install $(IOS_SIM_DEVICE) Xcode/Debug-iphonesimulator/XunitTestRunner.app
 	xcrun simctl launch booted net.dot.XunitTestRunner
+
+# build *.app and deploy to a real device via `ios-deploy` tool (`brew install ios-deploy`)
+IOS_DEVICE_SDK=iphoneos13.2
+run-tests-device:
+	xcodebuild -project Xcode/XunitTestRunner.xcodeproj -arch arm64 -sdk $(IOS_DEVICE_SDK) -allowProvisioningUpdates DEVELOPMENT_TEAM=H6BUBW32QD
+	ios-deploy -b Xcode/Debug-iphoneos/XunitTestRunner.app -L
 
 clean:
 	rm -rf modules.m
