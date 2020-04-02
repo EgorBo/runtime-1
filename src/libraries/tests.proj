@@ -12,6 +12,10 @@
     <SerializeProjects>true</SerializeProjects> 
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(RuntimeFlavor)' == 'Mono'"> 
+    <ProjectExclusions Include="$(MSBuildThisFileDirectory)\System.Utf8String.Experimental\tests\System.Utf8String.Experimental.Tests.csproj" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(BuildAllConfigurations)' != 'true'">
     <!-- We currently only test with C# projects. -->
     <Project Condition="'$(DirectoryToBuild)' != ''" Include="$(DirectoryToBuild)\**\*.Tests.csproj" />

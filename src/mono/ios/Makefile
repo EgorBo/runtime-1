@@ -43,10 +43,6 @@ aot-test: clean
 	$(DOTNET) run -p appbuilder tmp-$(MONO_ARCH) modules.m
 	make xcode MONO_APPDIR=tmp-$(MONO_ARCH)
 
-
-run-tests-sim:
-	xcodebuild -project Xcode/XunitTestRunner.xcodeproj -arch x86_64 -sdk $(IOS_DEPLOY_SDK)
-
 # build *.app and deploy to a simulator
 # NOTE: remove `open -a Simulator` and add `--auto-exit` for "quite" mode
 IOS_SIM_SDK=iphonesimulator13.2
