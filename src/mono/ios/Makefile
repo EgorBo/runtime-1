@@ -13,13 +13,13 @@ SYSROOT := $(shell xcrun --sdk iphoneos --show-sdk-path)
 BCL_EXCLUDES =\
 	tmp-$(MONO_ARCH)/System.Runtime.WindowsRuntime.dll
 
-
 # sample: rebuild everything and run xunit tests for
-# 'System.Collections.NonGeneric.Tests.dll'
-# NOTE: don't use tests suites with remote executor usages (on device)
-run-System.Collections.NonGeneric.Tests: mono-libraries-tests
+# 'System.Numerics.Vectors.Tests.dll'
+# NOTE: don't use tests suites with remote executor usages 
+# NOTE2: run 'run-tests-sim' after in order to deploy & run on a simulator
+run-System.Numerics.Vectors.Tests: mono-libraries-tests
 	make aot-test \
-	TEST_DIR=System.Collections.NonGeneric.Tests/netcoreapp5.0-Debug
+	TEST_DIR=System.Numerics.Vectors.Tests/netcoreapp5.0-Debug
 
 # rebuild mono, bcl and tests for iOS-$(MONO_ARCH)
 mono-libraries-tests:

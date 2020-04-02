@@ -30,8 +30,8 @@ public class Program
         var lsDecl = new StringBuilder();
         lsDecl
             .AppendLine("#include <mono/jit/jit.h>")
-            .AppendLine();
-            .AppendLine("#ifdef DEVICE");
+            .AppendLine()
+            .AppendLine("#ifdef DEVICE")
             .AppendLine();
 
         var lsUsage = new StringBuilder();
