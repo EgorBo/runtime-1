@@ -286,7 +286,8 @@ DynamicMethodDesc* DynamicMethodTable::GetDynamicMethod(BYTE *psig, DWORD sigSiz
     pNewMD->m_GcCover = NULL;
 #endif
 
-    pNewMD->SetNotInline(TRUE);
+    // allow inlining for dynamic methods
+    //pNewMD->SetNotInline(TRUE);
     pNewMD->GetLCGMethodResolver()->Reset();
 
     RETURN pNewMD;

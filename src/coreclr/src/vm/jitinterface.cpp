@@ -6630,7 +6630,7 @@ DWORD CEEInfo::getMethodAttribsInternal (CORINFO_METHOD_HANDLE ftn)
 
     if (pMD->IsLCGMethod())
     {
-        return CORINFO_FLG_STATIC | CORINFO_FLG_DONT_INLINE;
+        return CORINFO_FLG_STATIC;
     }
 
     DWORD result = 0;
@@ -7870,12 +7870,13 @@ CorInfoInline CEEInfo::canInline (CORINFO_METHOD_HANDLE hCaller,
     MethodDesc* pCaller = GetMethod(hCaller);
     MethodDesc* pCallee = GetMethod(hCallee);
 
-    if (pCallee->IsNoMetadata())
+    // allow inlining for dynamic methods
+    /*if (pCallee->IsNoMetadata())
     {
         result = INLINE_FAIL;
         szFailReason = "Inlinee is NoMetadata";
         goto exit;
-    }
+    }*/
 
 #ifdef DEBUGGING_SUPPORTED
 
