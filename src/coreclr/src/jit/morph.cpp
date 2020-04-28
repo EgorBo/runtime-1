@@ -11955,6 +11955,7 @@ DONE_MORPHING_CHILDREN:
         return tree;
     }
 
+REVISIT_NODE:
     /* gtFoldExpr could have used setOper to change the oper */
     oper = tree->OperGet();
     typ  = tree->TypeGet();
@@ -12062,6 +12063,29 @@ DONE_MORPHING_CHILDREN:
             {
                 // It is not safe to reorder/delete CSE's
                 break;
+            }
+
+            // Optimize  "x & 0x80000000 != 0" to "(int)x < 0" and other variations
+            if (fgGlobalMorph && op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConst() &&
+                op2->IsIntegralConst() &&
+                varTypeIsIntegral(op1->gtGetOp1()))
+            {
+                ssize_t  cns1value = op1->gtGetOp2()->AsIntConCommon()->IconValue();
+                ssize_t  cns2value = op2->AsIntConCommon()->IconValue();
+                GenTree* arg = op1->gtGetOp1();
+
+                unsigned width = genTypeStSz(arg->TypeGet()) * 8;
+                bool cns1IsSignBit = (static_cast<size_t>(cns1value) << (64 - width)) == (1ULL << 63);
+                bool cns2IsSignBit = (static_cast<size_t>(cns2value) << (64 - width)) == (1ULL << 63);
+
+                if (cns1IsSignBit && (cns2IsSignBit || (cns2value == 0)))
+                {
+                    bool isLt = ((oper == GT_NE) && (cns2value == 0)) || ((oper == GT_EQ) && cns2IsSignBit);
+                    GenTree* newNode = gtNewOperNode(isLt ? GT_LT : GT_GE, tree->TypeGet(), op1->gtGetOp1(), op2);
+                    newNode->gtFlags |= tree->gtFlags & (GTF_RELOP_JMP_USED | GTF_RELOP_QMARK | GTF_DONT_CSE);
+                    INDEBUG(newNode->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+                    return newNode;
+                }
             }
 
             cns2 = op2;
@@ -12513,6 +12537,8 @@ DONE_MORPHING_CHILDREN:
                         oper = (oper == GT_LE) ? GT_EQ : GT_NE;
                         tree->SetOper(oper, GenTree::PRESERVE_VN);
                         tree->gtFlags &= ~GTF_UNSIGNED;
+                        // re-visit this node as GT_EQ/NE
+                        goto REVISIT_NODE;
                     }
                 }
             }
