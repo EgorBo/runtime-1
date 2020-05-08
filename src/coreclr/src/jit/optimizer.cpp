@@ -817,6 +817,12 @@ bool Compiler::optCheckIterInLoopTest(
     {
         optLoopTable[loopInd].lpFlags |= LPFLG_VAR_LIMIT;
     }
+    else if (limitOp->OperIs(GT_ADD) && limitOp->gtGetOp1()->OperIs(GT_ARR_LENGTH) &&
+             limitOp->gtGetOp2()->IsCnsIntOrI() &&
+             (limitOp->gtGetOp2()->AsIntCon()->IconValue() <= 0))
+    {
+        optLoopTable[loopInd].lpFlags |= LPFLG_ARRLEN_LIMIT;
+    }
     else if (limitOp->gtOper == GT_ARR_LENGTH)
     {
         optLoopTable[loopInd].lpFlags |= LPFLG_ARRLEN_LIMIT;

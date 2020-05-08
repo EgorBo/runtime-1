@@ -3487,7 +3487,14 @@ inline void Compiler::LoopDsc::VERIFY_lpTestTree()
     }
     if (lpFlags & LPFLG_ARRLEN_LIMIT)
     {
-        assert(limit->OperGet() == GT_ARR_LENGTH);
+        GenTree* arrLen = limit;
+        if (limit->OperIs(GT_ADD))
+        {
+            arrLen = limit->gtGetOp1();
+            assert(limit->gtGetOp2()->IsCnsIntOrI());
+            assert(limit->gtGetOp2()->AsIntCon()->IconValue() <= 0);
+        }
+        assert(arrLen->OperIs(GT_ARR_LENGTH));
     }
 #endif
 }
@@ -3560,6 +3567,14 @@ inline bool Compiler::LoopDsc::lpArrLenLimit(Compiler* comp, ArrIndex* index)
     assert(lpFlags & LPFLG_ARRLEN_LIMIT);
 
     GenTree* limit = lpLimit();
+
+    if (limit->OperIs(GT_ADD))
+    {
+        assert(limit->gtGetOp2()->IsCnsIntOrI());
+        assert(limit->gtGetOp2()->AsIntCon()->IconValue() <= 0);
+        limit = limit->gtGetOp1();   
+    }
+
     assert(limit->OperGet() == GT_ARR_LENGTH);
 
     // Check if we have a.length or a[i][j].length
