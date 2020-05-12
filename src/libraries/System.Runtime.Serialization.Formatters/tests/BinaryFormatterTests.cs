@@ -26,6 +26,7 @@ namespace System.Runtime.Serialization.Formatters.Tests
         [SkipOnCoreClr("Long running tests: https://github.com/dotnet/runtime/issues/11191", RuntimeConfiguration.Checked)]
         [InlineData(2 * 6_584_983 - 2)] // previous limit
         [InlineData(2 * 7_199_369 - 2)] // last pre-computed prime number
+        [ActiveIssue("..")]
         public void SerializeHugeObjectGraphs(int limit)
         {
             Point[] pointArr = Enumerable.Range(0, limit)

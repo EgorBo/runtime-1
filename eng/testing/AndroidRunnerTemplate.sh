@@ -20,4 +20,4 @@ done
 
 dotnet xharness android test -i="net.dot.MonoRunner" \
     --package-name="net.dot.$TEST_NAME" \
-    --app=$APK -o=$EXECUTION_DIR/TestResults -v
+    --app=$APK -o=$EXECUTION_DIR/TestResults -v -timeout=300

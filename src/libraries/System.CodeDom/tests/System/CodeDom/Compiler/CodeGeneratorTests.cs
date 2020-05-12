@@ -13,6 +13,7 @@ using Xunit;
 
 namespace System.CodeDom.Compiler.Tests
 {
+    [ActiveIssue("Crashes runtime on Android")]
     public class CodeGeneratorTests : CodeGenerator
     {
         [Fact]

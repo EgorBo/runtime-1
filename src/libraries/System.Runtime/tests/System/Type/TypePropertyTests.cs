@@ -195,6 +195,7 @@ namespace System.Tests.Types
         }
 
         [Fact]
+        [ActiveIssue("...")]
         public void IsByRef_Get_ReturnsExpected()
         {
             Type t = CreateType();
@@ -337,6 +338,7 @@ namespace System.Tests.Types
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void IsTypeDefinition_Get_ReturnsExpected()
         {
             Assert.Equal(IsTypeDefinition, CreateType().IsTypeDefinition);

@@ -16,7 +16,7 @@
       <AndroidAbi Condition="'$(AndroidAbi)'==''">$(TargetArchitecture)</AndroidAbi>
     </PropertyGroup>
     <ItemGroup>
-      <AndroidTestRunnerBinaries Include="$(AndroidTestRunnerDir)*.*" />
+      <AndroidTestRunnerBinaries Include="$(AndroidTestRunnerDir)**\*.*" />
     </ItemGroup>
 
     <Error Condition="'@(AndroidTestRunnerBinaries)' == ''" Text="Could not find AndroidTestRunner in $(AndroidTestRunnerDir)" />

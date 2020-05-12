@@ -158,6 +158,7 @@ namespace System.Tests
 
         [Theory]
         [MemberData(nameof(CreateInstance_InvalidType_TestData))]
+        [ActiveIssue("...")]
         public void CreateInstance_InvalidType_ThrowsNotSupportedException(Type type)
         {
             Assert.Throws<NotSupportedException>(() => Activator.CreateInstance(type));

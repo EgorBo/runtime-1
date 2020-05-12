@@ -2972,6 +2972,7 @@ namespace System.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public static void IStructuralComparable_NullComparer_ThrowsNullReferenceException()
         {
             // This was not fixed in order to be compatible with the .NET Framework and Xamarin.
@@ -3016,6 +3017,7 @@ namespace System.Tests
         }
 
         [Fact]
+        [ActiveIssue("...")]
         public static void IStructuralEquatable_Equals_NullComparer_ThrowsNullReferenceException()
         {
             // This was not fixed in order to be compatible with the .NET Framework and Xamarin.

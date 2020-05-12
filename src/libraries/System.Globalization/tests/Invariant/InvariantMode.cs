@@ -660,6 +660,7 @@ namespace System.Globalization.Tests
         [InlineData(1, 2)]
         [InlineData(100_000, 200_000)]
         [InlineData(0x3FFF_FFFF, 0x7FFF_FFFE)]
+        [ActiveIssue("TODO:Crashes runtime on Android")]
         public void TestGetSortKeyLength_Valid(int inputLength, int expectedSortKeyLength)
         {
             using BoundedMemory<char> boundedMemory = BoundedMemory.Allocate<char>(0); // AV if dereferenced
@@ -671,6 +672,7 @@ namespace System.Globalization.Tests
         [Theory]
         [InlineData(0x4000_0000)]
         [InlineData(int.MaxValue)]
+        [ActiveIssue("TODO:Crashes runtime on Android")]
         public unsafe void TestGetSortKeyLength_OverlongArgument(int inputLength)
         {
             using BoundedMemory<char> boundedMemory = BoundedMemory.Allocate<char>(0); // AV if dereferenced

@@ -50,6 +50,7 @@ namespace System.CodeDom.Tests
         }
 
         [Fact]
+        [ActiveIssue("TODO:Crashes runtime on Android")]
         public void Add_Null_ThrowsNullReferenceException()
         {
             var collection = new CodeNamespaceImportCollection();
@@ -84,6 +85,7 @@ namespace System.CodeDom.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void AddRange_NullObjectInValue_ThrowsNullReferenceException()
         {
             var collection = new CodeNamespaceImportCollection();

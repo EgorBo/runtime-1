@@ -78,6 +78,7 @@ namespace System.Globalization.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void DayNames_FormatWithNull_ThrowsNullReferenceException()
         {
             var value = new string[] { "1", "2", "3", "4", "5", "6", "7" };

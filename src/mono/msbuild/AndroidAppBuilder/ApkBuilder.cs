@@ -84,10 +84,17 @@ public class ApkBuilder
         // Copy AppDir to OutputDir/assets (ignore native files)
         Utils.DirectoryCopy(sourceDir, Path.Combine(OutputDir, "assets"), file =>
         {
+            bool hasNonAscii = file.Any(s => s >= 128);
+            if (hasNonAscii)
+            {
+                // aapt doesn't accept non-ASCII file names (dirs)
+                return false;
+            }
+
             string fileName = Path.GetFileName(file);
             string extension = Path.GetExtension(file);
             // ignore native files, those go to lib/%abi%
-            if (extension == ".so" || extension == ".a")
+            if (extension == ".so" || extension == ".a" || extension == ".gz")
             {
                 // ignore ".pdb" and ".dbg" to make APK smaller
                 return false;

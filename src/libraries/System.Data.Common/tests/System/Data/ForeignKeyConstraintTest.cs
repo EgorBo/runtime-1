@@ -171,6 +171,7 @@ namespace System.Data.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void TestCtor5()
         {
             DataTable table1 = new DataTable("Table1");

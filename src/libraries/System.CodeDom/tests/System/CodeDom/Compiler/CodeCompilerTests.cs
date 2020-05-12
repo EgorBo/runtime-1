@@ -468,6 +468,7 @@ namespace System.CodeDom.Compiler.Tests
         }
 
         [Fact]
+        [ActiveIssue("Crashes runtime on Android")]
         public void GetResponseFileCmdArgs_NullOptions_ThrowsNullReferenceException()
         {
             var compiler = new Compiler();

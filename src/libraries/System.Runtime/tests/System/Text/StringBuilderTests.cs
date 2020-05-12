@@ -575,6 +575,7 @@ namespace System.Text.Tests
         }
 
         [Fact]
+        [ActiveIssue("...")]
         public static unsafe void Append_CharPointer_Null_ThrowsNullReferenceException()
         {
             var builder = new StringBuilder();

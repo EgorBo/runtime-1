@@ -81,6 +81,7 @@ namespace System.Data.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void SpecifyNonExistentTable()
         {
             DataViewManager m = new DataViewManager(null);

@@ -331,6 +331,7 @@ namespace System.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public static void Equals_GetHashCode()
         {
             TupleTestDriver<short, int, long, string, char, float, double, DateTime, Tuple<bool, object>, TimeSpan> tupleDriverA, tupleDriverB, tupleDriverC, tupleDriverD;
@@ -403,6 +404,7 @@ namespace System.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public static void CompareTo()
         {
             TupleTestDriver<short, int, long, string, char, float, double, DateTime, Tuple<bool, object>, TimeSpan> tupleDriverA, tupleDriverB, tupleDriverC;

@@ -171,6 +171,7 @@ namespace System.Data.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public void DataRowCollection_Add_O4()
         {
             Assert.Throws<NullReferenceException>(() =>

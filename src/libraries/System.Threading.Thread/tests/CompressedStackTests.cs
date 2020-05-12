@@ -28,6 +28,7 @@ namespace System.Threading.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public static void RunTest()
         {
             CompressedStack compressedStack = CompressedStack.Capture();

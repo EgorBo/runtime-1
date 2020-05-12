@@ -143,6 +143,7 @@ namespace System.Reflection.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")] // iOS and Android use different test runner.
         public void GetEntryAssembly()
         {
             Assert.NotNull(Assembly.GetEntryAssembly());
@@ -765,6 +766,7 @@ namespace System.Reflection.Tests
         }
 
         [Fact]
+        [ActiveIssue("..")]
         public static void AssemblyGetForwardedTypesLoadFailure()
         {
             Assembly a = typeof(TypeInForwardedAssembly).Assembly;
