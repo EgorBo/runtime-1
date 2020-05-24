@@ -11510,6 +11510,47 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
         case GT_INDEX:
             return fgMorphArrayIndex(tree);
 
+        case GT_AND:
+        {
+            if (op2->gtOper == GT_CAST && op2->AsOp()->gtOp1->IsCnsIntOrI())
+            {
+                op2 = gtFoldExprConst(op2);
+            }
+
+            // Optimize "x & icon" to "(type)x"
+            if (!optValnumCSE_phase && op2->IsCnsIntOrI())
+            {
+                var_types maskType = TYP_UNDEF;
+                switch (static_cast<size_t>(op2->AsIntConCommon()->IconValue()))
+                {
+                    case 0xFFFFFFFFFFFFFFFFUL:
+                        maskType = TYP_ULONG;
+                        break;
+                    case 0xFFFFFFFFU:
+                        maskType = TYP_UINT;
+                        break;
+                    case 0xFFFF:
+                        maskType = TYP_USHORT;
+                        break;
+                    case 0xFF:
+                        maskType = TYP_UBYTE;
+                        break;
+                    default:
+                        maskType = TYP_UNDEF;
+                        break;
+                }
+                if (maskType != TYP_UNDEF)
+                {
+                    GenTree* downcast = gtNewCastNode(genActualType(maskType), op1, false, maskType);
+                    GenTree* upcast   = gtNewCastNode(op1->TypeGet(), downcast, true, genUnsignedType(op1->TypeGet()));
+                    tree              = fgMorphCast(upcast);
+                    INDEBUG(tree->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+                    return tree;
+                }
+            }
+            break;
+        }
+
         case GT_CAST:
             return fgMorphCast(tree);
 
