@@ -141,10 +141,9 @@ libmonoruntime_support_la_LDFLAGS = $(Z_LIBS)
 libmonoruntime_support_la_CFLAGS = $(filter-out @CXX_REMOVE_CFLAGS@, @CFLAGS@) @ZLIB_CFLAGS@
 
 if ENABLE_NETCORE
-if HAVE_SYS_ICU
 shim_libraries = libmonoruntime-shimglobalization.la
 
-nodist_libmonoruntime_shimglobalization_la_SOURCES = \
+libmonoruntime_shimglobalization_la_SOURCES = \
 									@ICU_SHIM_PATH@/pal_calendarData.c \
 									@ICU_SHIM_PATH@/pal_casing.c \
 									@ICU_SHIM_PATH@/pal_collation.c \
@@ -153,11 +152,10 @@ nodist_libmonoruntime_shimglobalization_la_SOURCES = \
 									@ICU_SHIM_PATH@/pal_localeNumberData.c \
 									@ICU_SHIM_PATH@/pal_localeStringData.c \
 									@ICU_SHIM_PATH@/pal_normalization.c \
-									@ICU_SHIM_PATH@/pal_timeZoneInfo.c \
-									@ICU_SHIM_PATH@/pal_icushim.c
+									@ICU_SHIM_PATH@/pal_icushim_static.c \
+									@ICU_SHIM_PATH@/pal_timeZoneInfo.c
 
-libmonoruntime_shimglobalization_la_CFLAGS = @ICU_CFLAGS@ -I$(top_srcdir)/../libraries/Native/Unix/Common/
-endif
+libmonoruntime_shimglobalization_la_CFLAGS = @ICU_CFLAGS@ -I$(top_srcdir)/../libraries/Native/Unix/Common/ -I$(ICU_REPO)/icu4c/source/common/ -I$(ICU_REPO)/icu4c/source/i18n/ -L$(ICU_REPO)/icu4c/source/lib/ -licui18n -licuuc -licutu -licuio -L$(ICU_REPO)/icu4c/source/stubdata -licudata 
 endif
 
 if !ENABLE_NETCORE

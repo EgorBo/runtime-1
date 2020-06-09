@@ -1,16 +1,15 @@
 ﻿using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 
-namespace HelloWorld
+namespace ConsoleApp1
 {
     class Program
     {
         static void Main(string[] args)
         {
-            bool isMono = typeof(object).Assembly.GetType("Mono.RuntimeStructs") != null;
-            Console.WriteLine("Hello World " + (isMono ? "from Mono!" : "from CoreCLR!"));
-            Console.WriteLine(typeof(object).Assembly.FullName);
-            Console.WriteLine(System.Reflection.Assembly.GetEntryAssembly ());
-            Console.WriteLine(System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription);
+            Console.WriteLine(3.13.ToString(CultureInfo.GetCultureInfo("ru-RU")));
+            Console.WriteLine(CultureInfo.GetCultureInfo("ru-RU").NativeName);
         }
     }
 }
