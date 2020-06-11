@@ -6818,23 +6818,12 @@ AC_COMPILE_IFELSE(
 # for icu shim
 ICU_SHIM_PATH=.
 if test x$with_core = xonly; then
-	if test x$cross_compiling = xno; then
-		AC_CHECK_FILE($srcdir/../libraries/Native/Unix/System.Globalization.Native/pal_icushim.h, [have_shim_globalization=yes], [have_shim_globalization=no])
-	fi
-	if test x$have_shim_globalization = xyes || test x$cross_compiling = xyes; then
-		ICU_SHIM_PATH=../../../libraries/Native/Unix/System.Globalization.Native
-		if test x$target_osx = xyes; then
-			ORIG_CPPFLAGS=$CPPFLAGS
-			ICU_CFLAGS="$CPPFLAGS  -DTARGET_UNIX -DU_DISABLE_RENAMING -Wno-reserved-id-macro -Wno-documentation -Wno-documentation-unknown-command -Wno-switch-enum -Wno-covered-switch-default -Wno-covered-switch-default -Wno-extra-semi-stmt -Wno-unknown-warning-option -Wno-deprecated-declarations"
-			CPPFLAGS=$ORIG_CPPFLAGS
-		elif test x$platform_android = xyes; then 
-			ICU_CFLAGS="-DHAVE_UDAT_STANDALONE_SHORTER_WEEKDAYS -DHAVE_SET_MAX_VARIABLE -DTARGET_UNIX -DTARGET_ANDROID -Wno-reserved-id-macro -Wno-documentation -Wno-documentation-unknown-command -Wno-switch-enum -Wno-covered-switch-default -Wno-covered-switch-default -Wno-extra-semi-stmt -Wno-unknown-warning-option"
-			have_sys_icu=yes 
-		elif test x$host_linux = xyes; then
-			ICU_CFLAGS="-DTARGET_UNIX -Wno-reserved-id-macro -Wno-documentation -Wno-documentation-unknown-command -Wno-switch-enum -Wno-covered-switch-default -Wno-covered-switch-default -Wno-extra-semi-stmt -Wno-unknown-warning-option"
-		fi
-		AC_SUBST(ICU_CFLAGS)
-	fi
+	AC_CHECK_FILE($srcdir/../libraries/Native/Unix/System.Globalization.Native/pal_icushim.h, [have_shim_globalization=yes], [have_shim_globalization=no])
+	ICU_SHIM_PATH=../../../libraries/Native/Unix/System.Globalization.Native
+	ORIG_CPPFLAGS=$CPPFLAGS
+	ICU_CFLAGS="$CPPFLAGS  -DTARGET_UNIX -DU_DISABLE_RENAMING -Wno-reserved-id-macro -Wno-documentation -Wno-documentation-unknown-command -Wno-switch-enum -Wno-covered-switch-default -Wno-covered-switch-default -Wno-extra-semi-stmt -Wno-unknown-warning-option -Wno-deprecated-declarations"
+	CPPFLAGS=$ORIG_CPPFLAGS
+	AC_SUBST(ICU_CFLAGS)
 fi
 AC_SUBST(ICU_SHIM_PATH)
 AM_CONDITIONAL(HAVE_SYS_ICU, test x$have_sys_icu = xyes)

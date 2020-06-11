@@ -67,6 +67,8 @@
           Command="cd $(ICU_REPO)/icu4c/source &amp;&amp; make -j4"
           IgnoreStandardErrorWarningFormat="true"/>
 
+    <!-- For WASM use https://github.com/kg/mono/blob/wasm-libicu/sdks/wasm/icu/build-icu.sh script -->
+
     <!-- Debug specific options -->
     <ItemGroup Condition="'$(Configuration)' == 'Debug'">
       <_MonoConfigureParams Include="--enable-checked-build=private_types" />
