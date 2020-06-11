@@ -51,6 +51,8 @@ MONO_INCLUDE_DIR=$(MONO_BIN_DIR)/include/mono-2.0
 BUILDS_OBJ_DIR=$(MONO_OBJ_DIR)/wasm
 MONO_LIBS = \
 	$(MONO_BIN_DIR)/{libmono-ee-interp.a,libmonosgen-2.0.a,libmono-ilgen.a,libmono-icall-table.a} \
+	$(ICU_REPO)/icu4c/source/wasm-build/lib/{libicui18n.a,libicuio.a,libicuuc.a,libicutu.a} \
+	$(ICU_REPO)/icu4c/source/wasm-build/stubdata/libicudata.a \
 	${SYS_NATIVE_DIR}/libSystem.Native.a
 
 EMCC_FLAGS=--profiling-funcs -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s BINARYEN=1 -s ALIASING_FUNCTION_POINTERS=0 -s NO_EXIT_RUNTIME=1 -s "EXTRA_EXPORTED_RUNTIME_METHODS=['ccall', 'FS_createPath', 'FS_createDataFile', 'cwrap', 'setValue', 'getValue', 'UTF8ToString', 'addFunction']" -s "EXPORTED_FUNCTIONS=['_putchar']" --source-map-base http://example.com  -s WASM_OBJECT_FILES=0 -s FORCE_FILESYSTEM=1 -s USE_ZLIB=1
