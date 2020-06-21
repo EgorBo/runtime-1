@@ -6272,6 +6272,16 @@ GenTree* Compiler::fgMorphField(GenTree* tree, MorphAddrContext* mac)
                         addr->gtFlags |= GTF_ICON_INITCLASS;
                     }
 
+                    // if the field is "static readonly" and the holder is already statically initialized
+                    // we can mark such loads as invariant to get the same VN
+                    // see comments for "getStaticFieldCurrentClass"
+                    bool plsSpeculative = true;
+                    if ((info.compCompHnd->getStaticFieldCurrentClass(symHnd, &plsSpeculative) != NO_CLASS_HANDLE) && !plsSpeculative)
+                    {
+                        JITDUMP("Marking static read-only field '%s' as invariant.\n", eeGetFieldName(symHnd));
+                        tree->gtFlags |= GTF_IND_INVARIANT;
+                    }
+
                     tree->SetOper(GT_IND);
                     tree->AsOp()->gtOp1 = addr;
 
