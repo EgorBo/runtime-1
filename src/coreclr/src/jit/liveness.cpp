@@ -2276,6 +2276,11 @@ bool Compiler::fgRemoveDeadStore(GenTree**        pTree,
         GenTree* sideEffList = nullptr;
         if (rhsNode->gtFlags & GTF_SIDE_EFFECT)
         {
+            // Do not remove if contains a bounds check.
+            if (rhsNode->OperIs(GT_COMMA) && rhsNode->gtGetOp1()->OperIsBoundsCheck())
+            {
+                return false;
+            }
 #ifdef DEBUG
             if (verbose)
             {
