@@ -4230,12 +4230,15 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     //        Vector64.CreateScalarUnsafe(z)
                     //    ).ToScalar();
 
+                    NamedIntrinsic createScalarIntrin = callType ==
+                        TYP_DOUBLE ? NI_Vector64_Create : NI_Vector64_CreateScalarUnsafe;
+
                     GenTree* op3 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
-                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                                                            createScalarIntrin, callType, 8);
                     GenTree* op2 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
-                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                                                            createScalarIntrin, callType, 8);
                     GenTree* op1 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
-                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                                                            createScalarIntrin, callType, 8);
                     GenTree* res =
                         gtNewSimdHWIntrinsicNode(TYP_SIMD8, op1, op2, op3, NI_AdvSimd_FusedMultiplyAddScalar, callType, 8);
 
