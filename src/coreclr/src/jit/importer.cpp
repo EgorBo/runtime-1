@@ -4219,7 +4219,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 }
 #endif // TARGET_XARCH
 #ifdef TARGET_ARM64
-                //if (true)compExactlyDependsOn(InstructionSet_AdvSimd))
+                if (true)compExactlyDependsOn(InstructionSet_AdvSimd))
                 {
                     assert(varTypeIsFloating(callType));
 
