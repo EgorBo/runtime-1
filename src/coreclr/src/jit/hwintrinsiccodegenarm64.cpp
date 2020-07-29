@@ -537,7 +537,7 @@ void CodeGen::genHWIntrinsic(GenTreeHWIntrinsic* node)
             case NI_AdvSimd_FusedMultiplySubtractNegatedScalar:
             case NI_AdvSimd_FusedMultiplySubtractScalar:
                 assert(opt == INS_OPTS_NONE);
-                GetEmitter()->emitIns_R_R_R_R(ins, emitSize, targetReg, op2Reg, op3Reg, op1Reg);
+                GetEmitter()->emitIns_R_R_R_R(ins, emitSize, targetReg, op3Reg, op1Reg, op2Reg);
                 break;
 
             case NI_AdvSimd_DuplicateSelectedScalarToVector64:

@@ -4200,10 +4200,10 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     assert(varTypeIsFloating(callType));
 
                     // We are constructing a chain of intrinsics similar to:
-                    //    return FMA.MultiplyAddScalar(
-                    //        Vector128.CreateScalar(x),
-                    //        Vector128.CreateScalar(y),
-                    //        Vector128.CreateScalar(z)
+                    //    return Fma.MultiplyAddScalar(
+                    //        Vector128.CreateScalarUnsafe(x),
+                    //        Vector128.CreateScalarUnsafe(y),
+                    //        Vector128.CreateScalarUnsafe(z)
                     //    ).ToScalar();
 
                     GenTree* op3 = gtNewSimdHWIntrinsicNode(TYP_SIMD16, impPopStack().val,
@@ -4218,6 +4218,30 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     retNode = gtNewSimdHWIntrinsicNode(callType, res, NI_Vector128_ToScalar, callType, 16);
                 }
 #endif // TARGET_XARCH
+#ifdef TARGET_ARM64
+                //if (true)compExactlyDependsOn(InstructionSet_AdvSimd))
+                {
+                    assert(varTypeIsFloating(callType));
+
+                    // We are constructing a chain of intrinsics similar to:
+                    //    return AdvSimd.FusedMultiplyAddByScalar(
+                    //        Vector64.CreateScalarUnsafe(x),
+                    //        Vector64.CreateScalarUnsafe(y),
+                    //        Vector64.CreateScalarUnsafe(z)
+                    //    ).ToScalar();
+
+                    GenTree* op3 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
+                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                    GenTree* op2 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
+                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                    GenTree* op1 = gtNewSimdHWIntrinsicNode(TYP_SIMD8, impPopStack().val,
+                                                            NI_Vector64_CreateScalarUnsafe, callType, 8);
+                    GenTree* res =
+                        gtNewSimdHWIntrinsicNode(TYP_SIMD8, op1, op2, op3, NI_AdvSimd_FusedMultiplyAddScalar, callType, 8);
+
+                    retNode = gtNewSimdHWIntrinsicNode(callType, res, NI_Vector64_ToScalar, callType, 8);
+                }
+#endif // TARGET_ARM64
                 break;
             }
 #endif // FEATURE_HW_INTRINSICS
