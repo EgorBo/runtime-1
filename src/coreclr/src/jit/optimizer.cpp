@@ -4600,6 +4600,12 @@ bool Compiler::optDeriveLoopCloningConditions(unsigned loopNum, LoopCloneContext
                 JITDUMP("> limit %d is invalid\n", limit);
                 return false;
             }
+            if (limit < 16) // TODO: TBD
+            {
+                // not profitable to clone, size increase with little or even negative profit
+                JITDUMP("> limit is below 16\n", limit);
+                return false;
+            }
             ident = LC_Ident(static_cast<unsigned>(limit), LC_Ident::Const);
         }
         else if (loop->lpFlags & LPFLG_VAR_LIMIT)
