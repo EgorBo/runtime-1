@@ -5404,6 +5404,14 @@ GenTree* Lowering::LowerConstIntDivOrMod(GenTree* node)
 #endif
     }
 
+    if (isDiv && absDivisorValue >= 4 && isPow2(absDivisorValue) && comp->opts.compUseCMOV)
+    {
+        divisor->SetContained();
+        // don't expand "X s/ C" to RSH+AND+ADD if C is a power of two (>= 4)
+        // and CMOV instruction is available
+        return nullptr;
+    }
+
     // We're committed to the conversion now. Go find the use if any.
     LIR::Use use;
     if (!BlockRange().TryGetUse(node, &use))

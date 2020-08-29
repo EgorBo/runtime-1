@@ -773,6 +773,7 @@ void CodeGen::genCodeForDivMod(GenTreeOp* treeNode)
     GenTree*   divisor    = treeNode->gtOp2;
     genTreeOps oper       = treeNode->OperGet();
     emitAttr   size       = emitTypeSize(treeNode);
+    regNumber  operandReg = dividend->GetRegNum();
     regNumber  targetReg  = treeNode->GetRegNum();
     var_types  targetType = treeNode->TypeGet();
     emitter*   emit       = GetEmitter();
@@ -783,7 +784,56 @@ void CodeGen::genCodeForDivMod(GenTreeOp* treeNode)
     // dividend is in a register.
     assert(dividend->isUsedFromReg());
 
-    genConsumeOperands(treeNode->AsOp());
+    genConsumeReg(dividend);
+
+    if (treeNode->OperIs(GT_DIV) && treeNode->TypeIs(TYP_INT, TYP_LONG) &&
+        divisor->IsIntegralConst())
+    {
+        if (operandReg == targetReg)
+        {
+            // the optimization won't work if target reg == dividend reg
+            // so we need to move the dividend to a temp reg
+            inst_RV_RV(INS_mov, REG_RDX, operandReg, targetType);
+            operandReg = REG_RDX;
+        }
+
+        const ssize_t cnsDivisor    = divisor->AsIntConCommon()->IconValue();
+        const size_t  absCnsDivisor = abs(cnsDivisor);
+        if (absCnsDivisor >= 4 && isPow2(absCnsDivisor))
+        {
+            if (absCnsDivisor <= (1UL << 30))
+            {
+                // lea    rax, [rdx + (cnsDivisor-1)]
+                emit->emitIns_R_AR(INS_lea, size, targetReg, operandReg, static_cast<int>(absCnsDivisor - 1));
+            }
+            else
+            {
+                // mov + add
+                assert(false); // TODO
+            }
+
+            // test   rdx, rdx
+            emit->emitIns_R_R(INS_test, size, operandReg, operandReg);
+
+            // cmovns rax, rdx
+            emit->emitIns_R_R(INS_cmovns, size, targetReg, operandReg);
+
+            // sar    rax, ctz(cnsDivisor)
+            emit->emitIns_R_I(INS_sar_N, size, targetReg, genLog2(static_cast<size_t>(absCnsDivisor)));
+
+            if (cnsDivisor < 0)
+            {
+                // neg    rax
+                emit->emitIns_R(INS_neg, size, targetReg);
+            }
+
+            genProduceReg(treeNode);
+            return;
+        }
+    }
+
+    genConsumeRegs(divisor);
+
     // dividend must be in RAX
     genCopyRegIfNeeded(dividend, REG_RAX);
 
