@@ -17367,6 +17367,7 @@ void Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
         }
         Statement* trueStmt = fgNewStmtFromTree(trueExpr, stmt->GetILOffsetX());
         fgInsertStmtAtEnd(thenBlock, trueStmt);
+        thenBlock->bbFlags |= qmark->gtGetOp2()->AsColon()->bbThenNodeFlags;
     }
 
     // Assign the falseExpr into the dst or tmp, insert in elseBlock
@@ -17378,6 +17379,7 @@ void Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
         }
         Statement* falseStmt = fgNewStmtFromTree(falseExpr, stmt->GetILOffsetX());
         fgInsertStmtAtEnd(elseBlock, falseStmt);
+        elseBlock->bbFlags |= qmark->gtGetOp2()->AsColon()->bbElseNodeFlags;
     }
 
 #ifdef DEBUG

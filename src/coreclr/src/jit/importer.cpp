@@ -4268,6 +4268,57 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_String_Equals:
+            {
+                GenTree* arg0 = impStackTop(1).val;
+                GenTree* arg1 = impStackTop(0).val;
+
+                GenTreeStrCon* arg0cns = nullptr;
+                GenTreeStrCon* arg1cns = nullptr;
+
+                if (arg0->OperIs(GT_CNS_STR))
+                {
+                    arg0cns = arg0->AsStrCon();
+                }
+
+                if (arg1->OperIs(GT_CNS_STR))
+                {
+                    arg1cns = arg1->AsStrCon();
+                }
+
+                // Convert 'x == ""'  to  'x != null && x.Length == 0'
+                if ((arg0cns != nullptr) ^ (arg1cns != nullptr))
+                {
+                    GenTreeStrCon* cnsArg = arg0cns != nullptr ? arg0cns : arg1cns;
+                    GenTree*       varArg = arg0cns == nullptr ? arg0 : arg1;
+
+                    int length = -1;
+                    info.compCompHnd->getStringLiteral(cnsArg->gtScpHnd, cnsArg->gtSconCPX, &length);
+
+                    if (length == 0)
+                    {
+                        GenTree* varArgIsNull = gtNewOperNode(GT_NE, TYP_INT, varArg, gtNewIconNode(0, TYP_REF));
+                        GenTree* lengthIsZero = gtNewOperNode(GT_EQ, TYP_INT, gtNewArrLen(TYP_INT, gtClone(varArg),
+                            OFFSETOF__CORINFO_String__stringLen, nullptr), gtNewIconNode(0));
+
+                        GenTreeColon* colon = new (this, GT_COLON) GenTreeColon(TYP_INT, lengthIsZero, gtNewIconNode(0));
+
+                        // since colon will be expanded into new basic-blocks we need to keep
+                        // BBF_HAS_IDX_LEN flag in the one ElseNode will be added to.
+                        colon->bbThenNodeFlags |= BBF_HAS_IDX_LEN;
+
+                        unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling string.Equals(x, \"\") tree "));
+                        impAssignTempGen(tmp, gtNewQmarkNode(TYP_INT, varArgIsNull, colon), (unsigned)CHECK_SPILL_NONE);
+                        retNode = gtNewLclvNode(tmp, TYP_INT);
+
+                        impPopStack();
+                        impPopStack();
+                        break;
+                    }
+                }
+                break;
+            }
+
             case NI_System_Buffers_Binary_BinaryPrimitives_ReverseEndianness:
             {
                 assert(sig->numArgs == 1);
@@ -4621,6 +4672,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             if (strcmp(methodName, "KeepAlive") == 0)
             {
                 result = NI_System_GC_KeepAlive;
+            }
+        }
+        else if (strcmp(className, "String") == 0)
+        {
+            if (strcmp(methodName, "Equals") == 0)
+            {
+                result = NI_System_String_Equals;
             }
         }
         else if (strcmp(className, "Type") == 0)
