@@ -137,6 +137,7 @@ INLINE_OBSERVATION(IS_TOO_DEEP,               bool,   "too deep",               
 INLINE_OBSERVATION(IS_VIRTUAL,                bool,   "virtual",                              FATAL,       CALLSITE)
 INLINE_OBSERVATION(IS_VM_NOINLINE,            bool,   "noinline per VM",                      FATAL,       CALLSITE)
 INLINE_OBSERVATION(IS_WITHIN_CATCH,           bool,   "within catch region",                  FATAL,       CALLSITE)
+INLINE_OBSERVATION(IS_WITHIN_COLD_BLOCK,      bool,   "within cold block",                    FATAL,       CALLSITE)
 INLINE_OBSERVATION(IS_WITHIN_FILTER,          bool,   "within filter region",                 FATAL,       CALLSITE)
 INLINE_OBSERVATION(LDARGA_NOT_LOCAL_VAR,      bool,   "ldarga not on local var",              FATAL,       CALLSITE)
 INLINE_OBSERVATION(LDFLD_NEEDS_HELPER,        bool,   "ldfld needs helper",                   FATAL,       CALLSITE)

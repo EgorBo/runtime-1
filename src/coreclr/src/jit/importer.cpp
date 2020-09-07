@@ -20117,6 +20117,20 @@ void Compiler::impMarkInlineCandidateHelper(GenTreeCall*           call,
 
     if (!(methAttr & CORINFO_FLG_FORCEINLINE))
     {
+
+        if (compCurBB->isRunRarely())
+        {
+#ifdef DEBUG
+            if (verbose)
+            {
+                printf("\nWill not inline calls in cold basic blocks\n");
+            }
+#endif
+
+            inlineResult.NoteFatal(InlineObservation::CALLSITE_IS_WITHIN_COLD_BLOCK);
+            return;
+        }
+
         /* Don't bother inline blocks that are in the filter region */
         if (bbInCatchHandlerILRange(compCurBB))
         {
