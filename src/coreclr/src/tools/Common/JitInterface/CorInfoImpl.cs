@@ -1303,7 +1303,6 @@ namespace Internal.JitInterface
         {
             if (field != null)
             {
-                // TODO: get static field value (type is guaranteed to be already statically inited)
                 length = -1;
                 return null;
             }

@@ -3724,14 +3724,14 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
             {
                 // Optimize `ldstr + String::get_Length()` to CNS_INT
                 // e.g. "Hello".Length => 5
-                // it also supports static readonly fields (if type is already inited) instead of ldstr.
                 int     length = -1;
                 LPCWSTR str    = nullptr;
 
-                if (op1->OperIs(GT_FIELD))
+                if (!opts.IsReadyToRun() && op1->OperIs(GT_FIELD))
                 {
                     GenTreeField* field             = op1->AsField();
                     bool          plsSpeculative    = true;
+                    // check if op1 is a static readonly field of a statically inited class
                     CORINFO_CLASS_HANDLE fieldClass = info.compCompHnd->getStaticFieldCurrentClass(field->gtFldHnd, &plsSpeculative);
                     if ((fieldClass != NO_CLASS_HANDLE) && !plsSpeculative)
                     {
@@ -3743,10 +3743,6 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 {
                     str = info.compCompHnd->getStringLiteral(nullptr, op1->AsStrCon()->gtScpHnd,
                                                                       op1->AsStrCon()->gtSconCPX, &length);
-                }
-                if (op1->OperIs(GT_IND) && (op1->gtFlags & GTF_ICON_STR_HDL))
-                {
-                    // TODO: is it string.Empty?
                 }
                 if (length >= 0)
                 {
