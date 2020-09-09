@@ -1,3 +1,4 @@
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -78,7 +79,7 @@ namespace Internal.JitInterface
         [UnmanagedFunctionPointerAttribute(default(CallingConvention))]
         [return: MarshalAs(UnmanagedType.Bool)]delegate bool __isValidStringRef(IntPtr _this, IntPtr* ppException, CORINFO_MODULE_STRUCT_* module, uint metaTOK);
         [UnmanagedFunctionPointerAttribute(default(CallingConvention))]
-        delegate char* __getStringLiteral(IntPtr _this, IntPtr* ppException, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length);
+        delegate char* __getStringLiteral(IntPtr _this, IntPtr* ppException, CORINFO_FIELD_STRUCT_* field, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length);
         [UnmanagedFunctionPointerAttribute(default(CallingConvention))]
         delegate CorInfoType __asCorInfoType(IntPtr _this, IntPtr* ppException, CORINFO_CLASS_STRUCT_* cls);
         [UnmanagedFunctionPointerAttribute(default(CallingConvention))]
@@ -812,12 +813,12 @@ namespace Internal.JitInterface
             }
         }
 
-        static char* _getStringLiteral(IntPtr thisHandle, IntPtr* ppException, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
+        static char* _getStringLiteral(IntPtr thisHandle, IntPtr* ppException, CORINFO_FIELD_STRUCT_* field, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
         {
             var _this = GetThis(thisHandle);
             try
             {
-                return _this.getStringLiteral(module, metaTOK, ref length);
+                return _this.getStringLiteral(field, module, metaTOK, ref length);
             }
             catch (Exception ex)
             {

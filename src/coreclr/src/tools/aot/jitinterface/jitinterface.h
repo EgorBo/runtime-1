@@ -1,3 +1,4 @@
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -42,7 +43,7 @@ struct JitInterfaceCallbacks
     void* (* getTokenTypeAsHandle)(void * thisHandle, CorInfoException** ppException, void* pResolvedToken);
     int (* isValidToken)(void * thisHandle, CorInfoException** ppException, void* module, unsigned metaTOK);
     int (* isValidStringRef)(void * thisHandle, CorInfoException** ppException, void* module, unsigned metaTOK);
-    const wchar_t* (* getStringLiteral)(void * thisHandle, CorInfoException** ppException, void* module, unsigned metaTOK, int* length);
+    const wchar_t* (* getStringLiteral)(void * thisHandle, CorInfoException** ppException, void* field, void* module, unsigned metaTOK, int* length);
     int (* asCorInfoType)(void * thisHandle, CorInfoException** ppException, void* cls);
     const char* (* getClassName)(void * thisHandle, CorInfoException** ppException, void* cls);
     const char* (* getClassNameFromMetadata)(void * thisHandle, CorInfoException** ppException, void* cls, const char** namespaceName);
@@ -484,10 +485,10 @@ public:
         return _ret;
     }
 
-    virtual const wchar_t* getStringLiteral(void* module, unsigned metaTOK, int* length)
+    virtual const wchar_t* getStringLiteral(void* field, void* module, unsigned metaTOK, int* length)
     {
         CorInfoException* pException = nullptr;
-        const wchar_t* _ret = _callbacks->getStringLiteral(_thisHandle, &pException, module, metaTOK, length);
+        const wchar_t* _ret = _callbacks->getStringLiteral(_thisHandle, &pException, field, module, metaTOK, length);
         if (pException != nullptr)
             throw pException;
         return _ret;
