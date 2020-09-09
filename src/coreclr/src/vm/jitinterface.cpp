@@ -827,23 +827,49 @@ LPCWSTR CEEInfo::getStringLiteral (
 
     JIT_TO_EE_TRANSITION();
 
-    if (IsDynamicScope(moduleHnd))
+    if (fieldHnd != nullptr)
     {
-        *length = GetDynamicResolver(moduleHnd)->GetStringLiteralLength(metaTOK);
-    }
-    else
-    {
-        DWORD dwCharCount;
-        LPCWSTR pString;
-        if (!FAILED((module)->GetMDImport()->GetUserString(metaTOK, &dwCharCount, NULL, &pString)))
+        FieldDesc* pFD = (FieldDesc*)fieldHnd;
+        assert(moduleHnd == nullptr);
+        assert(metaTOK == 0);
+        assert(pFD->IsStatic());
+
+        GCX_COOP();
+        OBJECTREF fieldObj = pFD->GetStaticOBJECTREF();
+        VALIDATEOBJECTREF(fieldObj);
+        StringObject* strObj = (StringObject*)OBJECTREFToObject(fieldObj);
+        if (strObj)
         {
-            // For string.Empty pString will be null
-            *length = dwCharCount;
-            result = pString;
+            SString sstr;
+            strObj->GetSString(sstr);
+            *length = strObj->GetStringLength();
+            result = sstr.GetUnicode();
         }
         else
         {
             *length = -1;
+        }
+    }
+    else
+    {
+        if (IsDynamicScope(moduleHnd))
+        {
+            *length = GetDynamicResolver(moduleHnd)->GetStringLiteralLength(metaTOK);
+        }
+        else
+        {
+            DWORD dwCharCount;
+            LPCWSTR pString;
+            if (!FAILED((module)->GetMDImport()->GetUserString(metaTOK, &dwCharCount, NULL, &pString)))
+            {
+                // For string.Empty pString will be null
+                *length = dwCharCount;
+                result = pString;
+            }
+            else
+            {
+                *length = -1;
+            }
         }
     }
 

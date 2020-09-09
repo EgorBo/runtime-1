@@ -3722,7 +3722,13 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
             op1 = impPopStack().val;
             if (opts.OptimizationEnabled())
             {
-                if (!strcmp(info.compMethodName, "Egor") && op1->OperIs(GT_FIELD))
+                // Optimize `ldstr + String::get_Length()` to CNS_INT
+                // e.g. "Hello".Length => 5
+                // it also supports static readonly fields (if type is already inited) instead of ldstr.
+                int     length = -1;
+                LPCWSTR str    = nullptr;
+
+                if (op1->OperIs(GT_FIELD))
                 {
                     GenTreeField* field             = op1->AsField();
                     bool          plsSpeculative    = true;
@@ -3730,30 +3736,30 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     if ((fieldClass != NO_CLASS_HANDLE) && !plsSpeculative)
                     {
                         assert(fieldClass == impGetStringClass());
-                        printf("Marking static read-only field '%s' as invariant.\n", eeGetFieldName(field->gtFldHnd));
+                        str = info.compCompHnd->getStringLiteral(field->gtFldHnd, nullptr, 0, &length);
                     }
-                    printf("...\n");
                 }
                 if (op1->OperIs(GT_CNS_STR))
                 {
-                    // Optimize `ldstr + String::get_Length()` to CNS_INT
-                    // e.g. "Hello".Length => 5
-                    int     length = -1;
-                    LPCWSTR str    = info.compCompHnd->getStringLiteral(nullptr, op1->AsStrCon()->gtScpHnd,
-                                                                     op1->AsStrCon()->gtSconCPX, &length);
-                    if (length >= 0)
+                    str = info.compCompHnd->getStringLiteral(nullptr, op1->AsStrCon()->gtScpHnd,
+                                                                      op1->AsStrCon()->gtSconCPX, &length);
+                }
+                if (op1->OperIs(GT_IND) && (op1->gtFlags & GTF_ICON_STR_HDL))
+                {
+                    // TODO: is it string.Empty?
+                }
+                if (length >= 0)
+                {
+                    retNode = gtNewIconNode(length);
+                    if (str != nullptr) // can be NULL for dynamic context
                     {
-                        retNode = gtNewIconNode(length);
-                        if (str != nullptr) // can be NULL for dynamic context
-                        {
-                            JITDUMP("Optimizing '\"%ws\".Length' to just '%d'\n", str, length);
-                        }
-                        else
-                        {
-                            JITDUMP("Optimizing 'CNS_STR.Length' to just '%d'\n", length);
-                        }
-                        break;
+                        JITDUMP("Optimizing '\"%ws\".Length' to just '%d'\n", str, length);
                     }
+                    else
+                    {
+                        JITDUMP("Optimizing 'CNS_STR.Length' to just '%d'\n", length);
+                    }
+                    break;
                 }
                 GenTreeArrLen* arrLen = gtNewArrLen(TYP_INT, op1, OFFSETOF__CORINFO_String__stringLen, compCurBB);
                 op1                   = arrLen;

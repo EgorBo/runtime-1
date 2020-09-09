@@ -1301,6 +1301,12 @@ namespace Internal.JitInterface
 
         private char* getStringLiteral(CORINFO_FIELD_STRUCT_* field, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
         {
+            if (field != null)
+            {
+                // TODO: get static field value (type is guaranteed to be already statically inited)
+                length = -1;
+                return null;
+            }
             MethodIL methodIL = (MethodIL)HandleToObject((IntPtr)module);
             string s = (string)methodIL.GetObject((int)metaTOK);
             length = (int)s.Length;
