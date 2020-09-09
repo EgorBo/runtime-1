@@ -840,10 +840,13 @@ LPCWSTR CEEInfo::getStringLiteral (
         StringObject* strObj = (StringObject*)OBJECTREFToObject(fieldObj);
         if (strObj)
         {
-            SString sstr;
-            strObj->GetSString(sstr);
             *length = strObj->GetStringLength();
-            result = sstr.GetUnicode();
+            if (*length < 1000)
+            {
+                SString sstr;
+                strObj->GetSString(sstr);
+                result = sstr.GetUnicode();
+            }
         }
         else
         {
