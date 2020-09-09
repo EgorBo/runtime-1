@@ -352,13 +352,14 @@ BOOL interceptor_ICJI::isValidStringRef(CORINFO_MODULE_HANDLE module, /* IN  */
     return original_ICorJitInfo->isValidStringRef(module, metaTOK);
 }
 
-LPCWSTR interceptor_ICJI::getStringLiteral(CORINFO_MODULE_HANDLE module,  /* IN  */
+LPCWSTR interceptor_ICJI::getStringLiteral(CORINFO_FIELD_HANDLE  field,   /* IN  */
+                                           CORINFO_MODULE_HANDLE module,  /* IN  */
                                            unsigned              metaTOK, /* IN  */
                                            int*                  length   /* OUT */
                                            )
 {
     mcs->AddCall("getStringLiteral");
-    return original_ICorJitInfo->getStringLiteral(module, metaTOK, length);
+    return original_ICorJitInfo->getStringLiteral(field, module, metaTOK, length);
 }
 
 /**********************************************************************************/

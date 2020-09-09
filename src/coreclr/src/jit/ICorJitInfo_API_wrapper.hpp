@@ -330,12 +330,13 @@ BOOL WrapICorJitInfo::isValidStringRef(
 }
 
 LPCWSTR WrapICorJitInfo::getStringLiteral(
+            CORINFO_FIELD_HANDLE        field,      /* IN  */
             CORINFO_MODULE_HANDLE       module,     /* IN  */
             unsigned                    metaTOK,    /* IN  */
             int*                        length      /* OUT */)
 {
     API_ENTER(getStringLiteral);
-    LPCWSTR temp = wrapHnd->getStringLiteral(module, metaTOK, length);
+    LPCWSTR temp = wrapHnd->getStringLiteral(field, module, metaTOK, length);
     API_LEAVE(getStringLiteral);
     return temp;
 }

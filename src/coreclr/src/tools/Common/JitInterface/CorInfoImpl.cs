@@ -1299,7 +1299,7 @@ namespace Internal.JitInterface
         private bool isValidStringRef(CORINFO_MODULE_STRUCT_* module, uint metaTOK)
         { throw new NotImplementedException("isValidStringRef"); }
 
-        private char* getStringLiteral(CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
+        private char* getStringLiteral(CORINFO_FIELD_STRUCT_* field, CORINFO_MODULE_STRUCT_* module, uint metaTOK, ref int length)
         {
             MethodIL methodIL = (MethodIL)HandleToObject((IntPtr)module);
             string s = (string)methodIL.GetObject((int)metaTOK);

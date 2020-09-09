@@ -3722,12 +3722,24 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
             op1 = impPopStack().val;
             if (opts.OptimizationEnabled())
             {
+                if (!strcmp(info.compMethodName, "Egor") && op1->OperIs(GT_FIELD))
+                {
+                    GenTreeField* field             = op1->AsField();
+                    bool          plsSpeculative    = true;
+                    CORINFO_CLASS_HANDLE fieldClass = info.compCompHnd->getStaticFieldCurrentClass(field->gtFldHnd, &plsSpeculative);
+                    if ((fieldClass != NO_CLASS_HANDLE) && !plsSpeculative)
+                    {
+                        assert(fieldClass == impGetStringClass());
+                        printf("Marking static read-only field '%s' as invariant.\n", eeGetFieldName(field->gtFldHnd));
+                    }
+                    printf("...\n");
+                }
                 if (op1->OperIs(GT_CNS_STR))
                 {
                     // Optimize `ldstr + String::get_Length()` to CNS_INT
                     // e.g. "Hello".Length => 5
                     int     length = -1;
-                    LPCWSTR str    = info.compCompHnd->getStringLiteral(op1->AsStrCon()->gtScpHnd,
+                    LPCWSTR str    = info.compCompHnd->getStringLiteral(nullptr, op1->AsStrCon()->gtScpHnd,
                                                                      op1->AsStrCon()->gtSconCPX, &length);
                     if (length >= 0)
                     {

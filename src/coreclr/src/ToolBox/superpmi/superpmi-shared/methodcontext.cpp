@@ -4511,17 +4511,18 @@ BOOL MethodContext::repIsValidStringRef(CORINFO_MODULE_HANDLE module, unsigned m
 }
 
 
-void MethodContext::recGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int length, LPCWSTR result)
+void MethodContext::recGetStringLiteral(CORINFO_FIELD_HANDLE field, CORINFO_MODULE_HANDLE module, unsigned metaTOK, int length, LPCWSTR result)
 {
     if (GetStringLiteral == nullptr)
-        GetStringLiteral = new LightWeightMap<DLD, DD>();
+        GetStringLiteral = new LightWeightMap<DLDLD, DD>();
 
-    DLD key;
-    ZeroMemory(&key, sizeof(DLD)); // We use the input structs as a key and use memcmp to compare.. so we need to zero
+    DLDLD key;
+    ZeroMemory(&key, sizeof(DLDLD)); // We use the input structs as a key and use memcmp to compare.. so we need to zero
                                    // out padding too
 
-    key.A = (DWORDLONG)module;
-    key.B = (DWORD)metaTOK;
+    key.A = (DWORDLONG)field;
+    key.B = (DWORDLONG)module;
+    key.C = (DWORD)metaTOK;
 
     DWORD strBuf = (DWORD)-1;
     if (result != nullptr)
@@ -4534,13 +4535,13 @@ void MethodContext::recGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned m
     GetStringLiteral->Add(key, value);
 }
 
-void MethodContext::dmpGetStringLiteral(DLD key, DD value)
+void MethodContext::dmpGetStringLiteral(DLDLD key, DD value)
 {
-    printf("GetStringLiteral key mod-%016llX tok-%08X, result-%s, len-%u", key.A, key.B,
+    printf("GetStringLiteral key fld-%016llX mod-%016llX tok-%08X, result-%s, len-%u", key.A, key.B, key.C,
         GetStringLiteral->GetBuffer(value.B), value.A);
 }
 
-LPCWSTR MethodContext::repGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int* length)
+LPCWSTR MethodContext::repGetStringLiteral(CORINFO_FIELD_HANDLE field, CORINFO_MODULE_HANDLE module, unsigned metaTOK, int* length)
 {
     if (GetStringLiteral == nullptr)
     {
@@ -4548,12 +4549,13 @@ LPCWSTR MethodContext::repGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigne
         return nullptr;
     }
 
-    DLD key;
-    ZeroMemory(&key, sizeof(DLD)); // We use the input structs as a key and use memcmp to compare.. so we need to zero
+    DLDLD key;
+    ZeroMemory(&key, sizeof(DLDLD)); // We use the input structs as a key and use memcmp to compare.. so we need to zero
                                    // out padding too
 
-    key.A = (DWORDLONG)module;
-    key.B = (DWORD)metaTOK;
+    key.A = (DWORDLONG)field;
+    key.B = (DWORDLONG)module;
+    key.C = (DWORD)metaTOK;
 
     int itemIndex = GetStringLiteral->GetIndex(key);
     if (itemIndex < 0)

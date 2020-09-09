@@ -92,6 +92,12 @@ public:
         DWORD     B;
         DWORD     C;
     };
+    struct DLDLD
+    {
+        DWORDLONG A;
+        DWORDLONG B;
+        DWORD     C;
+    };
     struct Agnostic_CORINFO_METHODNAME_TOKENin
     {
         DWORDLONG ftn;
@@ -1081,9 +1087,9 @@ public:
     void dmpIsValidStringRef(DLD key, DWORD value);
     BOOL repIsValidStringRef(CORINFO_MODULE_HANDLE module, unsigned metaTOK);
 
-    void recGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int length, LPCWSTR result);
-    void dmpGetStringLiteral(DLD key, DD value);
-    LPCWSTR repGetStringLiteral(CORINFO_MODULE_HANDLE module, unsigned metaTOK, int* length);
+    void recGetStringLiteral(CORINFO_FIELD_HANDLE field, CORINFO_MODULE_HANDLE module, unsigned metaTOK, int length, LPCWSTR result);
+    void dmpGetStringLiteral(DLDLD key, DD value);
+    LPCWSTR repGetStringLiteral(CORINFO_FIELD_HANDLE field, CORINFO_MODULE_HANDLE module, unsigned metaTOK, int* length);
 
     void recGetHelperName(CorInfoHelpFunc funcNum, const char* result);
     void dmpGetHelperName(DWORD key, DWORD value);

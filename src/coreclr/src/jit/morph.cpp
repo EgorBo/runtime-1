@@ -5302,7 +5302,7 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
         if (cnsIndex >= 0)
         {
             int     length;
-            LPCWSTR str = info.compCompHnd->getStringLiteral(asIndex->Arr()->AsStrCon()->gtScpHnd,
+            LPCWSTR str = info.compCompHnd->getStringLiteral(nullptr, asIndex->Arr()->AsStrCon()->gtScpHnd,
                                                              asIndex->Arr()->AsStrCon()->gtSconCPX, &length);
             if ((cnsIndex < length) && (str != nullptr))
             {

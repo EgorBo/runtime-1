@@ -615,7 +615,8 @@ public:
                       unsigned metaTOK);
     BOOL isValidStringRef(CORINFO_MODULE_HANDLE module,
                           unsigned metaTOK);
-    LPCWSTR getStringLiteral(CORINFO_MODULE_HANDLE module,
+    LPCWSTR getStringLiteral(CORINFO_FIELD_HANDLE field,
+                             CORINFO_MODULE_HANDLE module,
                                  unsigned metaTOK,
                                  int* length);
 

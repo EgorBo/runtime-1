@@ -3876,11 +3876,12 @@ BOOL ZapInfo::isValidStringRef (
 }
 
 LPCWSTR ZapInfo::getStringLiteral (
+            CORINFO_FIELD_HANDLE        field,
             CORINFO_MODULE_HANDLE       tokenScope,
             unsigned                    token,
             int*                        length)
 {
-    return m_pEEJitInfo->getStringLiteral(tokenScope, token, length);
+    return m_pEEJitInfo->getStringLiteral(field, tokenScope, token, length);
 }
 
 //

@@ -2201,8 +2201,9 @@ public:
             ) = 0;
 
     // Returns string length and content (can be null for dynamic context)
-    // for given metaTOK and module, length `-1` means input is incorrect
+    // for given field or metaTOK and module, length `-1` means input is incorrect
     virtual LPCWSTR getStringLiteral (
+            CORINFO_FIELD_HANDLE        field,      /* IN  */
             CORINFO_MODULE_HANDLE       module,     /* IN  */
             unsigned                    metaTOK,    /* IN  */
             int*                        length      /* OUT */

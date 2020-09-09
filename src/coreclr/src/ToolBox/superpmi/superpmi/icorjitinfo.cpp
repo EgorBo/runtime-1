@@ -374,13 +374,14 @@ BOOL MyICJI::isValidStringRef(CORINFO_MODULE_HANDLE module, /* IN  */
     return jitInstance->mc->repIsValidStringRef(module, metaTOK);
 }
 
-LPCWSTR MyICJI::getStringLiteral(CORINFO_MODULE_HANDLE module,  /* IN  */
+LPCWSTR MyICJI::getStringLiteral(CORINFO_FIELD_HANDLE  field,   /* IN  */
+                                 CORINFO_MODULE_HANDLE module,  /* IN  */
                                  unsigned              metaTOK, /* IN  */
                                  int*                  length   /* OUT */
                                  )
 {
     jitInstance->mc->cr->AddCall("getStringLiteral");
-    return jitInstance->mc->repGetStringLiteral(module, metaTOK, length);
+    return jitInstance->mc->repGetStringLiteral(field, module, metaTOK, length);
 }
 
 /**********************************************************************************/

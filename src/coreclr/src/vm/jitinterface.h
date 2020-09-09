@@ -663,9 +663,10 @@ public:
 
     // Get string length and content (can be null) for given metaTOK
     LPCWSTR getStringLiteral (
-            CORINFO_MODULE_HANDLE       module,
+            CORINFO_FIELD_HANDLE       field,
+            CORINFO_MODULE_HANDLE      module,
             mdToken                    metaTOK,
-            int*                        length);
+            int*                       length);
 
     static size_t findNameOfToken (Module* module, mdToken metaTOK,
                             __out_ecount (FQNameCapacity) char * szFQName, size_t FQNameCapacity);

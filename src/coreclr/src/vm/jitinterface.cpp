@@ -810,6 +810,7 @@ BOOL CEEInfo::isValidStringRef (
 }
 
 LPCWSTR CEEInfo::getStringLiteral (
+        CORINFO_FIELD_HANDLE        fieldHnd,
         CORINFO_MODULE_HANDLE       moduleHnd,
         mdToken                     metaTOK,
         int*                        length)
