@@ -5940,6 +5940,8 @@ private:
     void optPerformHoistExpr(GenTree* expr, unsigned lnum);
 
 public:
+    void optBranchesToSelects();
+
     void optOptimizeBools();
 
 private:

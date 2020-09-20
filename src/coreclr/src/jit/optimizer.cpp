@@ -8703,6 +8703,114 @@ bool Compiler::optIsRangeCheckRemovable(GenTree* tree)
     return true;
 }
 
+//----------------------------------------------------------------------------------
+// optBranchlessConditions: 
+//
+void Compiler::optBranchesToSelects()
+{
+#if defined(FEATURE_HW_INTRINSICS) && defined(TARGET_XARCH)
+    if (!opts.compUseCMOV)
+    {
+        return;
+    }
+    for (BasicBlock* block = fgFirstBB; block; block = block->bbNext)
+    {
+        if ((block->bbJumpKind != BBJ_COND))
+        {
+            continue;
+        }
+
+        Statement* firstStmt = block->lastStmt();
+        if ((firstStmt == nullptr) || !firstStmt->GetRootNode()->OperIs(GT_JTRUE))
+        {
+            continue;
+        }
+
+        GenTree*  rootNode = firstStmt->GetRootNode();
+        GenTree*  rootSubNode = rootNode->gtGetOp1();
+        var_types typ = rootSubNode->TypeGet();
+
+        assert(rootSubNode != nullptr);
+
+        if (!varTypeIsIntegral(typ) || (rootNode->gtFlags & GTF_ORDER_SIDEEFF))
+        {
+            continue;
+        }
+
+        BasicBlock* trueBb = block->bbJumpDest;
+        BasicBlock* falseBb = block->bbNext;
+
+        if (trueBb->isRunRarely() || falseBb->isRunRarely())
+        {
+            // jump is more profitable
+            continue;
+        }
+
+        assert((trueBb != nullptr) && (falseBb != nullptr));
+
+        if (!rootSubNode->OperIsCompare() || (trueBb == falseBb) ||
+            // both blocks are expected to be BBJ_RETURN
+            // TODO: implement for GT_ASG
+            (trueBb->bbJumpKind != BBJ_RETURN) || (falseBb->bbJumpKind != BBJ_RETURN) ||
+            // give up if these blocks are used by someone else
+            (trueBb->countOfInEdges() != 1) || (falseBb->countOfInEdges() != 1) ||
+            // TODO: respect profile data
+            (trueBb->bbFlags & BBF_DONT_REMOVE) || (falseBb->bbFlags & BBF_DONT_REMOVE))
+        {
+            continue;
+        }
+
+        Statement* trueBbStmt = trueBb->firstStmt();
+        Statement* falseBbStmt = falseBb->firstStmt();
+        if ((trueBbStmt == nullptr) || (trueBbStmt->GetPrevStmt() != trueBbStmt) ||
+            // make sure both blocks are single statement
+            (falseBbStmt == nullptr) || (falseBbStmt->GetPrevStmt() != falseBbStmt))
+        {
+            continue;
+        }
+
+        // make sure both blocks are single `return cns` nodes
+        GenTree* retTrueNode = trueBbStmt->GetRootNode();
+        GenTree* retFalseNode = falseBbStmt->GetRootNode();
+        if (!retTrueNode->OperIs(GT_RETURN) || !retFalseNode->OperIs(GT_RETURN) ||
+            // both blocks of the same types
+            !retTrueNode->TypeIs(typ) || !retFalseNode->TypeIs(typ))
+        {
+            continue;
+        }
+
+        if (!retTrueNode->gtGetOp1()->OperIs(GT_CNS_INT, GT_LCL_VAR) ||
+            !retFalseNode->gtGetOp1()->OperIs(GT_CNS_INT, GT_LCL_VAR))
+        {
+            continue;
+        }
+
+        // unlink both blocks
+        fgRemoveRefPred(trueBb, block);
+        fgRemoveRefPred(falseBb, block);
+
+        // convert current block from BBJ_COND to BBJ_RETURN
+        block->bbJumpKind = BBJ_RETURN;
+
+        GenTree* condition = gtCloneExpr(rootSubNode);
+        condition->ChangeType(TYP_VOID);
+        condition->gtFlags |= GTF_SET_FLAGS;
+
+        GenTreeHWIntrinsic* call = gtNewSimdHWIntrinsicNode(typ,
+            condition, gtCloneExpr(retTrueNode->gtGetOp1()), gtCloneExpr(retFalseNode->gtGetOp1()),
+            NI_X86Base_X64_Select, typ, 0);
+
+        rootNode->ChangeOperUnchecked(GT_RETURN);
+        rootNode->AsOp()->gtOp1 = call;
+        rootNode->ChangeType(typ);
+        rootNode->gtFlags |= call->gtFlags;
+
+        block->bbJumpDest = nullptr;
+    }
+#endif
+}
+
+
 /******************************************************************************
  *
  * Replace x==null with (x|x)==0 if x is a GC-type.

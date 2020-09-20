@@ -1590,8 +1590,9 @@ bool LIR::Range::CheckLIR(Compiler* compiler, bool checkUnusedValues) const
                 // The argument of a JTRUE doesn't produce a value (just sets a flag).
                 assert(((node->OperGet() == GT_CALL) &&
                         (def->OperIsStore() || def->OperIs(GT_PUTARG_STK, GT_NOP, GT_ARGPLACE))) ||
-                       ((node->OperGet() == GT_JTRUE) && (def->TypeGet() == TYP_VOID) &&
+                       (/*node->OperIs(GT_HWINTRINSIC, GT_JTRUE) &&*/ (def->TypeGet() == TYP_VOID) &&
                         ((def->gtFlags & GTF_SET_FLAGS) != 0)));
+                // TODO: allow VOID for comparisons if node is HWINTRINSIC
                 continue;
             }
 

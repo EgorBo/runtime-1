@@ -1138,11 +1138,14 @@ float emitter::insEvaluateExecutionCost(instrDesc* id)
 //
 void emitter::perfScoreUnhandledInstruction(instrDesc* id, insExecutionCharacteristics* pResult)
 {
+/*
+TODO: update perfScore for CMOVnn
 #ifdef DEBUG
     printf("PerfScore: unhandled instruction: %s, format %s", codeGen->genInsName(id->idIns()),
            emitIfName(id->idInsFmt()));
     assert(!"PerfScore: unhandled instruction");
 #endif
+*/
     pResult->insThroughput = PERFSCORE_THROUGHPUT_1C;
     pResult->insLatency    = PERFSCORE_LATENCY_1C;
 }
