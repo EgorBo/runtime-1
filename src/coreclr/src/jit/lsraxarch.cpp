@@ -2396,6 +2396,15 @@ int LinearScan::BuildHWIntrinsic(GenTreeHWIntrinsic* intrinsicTree)
             }
 #endif // TARGET_X86
 
+            case NI_X86Base_X64_Select:
+            {
+                assert(numArgs == 3);
+                srcCount += BuildOperandUses(op2);
+                srcCount += BuildOperandUses(op3);
+                buildUses = false;
+                break;
+            }
+
             case NI_BMI2_MultiplyNoFlags:
             case NI_BMI2_X64_MultiplyNoFlags:
             {

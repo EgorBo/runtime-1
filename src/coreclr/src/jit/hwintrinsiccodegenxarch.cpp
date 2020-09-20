@@ -1307,6 +1307,40 @@ void CodeGen::genX86BaseIntrinsic(GenTreeHWIntrinsic* node)
             break;
         }
 
+        case NI_X86Base_X64_Select:
+        {
+            GenTreeArgList* argList = node->gtGetOp1()->AsArgList();
+            GenTree* condNode = argList->Current();
+
+            argList = argList->Rest();
+            GenTree* thenNode = argList->Current();
+
+            argList = argList->Rest();
+            GenTree* elseNode = argList->Current();
+
+            genConsumeRegs(thenNode);
+            genConsumeRegs(elseNode);
+
+            regNumber thenReg = thenNode->GetRegNum();
+            regNumber elseReg = elseNode->GetRegNum();
+            regNumber targetReg = node->GetRegNum();
+
+            assert(thenReg != elseReg);
+
+            instruction cmov = INS_cmovne;
+            if (elseReg == targetReg)
+            {
+                cmov = INS_cmove;
+            }
+            else if (thenReg != targetReg)
+            {
+                genCopyRegIfNeeded(thenNode, targetReg);
+            }
+            GetEmitter()->emitIns_R_R(cmov, emitTypeSize(node), targetReg, elseReg);
+            genProduceReg(node);
+            break;
+        }
+
         default:
             unreached();
             break;
