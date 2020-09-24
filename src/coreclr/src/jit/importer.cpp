@@ -3731,8 +3731,17 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                     // Optimize `ldstr + String::get_Length()` to CNS_INT
                     // e.g. "Hello".Length => 5
                     int     length = -1;
-                    LPCWSTR str    = info.compCompHnd->getStringLiteral(op1->AsStrCon()->gtScpHnd,
-                                                                     op1->AsStrCon()->gtSconCPX, &length);
+                    LPCWSTR str;
+                    if (op1->AsStrCon()->IsStringEmptyField())
+                    {
+                        str    = L"";
+                        length = 0;
+                    }
+                    else
+                    {
+                        str = info.compCompHnd->getStringLiteral(op1->AsStrCon()->gtScpHnd,
+                                                                 op1->AsStrCon()->gtSconCPX, &length);
+                    }
                     if (length >= 0)
                     {
                         retNode = gtNewIconNode(length);
@@ -14610,9 +14619,9 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     {
                         assert(aflags & CORINFO_ACCESS_GET);
 
-                        LPVOID         pValue;
-                        InfoAccessType iat = info.compCompHnd->emptyStringLiteral(&pValue);
-                        op1                = gtNewStringLiteralNode(iat, pValue);
+                        op1 = gtNewSconNode(
+                            -1, // Or maybe we should ask vm for actual gtSconCPX for ""?
+                            info.compCompHnd->getClassModule(impGetObjectClass())); // module for corelib
                         goto FIELD_DONE;
                     }
                     break;
