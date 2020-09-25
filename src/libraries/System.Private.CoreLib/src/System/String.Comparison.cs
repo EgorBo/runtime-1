@@ -740,10 +740,20 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int GetHashCode()
         {
+#if TARGET_AMD64
+            // Try to cache Marvin.ComputeHash32 result in upper 4 bytes of object header (unused area on x64)
+            ref int hashCode = ref Unsafe.Add(ref Unsafe.As<char, int>(ref _firstChar), -5);
+            if (hashCode == 0)
+            {
+                ulong seed = Marvin.DefaultSeed;
+                hashCode = Marvin.ComputeHash32(ref Unsafe.As<char, byte>(ref _firstChar), (uint)_stringLength * 2 /* in bytes, not chars */, (uint)seed, (uint)(seed >> 32));
+            }
+            return hashCode;
+#else
             ulong seed = Marvin.DefaultSeed;
-
             // Multiplication below will not overflow since going from positive Int32 to UInt32.
             return Marvin.ComputeHash32(ref Unsafe.As<char, byte>(ref _firstChar), (uint)_stringLength * 2 /* in bytes, not chars */, (uint)seed, (uint)(seed >> 32));
+#endif
         }
 
         // Gets a hash code for this string and this comparison. If strings A and B and comparison C are such
