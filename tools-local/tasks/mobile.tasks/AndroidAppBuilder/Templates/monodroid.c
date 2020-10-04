@@ -193,12 +193,17 @@ strncpy_str (JNIEnv *env, char *buff, jstring str, int nbuff)
         (*env)->ReleaseStringUTFChars (env, str, copy_buff);
 }
 
+JNIEnv* jniEnv;
+
 int
 Java_net_dot_MonoRunner_initRuntime (JNIEnv* env, jobject thiz, jstring j_files_dir, jstring j_cache_dir, jstring j_docs_dir)
 {
     char file_dir[2048];
     char cache_dir[2048];
     char docs_dir[2048];
+
+    jniEnv = env;
+
     strncpy_str (env, file_dir, j_files_dir, sizeof(file_dir));
     strncpy_str (env, cache_dir, j_cache_dir, sizeof(cache_dir));
     strncpy_str (env, docs_dir, j_docs_dir, sizeof(docs_dir));
@@ -208,4 +213,20 @@ Java_net_dot_MonoRunner_initRuntime (JNIEnv* env, jobject thiz, jstring j_files_
     setenv ("TMPDIR", cache_dir, true); 
     setenv ("DOCSDIR", docs_dir, true); 
     return mono_mobile_runtime_init ();
+}
+
+MONO_API bool Android_GetRandomBytes(char *buff, int len)
+{
+    // SecureRandom rand = new SecureRandom();
+    // rand.nextBytes(byteArray);
+    // TODO: cache rand instance? (convert to gref)
+
+    jclass randClass = (*jniEnv)->FindClass (jniEnv, "java/security/SecureRandom");
+    jmethodID randCtor = (*jniEnv)->GetMethodID(jniEnv, randClass, "<init>", "()V");
+    jmethodID randNextBytes = (*jniEnv)->GetMethodID(jniEnv, randClass, "nextBytes", "([B)V");
+    jobject randObj = (*jniEnv)->NewObject(jniEnv, randClass, randCtor);
+    jbyteArray buffArray = (*jniEnv)->NewByteArray(jniEnv, len);
+    (*jniEnv)->SetByteArrayRegion(jniEnv, buffArray, 0, len, (jbyte*)buff);
+    (*jniEnv)->CallVoidMethod(jniEnv, randObj, randNextBytes, buffArray);
+    return true;
 }
