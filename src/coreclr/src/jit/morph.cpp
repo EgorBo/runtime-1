@@ -13259,6 +13259,32 @@ DONE_MORPHING_CHILDREN:
                         tree->gtFlags &= ~GTF_UNSIGNED;
                     }
                 }
+
+                // Optimize "X & 0x80 != 0" to "X s< 0" for any integer type
+                if (fgGlobalMorph && tree->OperIs(GT_NE) && op1->OperIs(GT_AND) &&
+                    op2->IsIntegralConst(0) && op1->gtGetOp2()->IsIntegralConst())
+                {
+                    GenTree*  andOp   = op1->gtGetOp1();
+                    var_types andTyp  = andOp->TypeGet();
+                    size_t    andCns  = static_cast<size_t>(op1->gtGetOp2()->AsIntConCommon()->IconValue());
+                    size_t    width   = static_cast<size_t>(genTypeSize(andTyp)) * 8;
+                    size_t    signBit = 1ULL << (width - 1);
+                    size_t    ptrSize = sizeof(size_t) * 8;
+
+                    if ((andCns << (ptrSize - width)) == (signBit << (ptrSize - width)))
+                    {
+                        op1 = andOp;
+                        if (varTypeIsUnsigned(andTyp))
+                        {
+                            var_types castTo = genSignedType(andTyp);
+                            op1 = gtNewCastNode(tree->TypeGet(), op1, true, castTo);
+                        }
+
+                        oper = GT_LT;
+                        tree->AsOp()->gtOp1 = op1;
+                        tree->ChangeOper(oper);
+                    }
+                }
             }
 
         COMPARE:
