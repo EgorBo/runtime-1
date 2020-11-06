@@ -4169,7 +4169,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
 
             case NI_System_Type_GetTypeCode:
             {
-                // Optimize Type.GetTypeCode(typeof(..)) to a const
+                // Fold Type.GetTypeCode(typeof(..)) or Type.GetTypeCode(x.GetType()) to a constant
                 if (impStackTop(0).val->IsCall())
                 {
                     GenTreeCall* call = impStackTop().val->AsCall();
@@ -4231,6 +4231,11 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                             typeCode = -1;
                             break;
                         }
+
+                        // Not handled:
+                        //  TypeCode.Decimal
+                        //  TypeCode.DateTime
+                        //  TypeCode.DBNull
 
                         if (typeCode != -1)
                         {
