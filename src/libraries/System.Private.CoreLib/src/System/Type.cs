@@ -383,6 +383,7 @@ namespace System
             return cls;
         }
 
+        [Intrinsic]
         public static TypeCode GetTypeCode(Type? type)
         {
             if (type == null)
