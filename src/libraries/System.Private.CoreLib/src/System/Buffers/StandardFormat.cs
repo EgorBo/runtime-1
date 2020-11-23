@@ -51,7 +51,8 @@ namespace System.Buffers
         /// <param name="precision">An optional precision ranging from 0..9 or the special value NoPrecision (the default)</param>
         public StandardFormat(char symbol, byte precision = NoPrecision)
         {
-            if (precision != NoPrecision && precision > MaxPrecision)
+            // Optimized version of "precision != NoPrecision && precision > MaxPrecision":
+            if (unchecked((byte)(precision + 1)) > (MaxPrecision + 1))
                 ThrowHelper.ThrowArgumentOutOfRangeException_PrecisionTooLarge();
             if (symbol != (byte)symbol)
                 ThrowHelper.ThrowArgumentOutOfRangeException_SymbolDoesNotFit();
