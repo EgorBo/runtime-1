@@ -9062,6 +9062,30 @@ GenTree* Compiler::fgMorphCall(GenTreeCall* call)
         call->gtCallArgs->SetNode(dest);
     }
 
+    if (call->gtCallMethHnd == eeFindHelper(CORINFO_HELP_CHKCASTARRAY)) // not only array?
+    {
+        GenTree* arg0 = call->gtCallArgs->GetNode();
+        GenTree* arg1 = call->gtCallArgs->GetNext()->GetNode();
+
+        if (arg0->OperIs(GT_CNS_INT) && arg1->IsCall() &&
+            (lookupNamedIntrinsic(arg1->AsCall()->gtCallMethHnd) == NI_System_Object_MemberwiseClone))
+        {
+            CORINFO_CLASS_HANDLE castToHandle = (CORINFO_CLASS_HANDLE)arg0->AsIntCon()->IconValue();
+
+            bool isExact = false;
+            bool isNonNull = false;
+            CORINFO_CLASS_HANDLE castFromHandle =
+                gtGetClassHandle(arg1->AsCall()->gtCallThisArg->GetNode(), &isExact, &isNonNull);
+
+            if (castToHandle != NO_CLASS_HANDLE &&
+                castFromHandle != NO_CLASS_HANDLE &&
+                info.compCompHnd->compareTypesForCast(castFromHandle, castToHandle) == TypeCompareState::Must) // or canCast() ?
+            {
+                return fgMorphTree(arg1);
+            }
+        }
+    }
+
     /* Process the "normal" argument list */
     call = fgMorphArgs(call);
     noway_assert(call->gtOper == GT_CALL);
