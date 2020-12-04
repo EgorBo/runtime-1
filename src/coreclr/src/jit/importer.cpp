@@ -4253,6 +4253,32 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_Runtime_CompilerServices_JitHelpers_IsConstAsciiString:
+            {
+                GenTree* tree = impPopStack().val;
+                if (tree->OperIs(GT_CNS_STR))
+                {
+                    GenTreeStrCon* cns = tree->AsStrCon();
+                    int len = 0;
+                    LPCWSTR str = info.compCompHnd->getStringLiteral(cns->gtScpHnd, cns->gtSconCPX, &len);
+                    if ((str != nullptr) && (len >= 0))
+                    {
+                        for (int i = 0; i < len; i++)
+                        {
+                            if (str[0] > 0x007f)
+                            {
+                                retNode = gtNewIconNode(0);
+                                break;
+                            }
+                        }
+                        retNode = gtNewIconNode(1);
+                        break;
+                    }
+                }
+                retNode = gtNewIconNode(0);
+                break;
+            }
+
             case NI_System_Type_get_IsValueType:
             {
                 // Optimize
@@ -4787,6 +4813,16 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             else if (strcmp(methodName, "IsAssignableTo") == 0)
             {
                 result = NI_System_Type_IsAssignableTo;
+            }
+        }
+    }
+    else if (strcmp(namespaceName, "System.Runtime.CompilerServices") == 0)
+    {
+        if (strcmp(className, "JitHelpers") == 0)
+        {
+            if (strcmp(methodName, "IsConstAsciiString") == 0)
+            {
+                result = NI_System_Runtime_CompilerServices_JitHelpers_IsConstAsciiString;
             }
         }
     }
