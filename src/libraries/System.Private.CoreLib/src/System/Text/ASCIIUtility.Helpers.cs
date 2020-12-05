@@ -5,6 +5,11 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.InteropServices;
+
+#if SYSTEM_PRIVATE_CORELIB
+using Internal.Runtime.CompilerServices;
+#endif
 
 namespace System.Text
 {
@@ -77,6 +82,25 @@ namespace System.Text
 
                 return numAsciiBytes;
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong ReadFirst4CharsAsUInt64(ReadOnlySpan<char> span) => 
+            Unsafe.ReadUnaligned<ulong>(
+                ref Unsafe.As<char, byte>(
+                    ref MemoryMarshal.GetReference(span)));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong SmallStringTo64BitInt(string str)
+        {
+            Debug.Assert(str.Length <= 4);
+            ulong v = 0;
+            if (str.Length == 4) v |= ((ulong)str[3] << 48);
+            if (str.Length >= 3) v |= ((ulong)str[2] << 32);
+            if (str.Length >= 2) v |= ((ulong)str[1] << 16);
+            if (str.Length >= 1) v |= ((ulong)str[0]);
+            if (str.Length == 0) return 0;
+            return v;
         }
     }
 }
