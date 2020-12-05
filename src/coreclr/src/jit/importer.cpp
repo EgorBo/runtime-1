@@ -4321,6 +4321,47 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_String_Equals:
+            {
+                // Optimize 'x == ""' into 'x?.Length == 0'
+                if ((sig->numArgs == 2) && 
+                    (impStackTop(1).val->OperIs(GT_CNS_STR) ^ impStackTop(0).val->OperIs(GT_CNS_STR)))
+                {
+                    GenTree*       str1 = impStackTop(1).val;
+                    GenTree*       str2 = impStackTop(0).val;
+                    GenTreeStrCon* cns  = str1->OperIs(GT_CNS_STR) ? str1->AsStrCon() : str2->AsStrCon();
+                    GenTree*       lcl  = str1->OperIs(GT_CNS_STR) ? str2 : str1;
+                    
+                    int len = -1;
+                    info.compCompHnd->getStringLiteral(cns->gtScpHnd, cns->gtSconCPX, &len);
+
+                    if (len == 0)
+                    {
+                        GenTree* strClone;
+                        lcl = impCloneExpr(lcl, &strClone, NO_CLASS_HANDLE, (unsigned)CHECK_SPILL_ALL, 
+                                           nullptr DEBUGARG("STREQ tmp1"));
+
+                        GenTreeArrLen* strLen = gtNewArrLen(TYP_INT, strClone, OFFSETOF__CORINFO_String__stringLen, compCurBB);
+                        GenTree*       cmpLen = gtNewOperNode(GT_EQ, TYP_INT, strLen, gtNewIconNode(0));
+                        GenTreeColon*  colon  = new(this, GT_COLON) GenTreeColon(TYP_INT, cmpLen, gtNewIconNode(0));
+
+                        // Tell QMark expander that it has to add 'BBF_HAS_IDX_LEN' flag to the block it will create for the "then" node.
+                        colon->gtThenBbFlags = BBF_HAS_IDX_LEN;
+                        GenTreeQmark* qmark  = gtNewQmarkNode(TYP_INT, gtNewOperNode(GT_NE, TYP_INT, lcl, gtNewIconNode(0, TYP_REF)), colon);
+
+                        // Create a temp for the qmark - it can't be root.
+                        unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling STREQ root qmark"));
+                        impAssignTempGen(tmp, qmark, (unsigned)CHECK_SPILL_NONE);
+                        retNode = gtNewLclvNode(tmp, TYP_INT);
+
+                        JITDUMP("Optimize 'string.Equals(str, "")' to 'str?.Length == 0'");
+                        impPopStack();
+                        impPopStack();
+                    }
+                }
+                break;
+            }
+
             case NI_System_Threading_Thread_get_ManagedThreadId:
             {
                 if (opts.OptimizationEnabled() && impStackTop().val->OperIs(GT_RET_EXPR))
@@ -4810,6 +4851,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             if (strcmp(methodName, "KeepAlive") == 0)
             {
                 result = NI_System_GC_KeepAlive;
+            }
+        }
+        else if (strcmp(className, "String") == 0)
+        {
+            if (strcmp(methodName, "Equals") == 0)
+            {
+                result = NI_System_String_Equals;
             }
         }
         else if (strcmp(className, "Type") == 0)

@@ -678,6 +678,7 @@ namespace System
         }
 
         // Determines whether two Strings match.
+        [Intrinsic]
         public static bool Equals(string? a, string? b)
         {
             if (object.ReferenceEquals(a, b))
