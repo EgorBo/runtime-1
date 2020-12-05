@@ -639,42 +639,7 @@ namespace System
 
         public bool Equals(string? value, StringComparison comparisonType)
         {
-            if (object.ReferenceEquals(this, value))
-            {
-                CheckStringComparison(comparisonType);
-                return true;
-            }
-
-            if (value is null)
-            {
-                CheckStringComparison(comparisonType);
-                return false;
-            }
-
-            switch (comparisonType)
-            {
-                case StringComparison.CurrentCulture:
-                case StringComparison.CurrentCultureIgnoreCase:
-                    return CultureInfo.CurrentCulture.CompareInfo.Compare(this, value, GetCaseCompareOfComparisonCulture(comparisonType)) == 0;
-
-                case StringComparison.InvariantCulture:
-                case StringComparison.InvariantCultureIgnoreCase:
-                    return CompareInfo.Invariant.Compare(this, value, GetCaseCompareOfComparisonCulture(comparisonType)) == 0;
-
-                case StringComparison.Ordinal:
-                    if (this.Length != value.Length)
-                        return false;
-                    return EqualsHelper(this, value);
-
-                case StringComparison.OrdinalIgnoreCase:
-                    if (this.Length != value.Length)
-                        return false;
-
-                    return EqualsOrdinalIgnoreCaseNoLengthCheck(this, value);
-
-                default:
-                    throw new ArgumentException(SR.NotSupported_StringComparison, nameof(comparisonType));
-            }
+            return Equals(this, value, comparisonType);
         }
 
         // Determines whether two Strings match.
@@ -693,6 +658,7 @@ namespace System
             return EqualsHelper(a, b);
         }
 
+        [Intrinsic]
         public static bool Equals(string? a, string? b, StringComparison comparisonType)
         {
             if (object.ReferenceEquals(a, b))

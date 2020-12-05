@@ -17508,6 +17508,7 @@ void Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
     GenTree* condExpr  = qmark->gtGetOp1();
     GenTree* trueExpr  = qmark->gtGetOp2()->AsColon()->ThenNode();
     GenTree* falseExpr = qmark->gtGetOp2()->AsColon()->ElseNode();
+    unsigned trueBbFlags = qmark->gtGetOp2()->AsColon()->bbTrueFlags;
 
     assert(condExpr->gtFlags & GTF_RELOP_QMARK);
     condExpr->gtFlags &= ~GTF_RELOP_QMARK;
@@ -17639,6 +17640,7 @@ void Compiler::fgExpandQmarkStmt(BasicBlock* block, Statement* stmt)
             trueExpr = gtNewTempAssign(lclNum, trueExpr);
         }
         Statement* trueStmt = fgNewStmtFromTree(trueExpr, stmt->GetILOffsetX());
+        thenBlock->bbFlags |= trueBbFlags;
         fgInsertStmtAtEnd(thenBlock, trueStmt);
     }
 

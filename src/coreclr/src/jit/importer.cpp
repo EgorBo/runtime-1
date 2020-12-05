@@ -4291,6 +4291,80 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_String_Equals:
+            {
+                if (!strcmp(info.compMethodName, "Test") && sig->numArgs == 3)
+                {
+                    GenTree* str    = impStackTop(2).val;
+                    GenTree* cnsStr = impStackTop(1).val;
+                    GenTree* mode   = impStackTop(0).val;
+
+                    if (str->OperIs(GT_CNS_STR) || !cnsStr->OperIs(GT_CNS_STR) || !mode->IsIntegralConst(4))
+                    {
+                        break;
+                    }
+                    // TODO: handle case when strCon is on the left
+                    // TODO: OrdinalIgnoreCase support
+
+                    int     cnsLength  = 0;
+                    LPCWSTR strContent = info.compCompHnd->getStringLiteral(cnsStr->AsStrCon()->gtScpHnd,
+                                                                            cnsStr->AsStrCon()->gtSconCPX, &cnsLength);
+
+                    if ((strContent == nullptr) || (cnsLength < 0) || (cnsLength > 4))
+                    {
+                        break;
+                    }
+
+                    ULONG strAsUlong = 0x4242;
+                    for (int i = 0; i < cnsLength; i++)
+                    {
+                        // TODO: check is ASCII
+                        //strAsUlong |= strContent[i] << xxx
+                    }
+
+                    //                 qmark1
+                    //                 /     \
+                    //           str!=null   colon1
+                    //                       /     \
+                    //                      0      qmark2
+                    //                            /      \
+                    //          str.Length==cnsLength   colone2
+                    //                                  /      \
+                    //                                 0    *(&str+12)==strAsUlong
+
+
+                    // first, let's spawn two temp variables for `str` local
+                    GenTree* strClone;
+                    GenTree* strClone2;
+                    str      = impCloneExpr(str, &strClone, NO_CLASS_HANDLE, (unsigned)CHECK_SPILL_ALL, nullptr DEBUGARG("STREQ tmp1"));
+                    strClone = impCloneExpr(strClone, &strClone2, NO_CLASS_HANDLE, (unsigned)CHECK_SPILL_ALL, nullptr DEBUGARG("STREQ tmp2"));
+
+                    // Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref str._firstChar)) == 0x.....
+                    GenTree* indirCmp = gtNewOperNode(GT_EQ, TYP_INT,
+                        gtNewIndir(TYP_LONG,
+                            gtNewOperNode(GT_ADD, TYP_BYREF, strClone2,
+                            gtNewIconNode(12, TYP_LONG))), // 12 is an offset of `_firstChar` field
+                        gtNewIconNode(strAsUlong, TYP_LONG));
+
+                    GenTreeArrLen* strLen = gtNewArrLen(TYP_INT, str, OFFSETOF__CORINFO_String__stringLen, compCurBB);
+                    GenTreeColon*  colon2 = new(this, GT_COLON) GenTreeColon(TYP_INT, indirCmp, gtNewIconNode(0));
+                    GenTreeQmark*  qmark2 = gtNewQmarkNode(TYP_INT, gtNewOperNode(GT_EQ, TYP_INT, strLen, gtNewIconNode(cnsLength)), colon2);
+                    GenTreeColon*  colon1 = new (this, GT_COLON) GenTreeColon(TYP_INT, qmark2, gtNewIconNode(0));
+                    // QMark expander must set this flag to a block it will create:
+                    colon1->bbTrueFlags = BBF_HAS_IDX_LEN;
+                    GenTreeQmark* qmark1 = gtNewQmarkNode(TYP_INT, gtNewOperNode(GT_NE, TYP_INT, strClone, gtNewIconNode(0, TYP_REF)), colon1);
+
+                    // One more temp, qmark can't be a root
+                    unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling STREQ root qmark"));
+                    impAssignTempGen(tmp, qmark1, (unsigned)CHECK_SPILL_NONE);
+                    retNode = gtNewLclvNode(tmp, TYP_INT);
+                    impPopStack();
+                    impPopStack();
+                    impPopStack();
+                }
+                break;
+            }
+
             case NI_System_Type_get_IsValueType:
             {
                 // Optimize
@@ -4825,6 +4899,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             else if (strcmp(methodName, "IsAssignableTo") == 0)
             {
                 result = NI_System_Type_IsAssignableTo;
+            }
+        }
+        else if (strcmp(className, "String") == 0)
+        {
+            if (strcmp(methodName, "Equals") == 0)
+            {
+                result = NI_System_String_Equals;
             }
         }
     }
