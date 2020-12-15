@@ -1807,9 +1807,27 @@ void CodeGen::genCodeForBinary(GenTreeOp* treeNode)
     assert(oper == GT_ADD || oper == GT_SUB || oper == GT_MUL || oper == GT_DIV || oper == GT_UDIV || oper == GT_AND ||
            oper == GT_OR || oper == GT_XOR);
 
-    GenTree*    op1 = treeNode->gtGetOp1();
-    GenTree*    op2 = treeNode->gtGetOp2();
-    instruction ins = genGetInsForOper(treeNode->OperGet(), targetType);
+    GenTree*    op1  = treeNode->gtGetOp1();
+    GenTree*    op2  = treeNode->gtGetOp2();
+    emitAttr    size = emitActualTypeSize(treeNode);
+    instruction ins  = genGetInsForOper(treeNode->OperGet(), targetType);
+
+    // Emit madd/msub for A*B+C
+    if (treeNode->OperIs(GT_ADD) && op1->OperIs(GT_MUL) && op1->isContained())
+    {
+        // TODO: Lowering is expected to mark GT_MUL as contained
+
+        assert(!treeNode->gtOverflow());
+        assert(!treeNode->gtGetOp2()->gtOverflow());
+        regNumber mul1Reg = op1->gtGetOp1()->GetRegNum();
+        regNumber mul2Reg = op1->gtGetOp2()->GetRegNum();
+        regNumber addReg  = op2->GetRegNum();
+
+        // TODO: emit msub if either A or B is GT_NEG (but not both)
+        emit->emitIns_R_R_R_R(INS_madd, size, targetReg, mul1Reg, mul2Reg, addReg);
+        genProduceReg(treeNode);
+        return;
+    }
 
     if ((treeNode->gtFlags & GTF_SET_FLAGS) != 0)
     {
@@ -1832,7 +1850,7 @@ void CodeGen::genCodeForBinary(GenTreeOp* treeNode)
     // The arithmetic node must be sitting in a register (since it's not contained)
     assert(targetReg != REG_NA);
 
-    regNumber r = emit->emitInsTernary(ins, emitActualTypeSize(treeNode), treeNode, op1, op2);
+    regNumber r = emit->emitInsTernary(ins, size, treeNode, op1, op2);
     assert(r == targetReg);
 
     genProduceReg(treeNode);
