@@ -5446,6 +5446,7 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
 {
     noway_assert(tree->gtOper == GT_INDEX);
     GenTreeIndex*        asIndex        = tree->AsIndex();
+    GenTree*             index          = gtFoldExpr(asIndex->Index());
     var_types            elemTyp        = asIndex->TypeGet();
     unsigned             elemSize       = asIndex->gtIndElemSize;
     CORINFO_CLASS_HANDLE elemStructType = asIndex->gtStructElemClass;
@@ -5453,9 +5454,9 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
     noway_assert(elemTyp != TYP_STRUCT || elemStructType != nullptr);
 
     // Fold "cns_str"[cns_index] to ushort constant
-    if (opts.OptimizationEnabled() && asIndex->Arr()->OperIs(GT_CNS_STR) && asIndex->Index()->IsIntCnsFitsInI32())
+    if (opts.OptimizationEnabled() && asIndex->Arr()->OperIs(GT_CNS_STR) && index->IsIntCnsFitsInI32())
     {
-        const int cnsIndex = static_cast<int>(asIndex->Index()->AsIntConCommon()->IconValue());
+        const int cnsIndex = static_cast<int>(index->AsIntConCommon()->IconValue());
         if (cnsIndex >= 0)
         {
             int     length;
@@ -5527,7 +5528,7 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
     if (opts.MinOpts())
     {
         GenTree* const array = fgMorphTree(asIndex->Arr());
-        GenTree* const index = fgMorphTree(asIndex->Index());
+        index = fgMorphTree(asIndex->Index());
 
         GenTreeIndexAddr* const indexAddr =
             new (this, GT_INDEX_ADDR) GenTreeIndexAddr(array, index, elemTyp, elemStructType, elemSize,
@@ -5560,7 +5561,6 @@ GenTree* Compiler::fgMorphArrayIndex(GenTree* tree)
     }
 
     GenTree* arrRef = asIndex->Arr();
-    GenTree* index  = asIndex->Index();
 
     bool chkd = ((tree->gtFlags & GTF_INX_RNGCHK) != 0); // if false, range checking will be disabled
     bool nCSE = ((tree->gtFlags & GTF_DONT_CSE) != 0);
