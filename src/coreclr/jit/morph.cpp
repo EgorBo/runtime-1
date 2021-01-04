@@ -466,12 +466,19 @@ GenTree* Compiler::fgMorphCast(GenTree* tree)
                         // Don't try to optimize.
                         assert(!canPushCast);
                     }
-                    else if ((shiftAmountValue >= 32) && ((tree->gtFlags & GTF_ALL_EFFECT) == 0))
+                    else if ((shiftAmountValue >= 32))
                     {
-                        // Result of the shift is zero.
-                        DEBUG_DESTROY_NODE(tree);
-                        GenTree* zero = gtNewZeroConNode(TYP_INT);
-                        return fgMorphTree(zero);
+                        if ((tree->gtFlags & GTF_ALL_EFFECT) == 0)
+                        {
+                            // Result of the shift is zero.
+                            DEBUG_DESTROY_NODE(tree);
+                            GenTree* zero = gtNewZeroConNode(TYP_INT);
+                            return fgMorphTree(zero);
+                        }
+                        else
+                        {
+                            canPushCast = false;
+                        }
                     }
                     else
                     {
