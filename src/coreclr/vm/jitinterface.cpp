@@ -9220,21 +9220,7 @@ CORINFO_CLASS_HANDLE CEEInfo::getDefaultComparerClassHelper(CORINFO_CLASS_HANDLE
         return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
     }
 
-    // Nullable<T>
-    if (Nullable::IsNullableType(elemTypeHnd))
-    {
-        Instantiation nullableInst = elemTypeHnd.AsMethodTable()->GetInstantiation();
-        TypeHandle nullableComparer = TypeHandle(CoreLibBinder::GetClass(CLASS__ICOMPARABLEGENERIC)).Instantiate(nullableInst);
-        if (nullableInst[0].CanCastTo(nullableComparer))
-        {
-            return CORINFO_CLASS_HANDLE(nullableComparer.GetMethodTable());
-        }
-    }
-
-    // Enum
-    //
-    // We need to special case the Enum comparers based on their underlying type,
-    // to avoid boxing and call the correct versions of GetHashCode.
+    // We need to special case the Enum comparers based on their underlying type to avoid boxing
     if (elemTypeHnd.IsEnum())
     {
         MethodTable* targetClass = NULL;
@@ -9268,7 +9254,6 @@ CORINFO_CLASS_HANDLE CEEInfo::getDefaultComparerClassHelper(CORINFO_CLASS_HANDLE
 
     // Default case
     TypeHandle resultTh = ((TypeHandle)CoreLibBinder::GetClass(CLASS__OBJECT_COMPARER)).Instantiate(inst);
-
     return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
 }
 
