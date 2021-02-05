@@ -9220,6 +9220,52 @@ CORINFO_CLASS_HANDLE CEEInfo::getDefaultComparerClassHelper(CORINFO_CLASS_HANDLE
         return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
     }
 
+    // Nullable<T>
+    if (Nullable::IsNullableType(elemTypeHnd))
+    {
+        Instantiation nullableInst = elemTypeHnd.AsMethodTable()->GetInstantiation();
+        TypeHandle nullableComparer = TypeHandle(CoreLibBinder::GetClass(CLASS__ICOMPARABLEGENERIC)).Instantiate(nullableInst);
+        if (nullableInst[0].CanCastTo(nullableComparer))
+        {
+            return CORINFO_CLASS_HANDLE(nullableComparer.GetMethodTable());
+        }
+    }
+
+    // Enum
+    //
+    // We need to special case the Enum comparers based on their underlying type,
+    // to avoid boxing and call the correct versions of GetHashCode.
+    if (elemTypeHnd.IsEnum())
+    {
+        MethodTable* targetClass = NULL;
+        CorElementType normType = elemTypeHnd.GetVerifierCorElementType();
+
+        switch(normType)
+        {
+            case ELEMENT_TYPE_I1:
+            case ELEMENT_TYPE_I2:
+            case ELEMENT_TYPE_U1:
+            case ELEMENT_TYPE_U2:
+            case ELEMENT_TYPE_I4:
+            case ELEMENT_TYPE_U4:
+            case ELEMENT_TYPE_I8:
+            case ELEMENT_TYPE_U8:
+            {
+                targetClass = CoreLibBinder::GetClass(CLASS__ENUM_COMPARER);
+                break;
+            }
+
+            default:
+                break;
+        }
+
+        if (targetClass != NULL)
+        {
+            TypeHandle resultTh = ((TypeHandle)targetClass->GetCanonicalMethodTable()).Instantiate(inst);
+            return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
+        }
+    }
+
     // Default case
     TypeHandle resultTh = ((TypeHandle)CoreLibBinder::GetClass(CLASS__OBJECT_COMPARER)).Instantiate(inst);
 

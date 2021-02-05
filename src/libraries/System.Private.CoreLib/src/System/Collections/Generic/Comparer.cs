@@ -55,6 +55,7 @@ namespace System.Collections.Generic
     // Needs to be public to support binary serialization compatibility
     public sealed partial class GenericComparer<T> : Comparer<T> where T : IComparable<T>
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int Compare(T? x, T? y)
         {
             if (x != null)
@@ -79,6 +80,7 @@ namespace System.Collections.Generic
     // Needs to be public to support binary serialization compatibility
     public sealed partial class NullableComparer<T> : Comparer<T?> where T : struct, IComparable<T>
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int Compare(T? x, T? y)
         {
             if (x.HasValue)
