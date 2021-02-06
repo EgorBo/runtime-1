@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Internal.Runtime.CompilerServices;
 
 namespace System
 {
@@ -103,16 +104,9 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetOffset(int length)
         {
-            int offset = _value;
-            if (IsFromEnd)
-            {
-                // offset = length - (~value)
-                // offset = length + (~(~value) + 1)
-                // offset = length + value + 1
-
-                offset += length + 1;
-            }
-            return offset;
+            // But actually we need a CMOV/CSEL here
+            int value = _value;
+            return ((value >> 31) & (length + 1)) + value;
         }
 
         /// <summary>Indicates whether the current Index object is equal to another object of the same type.</summary>
