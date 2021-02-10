@@ -4094,7 +4094,8 @@ public:
     GenTree* impCastClassOrIsInstToTree(GenTree*                op1,
                                         GenTree*                op2,
                                         CORINFO_RESOLVED_TOKEN* pResolvedToken,
-                                        bool                    isCastClass);
+                                        bool                    isCastClass,
+                                        bool                    expandAsIsNotNull);
 
     GenTree* impOptimizeCastClassOrIsInst(GenTree* op1, CORINFO_RESOLVED_TOKEN* pResolvedToken, bool isCastClass);
 

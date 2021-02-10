@@ -10904,7 +10904,8 @@ GenTree* Compiler::impOptimizeCastClassOrIsInst(GenTree* op1, CORINFO_RESOLVED_T
 GenTree* Compiler::impCastClassOrIsInstToTree(GenTree*                op1,
                                               GenTree*                op2,
                                               CORINFO_RESOLVED_TOKEN* pResolvedToken,
-                                              bool                    isCastClass)
+                                              bool                    isCastClass,
+                                              bool                    expandAsIsNotNull)
 {
     assert(op1->TypeGet() == TYP_REF);
 
@@ -15590,7 +15591,22 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     if (!usingReadyToRunHelper)
 #endif
                     {
-                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, false);
+                        if ((impGetNonPrefixOpcode(codeAddr + sz, codeEndp) == CEE_LDNULL) &&
+                            (impGetNonPrefixOpcode(codeAddr + sz + 1, codeEndp) == CEE_CGT_UN))
+                        {
+                            // Special case:
+                            //
+                            //   isinst
+                            //   ldnull
+                            //   cgt.un
+                            //
+                            sz += 4;
+                            impPushOnStack(
+                                impCastClassOrIsInstToTree(op1, op2, &resolvedToken, false, true), typeInfo(TI_INT));
+                            break;
+                        }
+
+                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, false, false);
                     }
                     if (compDonotInline())
                     {
@@ -16195,7 +16211,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     if (!usingReadyToRunHelper)
 #endif
                     {
-                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, true);
+                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, true, false);
                     }
                     if (compDonotInline())
                     {
