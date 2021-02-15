@@ -5,6 +5,13 @@ using System.Collections.Generic;
 
 namespace System.Linq
 {
+    internal static class RuntimeHelpers
+    {
+        // JIT should implement it the way it does for corlib's RuntimeHelpers.IsBitwiseEquatable
+        // so we don't have to make that one public.
+        internal static bool IsBitwiseEquatable<T>() => throw new InvalidOperationException();
+    }
+
     public static partial class Enumerable
     {
         public static bool SequenceEqual<TSource>(this IEnumerable<TSource> first, IEnumerable<TSource> second) =>
@@ -12,11 +19,6 @@ namespace System.Linq
 
         public static bool SequenceEqual<TSource>(this IEnumerable<TSource> first, IEnumerable<TSource> second, IEqualityComparer<TSource>? comparer)
         {
-            if (comparer == null)
-            {
-                comparer = EqualityComparer<TSource>.Default;
-            }
-
             if (first == null)
             {
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.first);
@@ -25,6 +27,30 @@ namespace System.Linq
             if (second == null)
             {
                 ThrowHelper.ThrowArgumentNullException(ExceptionArgument.second);
+            }
+
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<TSource>() && 
+                RuntimeHelpers.IsBitwiseEquatable<TSource>() && 
+                // ^ this call is optimized into "false" for any unknown or not suitable T (and the whole block is removed)
+                comparer == null && first is TSource[] firstArr && second is TSource[] secondArr)
+            {
+                if (firstArr.Length == secondArr.Length)
+                    return false;
+
+                if (firstArr.Length == 0)
+                    return true;
+
+                ref byte firstArrStart = ref Unsafe.As<TSource, byte>(ref firstArr[0]);
+                ref byte secondArrStart = ref Unsafe.As<TSource, byte>(ref firstArr[0]);
+                int length = firstArr.Length * Unsafe.SizeOf<TSource>(); // TODO: may overflow
+
+                return MemoryMarshal.CreateSpan(ref firstArrStart, length)
+                            .SequenceEqual(MemoryMarshal.CreateSpan(ref secondArrStart, length));
+            }
+
+            if (comparer == null)
+            {
+                comparer = EqualityComparer<TSource>.Default;
             }
 
             if (first is ICollection<TSource> firstCol && second is ICollection<TSource> secondCol)
