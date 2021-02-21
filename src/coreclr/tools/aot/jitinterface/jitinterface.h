@@ -60,6 +60,7 @@ struct JitInterfaceCallbacks
     CORINFO_ASSEMBLY_HANDLE (* getModuleAssembly)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_MODULE_HANDLE mod);
     const char* (* getAssemblyName)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_ASSEMBLY_HANDLE assem);
     void* (* LongLifetimeMalloc)(void * thisHandle, CorInfoExceptionClass** ppException, size_t sz);
+    void* (* getBoxedObjectFromCache)(void * thisHandle, CorInfoExceptionClass** ppException, size_t type);
     void (* LongLifetimeFree)(void * thisHandle, CorInfoExceptionClass** ppException, void* obj);
     size_t (* getClassModuleIdForStatics)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE cls, CORINFO_MODULE_HANDLE* pModule, void** ppIndirection);
     unsigned (* getClassSize)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE cls);
@@ -673,6 +674,15 @@ public:
 {
     CorInfoExceptionClass* pException = nullptr;
     void* temp = _callbacks->LongLifetimeMalloc(_thisHandle, &pException, sz);
+    if (pException != nullptr) throw pException;
+    return temp;
+}
+
+    virtual void* getBoxedObjectFromCache(
+          size_t type)
+{
+    CorInfoExceptionClass* pException = nullptr;
+    void* temp = _callbacks->getBoxedObjectFromCache(_thisHandle, &pException, type);
     if (pException != nullptr) throw pException;
     return temp;
 }

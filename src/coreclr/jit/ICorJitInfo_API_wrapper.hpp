@@ -491,6 +491,15 @@ void* WrapICorJitInfo::LongLifetimeMalloc(
     return temp;
 }
 
+void* WrapICorJitInfo::getBoxedObjectFromCache(
+          size_t type)
+{
+    API_ENTER(getBoxedObjectFromCache);
+    void* temp = wrapHnd->getBoxedObjectFromCache(type);
+    API_LEAVE(getBoxedObjectFromCache);
+    return temp;
+}
+
 void WrapICorJitInfo::LongLifetimeFree(
           void* obj)
 {

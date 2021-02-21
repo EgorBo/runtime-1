@@ -16125,6 +16125,41 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     break;
                 }
 
+                CorInfoType jitTyp = info.compCompHnd->asCorInfoType(resolvedToken.hClass);
+                if (opts.OptimizationEnabled() && !opts.IsReadyToRun())
+                {
+                    if (jitTyp == CORINFO_TYPE_BOOL)
+                    {
+                        // for bool we going to emit:
+                        //
+                        //  boolVal == 0 ? boxedTrueConstHandle : boxedFalseConstHandle
+                        //
+                        size_t   ptr          = (size_t)info.compCompHnd->getBoxedObjectFromCache(jitTyp);
+                        GenTree* boxedTrueOp  = gtNewIndOfIconHandleNode(TYP_REF, ptr, GTF_ICON_GLOBAL_PTR, false);
+                        GenTree* boxedFalseOp = gtNewIndOfIconHandleNode(TYP_REF, ptr + 8, GTF_ICON_GLOBAL_PTR, false);
+                        GenTree* colon        = new (this, GT_COLON) GenTreeColon(TYP_REF, boxedTrueOp, boxedFalseOp);
+                        GenTree* cmp          = gtNewOperNode(GT_EQ, TYP_INT, impPopStack().val, gtNewIconNode(0));
+                        GenTree* qmark        = gtNewQmarkNode(TYP_REF, cmp, colon);
+
+                        printf("Optimizing boxing for bools in %s::%s\n", info.compClassName, info.compMethodName);
+
+                        unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling QMark"));
+                        impAssignTempGen(tmp, qmark, (unsigned)CHECK_SPILL_NONE);
+                        typeInfo retType = typeInfo(TI_REF, info.compCompHnd->getTypeForBox(resolvedToken.hClass));
+                        impPushOnStack(gtNewLclvNode(tmp, TYP_REF), retType);
+                        break;
+                    }
+                    else if (jitTyp == CORINFO_TYPE_INT)
+                    {
+                        // for integer it's a bit more complicated, we're going to cache only [0..9] values
+                        //
+                        //  ((uint)value < 10) ? boxedZeroConstHandle + value : box(value)
+                        //
+
+                        // TODO: implement
+                    }
+                }
+
                 // Look ahead for box idioms
                 int matched = impBoxPatternMatch(&resolvedToken, codeAddr + sz, codeEndp);
                 if (matched >= 0)

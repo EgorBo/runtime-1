@@ -3602,6 +3602,11 @@ void* ZapInfo::LongLifetimeMalloc(size_t sz)
     return m_pEEJitInfo->LongLifetimeMalloc(sz);
 }
 
+void* ZapInfo::getBoxedObjectFromCache(size_t type)
+{
+    return m_pEEJitInfo->getBoxedObjectFromCache(type);
+}
+
 void ZapInfo::LongLifetimeFree(void* obj)
 {
     return m_pEEJitInfo->LongLifetimeFree(obj);

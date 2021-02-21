@@ -2304,6 +2304,7 @@ public:
     // Note that "LongLifetimeFree" does not execute destructors, if "obj"
     // is an array of a struct type with a destructor.
     virtual void* LongLifetimeMalloc(size_t sz) = 0;
+    virtual void* getBoxedObjectFromCache(size_t type) = 0;
     virtual void LongLifetimeFree(void* obj) = 0;
 
     virtual size_t getClassModuleIdForStatics (

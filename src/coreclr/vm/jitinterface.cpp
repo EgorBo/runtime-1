@@ -3712,6 +3712,79 @@ void* CEEInfo::LongLifetimeMalloc(size_t sz)
     return result;
 }
 
+// for a prototype, probably should be cached in the AppDomain object?
+OBJECTREF* boxedValuesCache = nullptr;
+
+/*********************************************************************/
+void* CEEInfo::getBoxedObjectFromCache(size_t type)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_ANY;
+        INJECT_FAULT(COMPlusThrowOM(););
+    } CONTRACTL_END;
+
+    JIT_TO_EE_TRANSITION_LEAF();
+
+    GCX_COOP();
+
+    void* result = nullptr;
+
+#ifdef CROSSGEN_COMPILE
+    _ASSERTE(FALSE);
+#else
+
+    if (boxedValuesCache == nullptr)
+    {
+        boxedValuesCache = new (nothrow) OBJECTREF[12];
+
+        // Cache (object)false
+        OBJECTREF boxedFalse = AllocateObject(CoreLibBinder::GetElementType(ELEMENT_TYPE_BOOLEAN));
+        GCPROTECT_BEGIN(boxedFalse);
+        GetAppDomain()->CreatePinningHandle(boxedFalse);
+        *reinterpret_cast<bool*>(boxedFalse->GetData()) = false;
+        boxedValuesCache[0] = boxedFalse;
+        GCPROTECT_END();
+
+        // Cache (object)true
+        OBJECTREF boxedTrue = AllocateObject(CoreLibBinder::GetElementType(ELEMENT_TYPE_BOOLEAN));
+        GCPROTECT_BEGIN(boxedTrue);
+        GetAppDomain()->CreatePinningHandle(boxedTrue);
+        *reinterpret_cast<bool*>(boxedTrue->GetData()) = true;
+        boxedValuesCache[1] = boxedTrue;
+        GCPROTECT_END();
+
+        // Cache (object)[0..9]
+        for (int i = 0; i < 10; i++)
+        {
+            OBJECTREF boxedInt = AllocateObject(CoreLibBinder::GetElementType(ELEMENT_TYPE_I4));
+            GCPROTECT_BEGIN(boxedInt);
+            GetAppDomain()->CreatePinningHandle(boxedInt);
+            *reinterpret_cast<int*>(boxedInt->GetData()) = i;
+            boxedValuesCache[i + 2] = boxedInt;
+            GCPROTECT_END();
+        }
+    }
+
+    //if (type == CORINFO_TYPE_BOOL)
+    //{
+    //    result = boxedValuesCache;
+    //}
+    //else
+    //{
+    //    assert(type == CORINFO_TYPE_INT);
+    //    result = boxedValuesCache + 2; // skip first two booleans
+    //}
+
+    result = boxedValuesCache;
+#endif
+
+    EE_TO_JIT_TRANSITION_LEAF();
+
+    return result;
+}
+
 /*********************************************************************/
 void CEEInfo::LongLifetimeFree(void* obj)
 {

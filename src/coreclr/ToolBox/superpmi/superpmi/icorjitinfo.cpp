@@ -528,6 +528,14 @@ void* MyICJI::LongLifetimeMalloc(size_t sz)
     return 0;
 }
 
+void* MyICJI::getBoxedObjectFromCache(size_t type)
+{
+    jitInstance->mc->cr->AddCall("getBoxedObjectFromCache");
+    LogError("Hit unimplemented getBoxedObjectFromCache");
+    DebugBreakorAV(32);
+    return 0;
+}
+
 void MyICJI::LongLifetimeFree(void* obj)
 {
     jitInstance->mc->cr->AddCall("LongLifetimeFree");

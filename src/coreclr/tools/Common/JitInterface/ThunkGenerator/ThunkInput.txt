@@ -199,6 +199,7 @@ FUNCTIONS
     CORINFO_ASSEMBLY_HANDLE getModuleAssembly(CORINFO_MODULE_HANDLE mod)
     const char* getAssemblyName(CORINFO_ASSEMBLY_HANDLE assem)
     void* LongLifetimeMalloc(size_t sz)
+    void* getBoxedObjectFromCache(size_t type)
     void LongLifetimeFree(void* obj)
     size_t getClassModuleIdForStatics(CORINFO_CLASS_HANDLE cls, CORINFO_MODULE_HANDLE* pModule, VOIDSTARSTAR ppIndirection)
     unsigned getClassSize(CORINFO_CLASS_HANDLE cls)

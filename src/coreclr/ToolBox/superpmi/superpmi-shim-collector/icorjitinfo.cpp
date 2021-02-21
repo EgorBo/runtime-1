@@ -635,6 +635,12 @@ void* interceptor_ICJI::LongLifetimeMalloc(size_t sz)
     return original_ICorJitInfo->LongLifetimeMalloc(sz);
 }
 
+void* interceptor_ICJI::getBoxedObjectFromCache(size_t type)
+{
+    mc->cr->AddCall("getBoxedObjectFromCache");
+    return original_ICorJitInfo->getBoxedObjectFromCache(type);
+}
+
 void interceptor_ICJI::LongLifetimeFree(void* obj)
 {
     mc->cr->AddCall("LongLifetimeFree");

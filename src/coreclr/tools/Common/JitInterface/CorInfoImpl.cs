@@ -1647,6 +1647,11 @@ namespace Internal.JitInterface
             return (void*)Marshal.AllocCoTaskMem((int)sz);
         }
 
+        private void* getBoxedObjectFromCache(UIntPtr type)
+        {
+            throw new NotImplementedException("getBoxedObjectFromCache");
+        }
+
         private void LongLifetimeFree(void* obj)
         {
             Marshal.FreeCoTaskMem((IntPtr)obj);

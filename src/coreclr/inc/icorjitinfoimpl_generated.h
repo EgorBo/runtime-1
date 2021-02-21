@@ -219,6 +219,9 @@ const char* getAssemblyName(
 void* LongLifetimeMalloc(
           size_t sz) override;
 
+void* getBoxedObjectFromCache(
+          size_t type) override;
+
 void LongLifetimeFree(
           void* obj) override;
 
