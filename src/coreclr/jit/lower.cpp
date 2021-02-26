@@ -143,6 +143,31 @@ GenTree* Lowering::LowerNode(GenTree* node)
             break;
 
         case GT_MUL:
+            // Drop cast nodes if we have (long)int1 * (long)int2 in order to emit umull/smull.
+            if (node->TypeIs(TYP_LONG) &&
+                node->gtGetOp1()->OperIs(GT_CAST) && node->gtGetOp2()->OperIs(GT_CAST) &&
+                node->gtGetOp1()->AsCast()->CastOp()->TypeIs(TYP_INT) &&
+                node->gtGetOp2()->AsCast()->CastOp()->TypeIs(TYP_INT))
+            {
+                GenTreeCast* castOp1 = node->gtGetOp1()->AsCast();
+                GenTreeCast* castOp2 = node->gtGetOp2()->AsCast();
+                var_types    castTo  = castOp1->CastToType();
+
+                if ((castTo == castOp2->CastToType()) && ((castTo == TYP_LONG) || (castTo == TYP_ULONG)))
+                {
+                    if (castTo == TYP_ULONG)
+                    {
+                        node->gtFlags |= GTF_UNSIGNED;
+                    }
+                    BlockRange().Remove(node->gtGetOp1());
+                    BlockRange().Remove(node->gtGetOp2());
+                    node->AsOp()->gtOp1 = castOp1->CastOp();
+                    node->AsOp()->gtOp2 = castOp2->CastOp();
+                }
+            }
+            ContainCheckMul(node->AsOp());
+            break;
+
         case GT_MULHI:
 #if defined(TARGET_X86)
         case GT_MUL_LONG:

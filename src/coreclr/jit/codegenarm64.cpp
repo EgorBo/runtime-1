@@ -1810,7 +1810,18 @@ void CodeGen::genCodeForBinary(GenTreeOp* treeNode)
 
     GenTree*    op1 = treeNode->gtGetOp1();
     GenTree*    op2 = treeNode->gtGetOp2();
-    instruction ins = genGetInsForOper(treeNode->OperGet(), targetType);
+
+    instruction ins;
+
+    // Use umull/smull for expressions like (long)int1 * (long)int2
+    if (treeNode->OperIs(GT_MUL) && treeNode->TypeIs(TYP_LONG) && op1->TypeIs(TYP_INT) && op2->TypeIs(TYP_INT))
+    {
+        ins = treeNode->IsUnsigned() ? INS_umull : INS_smull;
+    }
+    else
+    {
+        ins = genGetInsForOper(treeNode->OperGet(), targetType);
+    }
 
     if ((treeNode->gtFlags & GTF_SET_FLAGS) != 0)
     {
