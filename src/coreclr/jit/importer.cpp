@@ -14977,6 +14977,9 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                                    (op1->OperGet() == GT_OBJ));
                             op1->gtFlags |= GTF_IND_VOLATILE;
                         }
+                        unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling volatile field read"));
+                        impAssignTempGen(tmp, op1, (unsigned)CHECK_SPILL_ALL);
+                        op1 = gtNewLclvNode(tmp, op1->TypeGet());
                     }
 
                     if ((prefixFlags & PREFIX_UNALIGNED) && !varTypeIsByte(lclTyp))
