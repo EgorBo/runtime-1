@@ -1372,19 +1372,28 @@ namespace System
             return new DateTime(ticks | d.InternalKind);
         }
 
-        public static TimeSpan operator -(DateTime d1, DateTime d2) => new TimeSpan(d1.Ticks - d2.Ticks);
+        public static TimeSpan operator -(DateTime d1, DateTime d2) => new TimeSpan(d1.Ticks - d2.Ticks);        
 
-        public static bool operator ==(DateTime d1, DateTime d2) => d1.Ticks == d2.Ticks;
+        public static bool operator ==(DateTime d1, DateTime d2) => d1.TicksForCmp == d2.TicksForCmp;
 
-        public static bool operator !=(DateTime d1, DateTime d2) => d1.Ticks != d2.Ticks;
+        public static bool operator !=(DateTime d1, DateTime d2) => d1.TicksForCmp != d2.TicksForCmp;
 
-        public static bool operator <(DateTime t1, DateTime t2) => t1.Ticks < t2.Ticks;
+        public static bool operator <(DateTime t1, DateTime t2) => t1.TicksForCmp < t2.TicksForCmp;
 
-        public static bool operator <=(DateTime t1, DateTime t2) => t1.Ticks <= t2.Ticks;
+        public static bool operator <=(DateTime t1, DateTime t2) => t1.TicksForCmp <= t2.TicksForCmp;
 
-        public static bool operator >(DateTime t1, DateTime t2) => t1.Ticks > t2.Ticks;
+        public static bool operator >(DateTime t1, DateTime t2) => t1.TicksForCmp > t2.TicksForCmp;
 
-        public static bool operator >=(DateTime t1, DateTime t2) => t1.Ticks >= t2.Ticks;
+        public static bool operator >=(DateTime t1, DateTime t2) => t1.TicksForCmp >= t2.TicksForCmp;
+
+        private ulong TicksForCmp
+        {
+            get
+            {
+                Debug.Assert((unchecked((ulong)-1) >> 2) == TicksMask);
+                return _dateData << 2;
+            }
+        }
 
         // Returns a string array containing all of the known date and time options for the
         // current culture.  The strings returned are properly formatted date and
