@@ -33,6 +33,7 @@ CompPhaseNameMacro(PHASE_IBCINSTR,               "Profile instrumentation",     
 CompPhaseNameMacro(PHASE_INCPROFILE,             "Profile incorporation",          "INCPROF",  false, -1, false)
 CompPhaseNameMacro(PHASE_MORPH_INIT,             "Morph - Init",                   "MOR-INIT" ,false, -1, false)
 CompPhaseNameMacro(PHASE_MORPH_INLINE,           "Morph - Inlining",               "MOR-INL",  false, -1, true)
+CompPhaseNameMacro(PHASE_FORWARD_SUB,            "Morph - Forward Sub",            "MOR-FWDS", false, -1, true)
 CompPhaseNameMacro(PHASE_MORPH_ADD_INTERNAL,     "Morph - Add internal blocks",    "MOR-ADD",  false, -1, true)
 CompPhaseNameMacro(PHASE_ALLOCATE_OBJECTS,       "Allocate Objects",               "ALLOC-OBJ", false, -1, false)
 CompPhaseNameMacro(PHASE_EMPTY_TRY,              "Remove empty try",               "EMPTYTRY", false, -1, false)

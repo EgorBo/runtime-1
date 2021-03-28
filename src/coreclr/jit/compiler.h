@@ -6034,6 +6034,10 @@ private:
     void fgMarkAddressExposedLocals();
     void fgMarkAddressExposedLocals(Statement* stmt);
 
+    bool fgIsSuitableForForwardSubstitution(GenTree* tree, BasicBlock* block, int recursionLevel = 0);
+    void fgForwardSubstitution();
+
+
     static fgWalkPreFn  fgUpdateSideEffectsPre;
     static fgWalkPostFn fgUpdateSideEffectsPost;
 

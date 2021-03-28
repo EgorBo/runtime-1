@@ -1241,3 +1241,141 @@ void Compiler::fgMarkAddressExposedLocals(Statement* stmt)
     LocalAddressVisitor visitor(this);
     visitor.VisitStmt(stmt);
 }
+
+// Hash table "localNum - its definition"
+typedef JitHashTable<unsigned, JitSmallPrimitiveKeyFuncs<unsigned>, GenTree*> LclNumToDef;
+
+//------------------------------------------------------------------------
+// fgIsSuitableForForwardSubstitution:
+//
+bool Compiler::fgIsSuitableForForwardSubstitution(GenTree* tree, BasicBlock* block, int recursionLevel)
+{
+    if (recursionLevel > 2)
+    {
+        return false;
+    }
+
+    // Tree::ReplaceWith won't be able to handle large ones.
+    if (tree->GetNodeSize() != TREE_NODE_SZ_SMALL)
+    {
+        return false;
+    }
+
+    // These types mostly bring size regressions after FS.
+    if (tree->TypeIs(TYP_FLOAT, TYP_DOUBLE, TYP_STRUCT))
+    {
+        return false;
+    }
+
+    // The only side effect we allow is GTF_EXCEPT
+    if ((tree->gtFlags & GTF_ALL_EFFECT) && ((tree->gtFlags & GTF_ALL_EFFECT) != GTF_EXCEPT))
+    {
+        return false;
+    }
+
+    if (!opts.IsReadyToRun() && tree->OperIs(GT_CNS_STR))
+    {
+        return true;
+    }
+
+    if (tree->OperIs(GT_IND) && tree->gtFlags & (GTF_IND_INVARIANT | GTF_IND_NONFAULTING) &&
+        fgIsSuitableForForwardSubstitution(tree->gtGetOp1(), block, recursionLevel + 1))
+    {
+        return true;
+    }
+
+    // Integer constants
+    if (tree->OperIs(GT_CNS_INT) && !varTypeIsGC(tree->TypeGet()))
+    {
+        // TODO-CQ: enable for TYP_REF
+        return true;
+    }
+
+    // Consider other locals only if they are part of a bigger expression to substitute.
+    if ((recursionLevel > 0) && tree->OperIs(GT_LCL_VAR))
+    {
+        LclVarDsc* lclDsc = &lvaTable[tree->AsLclVarCommon()->GetLclNum()];
+        return !lclDsc->lvAddrExposed && !lclDsc->lvHasLdAddrOp && lclDsc->lvSingleDef;
+    }
+
+    // Allow some unary ops
+    if (tree->OperIs(GT_NOT, GT_NEG) &&
+        fgIsSuitableForForwardSubstitution(tree->gtGetOp1(), block, recursionLevel + 1))
+    {
+        return true;
+    }
+
+    // Allow some binary ops
+    if ((tree->OperIsCompare() || tree->OperIs(GT_OR, GT_AND, GT_XOR, GT_LSH, GT_RSH, GT_RSZ, GT_LEA)) &&
+        fgIsSuitableForForwardSubstitution(tree->gtGetOp1(), block, recursionLevel + 1) &&
+        fgIsSuitableForForwardSubstitution(tree->gtGetOp2(), block, recursionLevel + 1))
+    {
+        return true;
+    }
+
+    // TODO: Enable for HW intrinsics, e.g. Vector_.Create(constArgs)
+    // TODO: Enable for "typeof()"
+
+    return false;
+}
+
+//------------------------------------------------------------------------
+// fgForwardSubstitution:
+//
+void Compiler::fgForwardSubstitution()
+{
+    CompAllocator allocator(getAllocator(CMK_ForwardSubstitution));
+    LclNumToDef   lclToDef(allocator);
+
+    for (BasicBlock* block = fgFirstBB; block != nullptr; block = block->bbNext)
+    {
+        if (block->isRunRarely())
+        {
+            // Don't bother doing FS for cold blocks
+            continue;
+        }
+
+        for (Statement* stmt : block->Statements())
+        {
+            GenTree* rootNode = stmt->GetRootNode();
+            if ((rootNode != nullptr) && rootNode->OperIs(GT_ASG))
+            {
+                if (rootNode->gtGetOp1()->OperIs(GT_LCL_VAR) &&
+                    fgIsSuitableForForwardSubstitution(rootNode->gtGetOp2(), block))
+                {
+                    UINT32     lclNum = rootNode->gtGetOp1()->AsLclVarCommon()->GetLclNum();
+                    LclVarDsc* lclDsc = &lvaTable[lclNum];
+
+                    // Only single-def and if its address is not taken anywhere
+                    if (!lclDsc->lvAddrExposed && lclDsc->lvSingleDef && !lclDsc->lvHasLdAddrOp)
+                    {
+                        lclToDef.Set(lclNum, rootNode->gtGetOp2());
+                    }
+                    continue; // Skip current statement so we won't visit current GT_ASG node.
+                }
+            }
+
+            // Walk all nodes and look for LCL_VAR we can replace with expressions
+            auto fsVisitor = [](GenTree** tree, fgWalkData* data) -> fgWalkResult {
+                if ((*tree)->OperIs(GT_ASG))
+                {
+                    // Skip ASG for now, can be enabled in future
+                    return WALK_SKIP_SUBTREES;
+                }
+                if ((*tree)->OperIs(GT_LCL_VAR))
+                {
+                    GenTreeLclVar* lcl = (*tree)->AsLclVar();
+                    GenTree* replaceBy = nullptr;
+
+                    // Do we have this local in lclToDef hash table?
+                    if (((LclNumToDef*)data->pCallbackData)->Lookup(lcl->GetLclNum(), &replaceBy))
+                    {
+                        (*tree)->ReplaceWith(data->compiler->gtCloneExpr(replaceBy), data->compiler);
+                    }
+                }
+                return WALK_CONTINUE;
+            };
+            fgWalkTreePre(stmt->GetRootNodePointer(), fsVisitor, &lclToDef, true);
+        }
+    }
+}
