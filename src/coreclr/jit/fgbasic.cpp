@@ -806,6 +806,13 @@ public:
     {
         return depth >= 1;
     }
+    void PopTop()
+    {
+        assert((depth == 1) || (depth == 2));
+        slot0 = depth == 2 ? slot1 : 0;
+        slot1 = 0;
+        depth--;
+    }
 
 private:
     enum
@@ -944,6 +951,12 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                 BADCODE3("Illegal opcode", ": %02X", (int)opcode);
             }
 
+            case CEE_LDSTR:
+            {
+                pushedStack.PushConstant();
+                break;
+            }
+
             case CEE_CALL:
             case CEE_CALLVIRT:
             {
@@ -988,7 +1001,31 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
 
                     if ((methodFlags & CORINFO_FLG_JIT_INTRINSIC) != 0)
                     {
-                        if (intrinsicID == CORINFO_INTRINSIC_Illegal)
+                        // TODO: handle complex expressions such as typeof(T).IsValueType, etc
+                        if (intrinsicID == CORINFO_INTRINSIC_StringLength)
+                        {
+                            if (makeInlineObservations && pushedStack.IsStackAtLeastOneDeep())
+                            {
+                                unsigned slot0 = pushedStack.GetSlot0();
+
+                                if (FgStack::IsArgument(slot0) && isInlining &&
+                                    impInlineInfo->inlArgInfo[FgStack::SlotTypeToArgNum(slot0)].argIsInvariant)
+                                {
+                                    // slot0 is an arg which is a string literal (we hope argIsInvariant means that)
+                                    compInlineResult->Note(InlineObservation::CALLEE_CALL_WILL_BE_FOLDED);
+
+                                    // replace slot0 with a constant
+                                    //pushedStack.PopTop();
+                                    //pushedStack.PushConstant();
+                                }
+                                else if (FgStack::IsConstant(slot0))
+                                {
+                                    // slot0 is a ldstr (string literal)
+                                    compInlineResult->Note(InlineObservation::CALLEE_CALL_WILL_BE_FOLDED);
+                                }
+                            }
+                        }
+                        else if (intrinsicID == CORINFO_INTRINSIC_Illegal)
                         {
                             ni = lookupNamedIntrinsic(methodHnd);
 
@@ -1733,6 +1770,12 @@ void Compiler::fgObserveInlineConstants(OPCODE opcode, const FgStack& stack, boo
                     }
                 }
             }
+            // e.g. if (Avx2.IsSupported)
+            else if (FgStack::IsConstant(slot0))
+            {
+                compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
+                compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
+            }
 
             return;
         }
@@ -1759,6 +1802,13 @@ void Compiler::fgObserveInlineConstants(OPCODE opcode, const FgStack& stack, boo
         (FgStack::IsArrayLen(slot1) && FgStack::IsArgument(slot0)))
     {
         compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_RANGE_CHECK);
+    }
+
+    // Const1 cmp Const2
+    if (FgStack::IsConstant(slot0) && FgStack::IsConstant(slot1))
+    {
+        compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
+        compInlineResult->Note(InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST);
     }
 
     // Check for an incoming arg that's a constant

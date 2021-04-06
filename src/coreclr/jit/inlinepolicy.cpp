@@ -318,10 +318,11 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 break;
 
             case InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST:
-                // We shouldn't see this for a prejit root since
-                // we don't know anything about callers.
-                assert(!m_IsPrejitRoot);
                 m_ConstantArgFeedsConstantTest++;
+                break;
+
+            case InlineObservation::CALLEE_CALL_WILL_BE_FOLDED:
+                m_CallToBeFoldedToConst++;
                 break;
 
             case InlineObservation::CALLEE_BEGIN_OPCODE_SCAN:
@@ -725,6 +726,14 @@ double DefaultPolicy::DetermineMultiplier()
         multiplier += 3.0;
         JITDUMP("\nInline candidate has const arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
     }
+
+    if (m_CallToBeFoldedToConst > 0)
+    {
+        // Do we want to increase the multiplier here?
+        // At least, we could reduce the estimated size by "callWeight * m_CallToBeFoldedToConst"
+        JITDUMP("\nInline candidate has %d call(s) that is expected to be folded into a constant.", m_CallToBeFoldedToConst);
+    }
+
     // For prejit roots we do not see the call sites. To be suitably optimistic
     // assume that call sites may pass constants.
     else if (m_IsPrejitRoot && ((m_ArgFeedsConstantTest > 0) || (m_ArgFeedsTest > 0)))
@@ -2017,6 +2026,7 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_MethodIsMostlyLoadStore ? 1 : 0);
     fprintf(file, ",%u", m_ArgFeedsRangeCheck);
     fprintf(file, ",%u", m_ConstantArgFeedsConstantTest);
+    fprintf(file, ",%u", m_CallToBeFoldedToConst);
     fprintf(file, ",%d", m_CalleeNativeSizeEstimate);
     fprintf(file, ",%d", m_CallsiteNativeSizeEstimate);
     fprintf(file, ",%d", m_ModelCodeSizeEstimate);
