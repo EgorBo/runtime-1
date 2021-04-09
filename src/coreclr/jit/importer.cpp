@@ -6799,9 +6799,37 @@ void Compiler::impImportAndPushBox(CORINFO_RESOLVED_TOKEN* pResolvedToken)
             return;
         }
 
-        GenTreeCall::Use* args =
-            gtNewCallArgs(op2, impGetStructAddr(exprToBox, operCls, (unsigned)CHECK_SPILL_ALL, true));
-        op1 = gtNewHelperCallNode(boxHelper, TYP_REF, args);
+        GenTree* obj = impGetStructAddr(exprToBox, operCls, (unsigned)CHECK_SPILL_ALL, true);
+        op1 = gtNewHelperCallNode(boxHelper, TYP_REF, gtNewCallArgs(op2, obj));
+
+        // In case of Nullable<> let's optimize it to:
+        //
+        // if (!o.HasValue)
+        //     null;
+        // else
+        //     CORINFO_HELP_BOX_NULLABLE(typ, o)
+        //
+        if (boxHelper == CORINFO_HELP_BOX_NULLABLE)
+        {
+            // Get Nullable<>.hasValue field info
+            CORINFO_FIELD_HANDLE hasValueFldHnd = info.compCompHnd->getFieldInClass(operCls, 0);
+            GenTree*             clonedObj      = gtCloneExpr(obj);
+            GenTree*             hasValueFld    = gtNewFieldRef(TYP_BOOL, hasValueFldHnd, clonedObj, 0);
+
+#if DEBUG
+            assert(info.compCompHnd->getFieldOffset(hasValueFldHnd) == 0);
+            assert(strcmp(info.compCompHnd->getFieldName(hasValueFldHnd, nullptr), "hasValue") == 0);
+#endif
+
+            GenTree*      cond   = gtNewOperNode(GT_NE, TYP_INT, gtNewIconNode(0, TYP_INT), hasValueFld);
+            GenTree*      nullOp = gtNewIconNode(0, TYP_REF);
+            GenTreeColon* colon  = new (this, GT_COLON) GenTreeColon(TYP_REF, op1, nullOp);
+            GenTreeQmark* qmark  = gtNewQmarkNode(TYP_REF, cond, colon);
+            unsigned      tmp    = lvaGrabTemp(true DEBUGARG("spilling QMark"));
+
+            impAssignTempGen(tmp, qmark, (unsigned)CHECK_SPILL_NONE);
+            op1 = gtNewLclvNode(tmp, TYP_REF);
+        }
     }
 
     /* Push the result back on the stack, */
