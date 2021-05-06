@@ -12975,15 +12975,52 @@ GenTree* Compiler::gtFoldTypeCompare(GenTree* tree)
         return tree;
     }
 
+    GenTree* const op1 = tree->AsOp()->gtOp1;
+    GenTree* const op2 = tree->AsOp()->gtOp2;
+
+    // Try to fold "obj->MethodTable cmp SomeType" to true/false
+    GenTreeIndir*  indir = nullptr;
+    GenTreeIntCon* cns   = nullptr;
+    if (op1->OperIs(GT_IND) && op2->OperIs(GT_CNS_INT))
+    {
+        indir = op1->AsIndir();
+        cns   = op2->AsIntCon();
+    }
+    else if (op2->OperIs(GT_IND) && op1->OperIs(GT_CNS_INT))
+    {
+        indir = op2->AsIndir();
+        cns   = op1->AsIntCon();
+    }
+    if (indir != nullptr)
+    {
+        bool                 isExact   = false;
+        bool                 isNonNull = false;
+        CORINFO_CLASS_HANDLE cls1      = gtGetClassHandle(indir->Addr(), &isExact, &isNonNull);
+        CORINFO_CLASS_HANDLE cls2      = reinterpret_cast<CORINFO_CLASS_HANDLE>(cns->IconValue());
+
+        if (cls1 != nullptr)
+        {
+            TypeCompareState eqResult = info.compCompHnd->compareTypesForEquality(cls1, cls2);
+            if (eqResult != TypeCompareState::May)
+            {
+                bool result = oper == GT_EQ;
+                if (eqResult == TypeCompareState::MustNot)
+                {
+                    result = !result;
+                }
+
+                return gtNewOperNode(GT_COMMA, TYP_INT, indir, gtNewIconNode(result ? 1 : 0));
+            }
+        }
+    }
+
     // Screen for the right kinds of operands
-    GenTree* const         op1     = tree->AsOp()->gtOp1;
     const TypeProducerKind op1Kind = gtGetTypeProducerKind(op1);
     if (op1Kind == TPK_Unknown)
     {
         return tree;
     }
 
-    GenTree* const         op2     = tree->AsOp()->gtOp2;
     const TypeProducerKind op2Kind = gtGetTypeProducerKind(op2);
     if (op2Kind == TPK_Unknown)
     {
