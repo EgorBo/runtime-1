@@ -95,7 +95,16 @@ public:
         , m_ArgFeedsTest(0)
         , m_ArgFeedsConstantTest(0)
         , m_ArgFeedsRangeCheck(0)
-        , m_ConstantArgFeedsConstantTest(0)
+        , m_FoldableBox(0)
+        , m_Intrinsic(0)
+        , m_UncondBranch(0)
+        , m_ArgMoreConcrete(0)
+        , m_FoldableIntrinsic(0)
+        , m_FoldableExpr(0)
+        , m_FoldableExprUn(0)
+        , m_FoldableBranch(0)
+        , m_FoldableSwitch(0)
+        , m_DivByCns(0)
         , m_CalleeNativeSizeEstimate(0)
         , m_CallsiteNativeSizeEstimate(0)
         , m_IsForceInline(false)
@@ -163,7 +172,16 @@ protected:
     unsigned                m_ArgFeedsTest;
     unsigned                m_ArgFeedsConstantTest;
     unsigned                m_ArgFeedsRangeCheck;
-    unsigned                m_ConstantArgFeedsConstantTest;
+    unsigned                m_FoldableBox;
+    unsigned                m_Intrinsic;
+    unsigned                m_UncondBranch;
+    unsigned                m_ArgMoreConcrete;
+    unsigned                m_FoldableIntrinsic;
+    unsigned                m_FoldableExpr;
+    unsigned                m_FoldableExprUn;
+    unsigned                m_FoldableBranch;
+    unsigned                m_FoldableSwitch;
+    unsigned                m_DivByCns;
     int                     m_CalleeNativeSizeEstimate;
     int                     m_CallsiteNativeSizeEstimate;
     bool                    m_IsForceInline : 1;

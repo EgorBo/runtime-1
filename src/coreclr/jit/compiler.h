@@ -3933,7 +3933,8 @@ protected:
 
     GenTree* impImportLdvirtftn(GenTree* thisPtr, CORINFO_RESOLVED_TOKEN* pResolvedToken, CORINFO_CALL_INFO* pCallInfo);
 
-    int impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const BYTE* codeAddr, const BYTE* codeEndp);
+    int impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const BYTE* codeAddr, const BYTE* codeEndp,
+                           bool makeInlineObservation);
     void impImportAndPushBox(CORINFO_RESOLVED_TOKEN* pResolvedToken);
 
     void impImportNewObjArray(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORINFO_CALL_INFO* pCallInfo);
@@ -5636,8 +5637,6 @@ protected:
                                 BOOL        IsLeave = false /* is the src a leave block */);
 
     bool fgFlowToFirstBlockOfInnerTry(BasicBlock* blkSrc, BasicBlock* blkDest, bool sibling);
-
-    void fgObserveInlineConstants(OPCODE opcode, const FgStack& stack, bool isInlining);
 
     void fgAdjustForAddressExposedOrWrittenThis();
 

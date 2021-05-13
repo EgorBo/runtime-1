@@ -6398,7 +6398,8 @@ GenTree* Compiler::impImportLdvirtftn(GenTree*                thisPtr,
 //   pResolvedToken is known to be a value type; ref type boxing
 //   is handled in the CEE_BOX clause.
 
-int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const BYTE* codeAddr, const BYTE* codeEndp)
+int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const BYTE* codeAddr, const BYTE* codeEndp,
+                                 bool makeInlineObservation)
 {
     if (codeAddr >= codeEndp)
     {
@@ -6411,6 +6412,12 @@ int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const B
             // box + unbox.any
             if (codeAddr + 1 + sizeof(mdToken) <= codeEndp)
             {
+                if (makeInlineObservation)
+                {
+                    compInlineResult->Note(InlineObservation::CALLEE_FOLDABLE_BOX);
+                    return 1 + sizeof(mdToken);
+                }
+
                 CORINFO_RESOLVED_TOKEN unboxResolvedToken;
 
                 impResolveToken(codeAddr + 1, &unboxResolvedToken, CORINFO_TOKENKIND_Class);
@@ -6436,6 +6443,12 @@ int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const B
             // box + br_true/false
             if ((codeAddr + ((codeAddr[0] >= CEE_BRFALSE) ? 5 : 2)) <= codeEndp)
             {
+                if (makeInlineObservation)
+                {
+                    compInlineResult->Note(InlineObservation::CALLEE_FOLDABLE_BOX);
+                    return 0;
+                }
+
                 GenTree* const treeToBox       = impStackTop().val;
                 bool           canOptimize     = true;
                 GenTree*       treeToNullcheck = nullptr;
@@ -6498,6 +6511,12 @@ int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const B
                     case CEE_BRFALSE_S:
                         if ((nextCodeAddr + ((nextCodeAddr[0] >= CEE_BRFALSE) ? 5 : 2)) <= codeEndp)
                         {
+                            if (makeInlineObservation)
+                            {
+                                compInlineResult->Note(InlineObservation::CALLEE_FOLDABLE_BOX);
+                                return 1 + sizeof(mdToken);
+                            }
+
                             if (!(impStackTop().val->gtFlags & GTF_SIDE_EFFECT))
                             {
                                 CorInfoHelpFunc boxHelper = info.compCompHnd->getBoxHelper(pResolvedToken->hClass);
@@ -6574,6 +6593,12 @@ int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken, const B
                     case CEE_UNBOX_ANY:
                         if ((nextCodeAddr + 1 + sizeof(mdToken)) <= codeEndp)
                         {
+                            if (makeInlineObservation)
+                            {
+                                compInlineResult->Note(InlineObservation::CALLEE_FOLDABLE_BOX);
+                                return 2 + sizeof(mdToken) * 2;
+                            }
+
                             // See if the resolved tokens in box, isinst and unbox.any describe types that are equal.
                             CORINFO_RESOLVED_TOKEN isinstResolvedToken = {};
                             impResolveToken(codeAddr + 1, &isinstResolvedToken, CORINFO_TOKENKIND_Class);
@@ -16031,7 +16056,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 }
 
                 // Look ahead for box idioms
-                int matched = impBoxPatternMatch(&resolvedToken, codeAddr + sz, codeEndp);
+                int matched = impBoxPatternMatch(&resolvedToken, codeAddr + sz, codeEndp, false);
                 if (matched >= 0)
                 {
                     // Skip the matched IL instructions

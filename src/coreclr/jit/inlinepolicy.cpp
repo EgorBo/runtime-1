@@ -317,11 +317,44 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 propagate = true;
                 break;
 
-            case InlineObservation::CALLSITE_CONSTANT_ARG_FEEDS_TEST:
-                // We shouldn't see this for a prejit root since
-                // we don't know anything about callers.
-                assert(!m_IsPrejitRoot);
-                m_ConstantArgFeedsConstantTest++;
+            case InlineObservation::CALLEE_FOLDABLE_BOX:
+                m_FoldableBox++;
+                break;
+
+            case InlineObservation::CALLEE_INTRINSIC:
+                m_Intrinsic++;
+                break;
+
+            case InlineObservation::CALLEE_UNCOND_BRANCH:
+                m_UncondBranch++;
+                break;
+
+            case InlineObservation::CALLSITE_ARG_MORE_CONCRETE:
+                m_ArgMoreConcrete++;
+                break;
+
+            case InlineObservation::CALLSITE_FOLDABLE_INTRINSIC:
+                m_FoldableIntrinsic++;
+                break;
+
+            case InlineObservation::CALLSITE_FOLDABLE_EXPR:
+                m_FoldableExpr++;
+                break;
+
+            case InlineObservation::CALLSITE_FOLDABLE_EXPR_UN:
+                m_FoldableExprUn;
+                break;
+
+            case InlineObservation::CALLSITE_FOLDABLE_BRANCH:
+                m_FoldableBranch++;
+                break;
+
+            case InlineObservation::CALLSITE_FOLDABLE_SWITCH:
+                m_FoldableSwitch++;
+                break;
+
+            case InlineObservation::CALLSITE_DIV_BY_CNS:
+                m_DivByCns++;
                 break;
 
             case InlineObservation::CALLEE_BEGIN_OPCODE_SCAN:
@@ -720,11 +753,12 @@ double DefaultPolicy::DetermineMultiplier()
         JITDUMP("\nInline candidate has arg that feeds range check.  Multiplier increased to %g.", multiplier);
     }
 
-    if (m_ConstantArgFeedsConstantTest > 0)
+    if (m_FoldableBranch > 0)
     {
         multiplier += 3.0;
         JITDUMP("\nInline candidate has const arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
     }
+
     // For prejit roots we do not see the call sites. To be suitably optimistic
     // assume that call sites may pass constants.
     else if (m_IsPrejitRoot && ((m_ArgFeedsConstantTest > 0) || (m_ArgFeedsTest > 0)))
@@ -759,6 +793,53 @@ double DefaultPolicy::DetermineMultiplier()
         default:
             assert(!"Unexpected callsite frequency");
             break;
+    }
+
+    // No-op observation (for now):
+
+    if (m_FoldableBox > 0)
+    {
+        JITDUMP("\nInline has %d foldable BOX(s).", m_FoldableBox);
+    }
+
+    if (m_Intrinsic > 0)
+    {
+        JITDUMP("\nInline has %d intrinsic(s).", m_Intrinsic);
+    }
+
+    if (m_UncondBranch > 0)
+    {
+        JITDUMP("\nInline has %d unconditional branch(es).", m_UncondBranch);
+    }
+
+    if (m_ArgMoreConcrete > 0)
+    {
+        JITDUMP("\nCallsite passes more concrete %d arg(s) than in callee's sig.", m_ArgMoreConcrete);
+    }
+
+    if (m_FoldableIntrinsic > 0)
+    {
+        JITDUMP("\nInline has %d foldable intrinsic(s).", m_FoldableIntrinsic);
+    }
+
+    if (m_FoldableExpr > 0)
+    {
+        JITDUMP("\nInline has %d foldable binary expression(s).", m_FoldableExpr);
+    }
+
+    if (m_FoldableExprUn > 0)
+    {
+        JITDUMP("\nInline has %d foldable unary expression(s).", m_FoldableExprUn);
+    }
+
+    if (m_FoldableSwitch > 0)
+    {
+        JITDUMP("\nInline has %d foldable switch expression(s).", m_FoldableSwitch);
+    }
+
+    if (m_DivByCns > 0)
+    {
+        JITDUMP("\nInline has %d Div-by-const expression(s).", m_DivByCns);
     }
 
 #ifdef DEBUG
@@ -1816,7 +1897,7 @@ void DiscretionaryPolicy::EstimateCodeSize()
           6.021 * m_CallCount +
          -0.238 * m_IsInstanceCtor +
          -5.357 * m_IsFromPromotableValueClass +
-         -7.901 * (m_ConstantArgFeedsConstantTest > 0 ? 1 : 0)  +
+         -7.901 * (m_FoldableBranch > 0 ? 1 : 0)  +
           0.065 * m_CalleeNativeSizeEstimate;
     // clang-format on
 
@@ -2016,7 +2097,16 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_ArgFeedsConstantTest);
     fprintf(file, ",%u", m_MethodIsMostlyLoadStore ? 1 : 0);
     fprintf(file, ",%u", m_ArgFeedsRangeCheck);
-    fprintf(file, ",%u", m_ConstantArgFeedsConstantTest);
+    fprintf(file, ",%u", m_FoldableBox);
+    fprintf(file, ",%u", m_Intrinsic);
+    fprintf(file, ",%u", m_UncondBranch);
+    fprintf(file, ",%u", m_ArgMoreConcrete);
+    fprintf(file, ",%u", m_FoldableIntrinsic);
+    fprintf(file, ",%u", m_FoldableExpr);
+    fprintf(file, ",%u", m_FoldableExprUn);
+    fprintf(file, ",%u", m_FoldableBranch);
+    fprintf(file, ",%u", m_FoldableSwitch);
+    fprintf(file, ",%u", m_DivByCns);
     fprintf(file, ",%d", m_CalleeNativeSizeEstimate);
     fprintf(file, ",%d", m_CallsiteNativeSizeEstimate);
     fprintf(file, ",%d", m_ModelCodeSizeEstimate);

@@ -95,6 +95,9 @@ INLINE_OBSERVATION(NUMBER_OF_ARGUMENTS,       int,    "number of arguments",    
 INLINE_OBSERVATION(NUMBER_OF_BASIC_BLOCKS,    int,    "number of basic blocks",               INFORMATION, CALLEE)
 INLINE_OBSERVATION(NUMBER_OF_LOCALS,          int,    "number of locals",                     INFORMATION, CALLEE)
 INLINE_OBSERVATION(RANDOM_ACCEPT,             bool,   "random accept",                        INFORMATION, CALLEE)
+INLINE_OBSERVATION(FOLDABLE_BOX,              int,    "potentially foldable box opcode",      INFORMATION, CALLEE)
+INLINE_OBSERVATION(INTRINSIC,                 int,    "call marked as intrinsic",             INFORMATION, CALLEE)
+INLINE_OBSERVATION(UNCOND_BRANCH,             int,    "unconditional branch",                 INFORMATION, CALLEE)
 INLINE_OBSERVATION(UNSUPPORTED_OPCODE,        bool,   "unsupported opcode",                   INFORMATION, CALLEE)
 
 // ------ Caller Correctness -------
@@ -162,6 +165,13 @@ INLINE_OBSERVATION(RARE_GC_STRUCT,            bool,   "rarely called, has gc str
 
 // ------ Call Site Information -------
 
+INLINE_OBSERVATION(ARG_MORE_CONCRETE,         int,    "arg is more concrete than sig",        INFORMATION, CALLSITE)
+INLINE_OBSERVATION(FOLDABLE_INTRINSIC,        int,    "constant argument feeds intrinsic",    INFORMATION, CALLSITE)
+INLINE_OBSERVATION(FOLDABLE_EXPR,             int,    "foldable binary expression",           INFORMATION, CALLSITE)
+INLINE_OBSERVATION(FOLDABLE_EXPR_UN,          int,    "foldable unary expression",            INFORMATION, CALLSITE)
+INLINE_OBSERVATION(FOLDABLE_BRANCH,           int,    "foldable branch",                      INFORMATION, CALLSITE)
+INLINE_OBSERVATION(FOLDABLE_SWITCH,           int,    "foldable switch",                      INFORMATION, CALLSITE)
+INLINE_OBSERVATION(DIV_BY_CNS,                int,    "dividy by const",                      INFORMATION, CALLSITE)
 INLINE_OBSERVATION(CONSTANT_ARG_FEEDS_TEST,   bool,   "constant argument feeds test",         INFORMATION, CALLSITE)
 INLINE_OBSERVATION(DEPTH,                     int,    "depth",                                INFORMATION, CALLSITE)
 INLINE_OBSERVATION(FREQUENCY,                 int,    "rough call site frequency",            INFORMATION, CALLSITE)
