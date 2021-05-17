@@ -937,9 +937,9 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
             opts.lvRefCount++;
         }
 
-        if (makeInlineObservations &&
-            (((opcode >= CEE_LDNULL) && (opcode <= CEE_LDC_R8)) || ((opcode == CEE_LDSTR) && (opcode == CEE_LDTOKEN))))
+        if (makeInlineObservations && ((opcode >= CEE_LDNULL) && (opcode <= CEE_LDC_R8)))
         {
+            // LDTOKEN and LDSTR are handled below
             pushedStack.PushConstant();
             handled = true;
         }
@@ -1060,6 +1060,15 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         //case NI_System_Type_op_Equality:
                         //case NI_System_Type_op_Inequality:
                         //case NI_System_String_get_Chars:
+
+                        // If first argument of Vector(64/128/256).Create is a constant - we most likely will fold it
+#if defined(TARGET_XARCH) && defined(FEATURE_HW_INTRINSICS)
+                        case NI_Vector128_Create:
+                        case NI_Vector256_Create:
+#elif defined(TARGET_ARM64) && defined(FEATURE_HW_INTRINSICS)
+                        case NI_Vector64_Create:
+                        case NI_Vector128_Create:
+#endif
                         case NI_System_Type_IsAssignableTo:
                         case NI_System_Type_IsAssignableFrom:
                         {
@@ -1086,6 +1095,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         case NI_Vector256_get_Count:
                             foldableIntrinsc = true;
                             pushedStack.PushConstant();
+                            // TODO: check if it's a loop condition - we unroll such loops.
                             break;
                         case NI_Vector256_get_Zero:
                         case NI_Vector256_get_AllBitsSet:
@@ -1118,7 +1128,12 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                     }
                     else if (ni != NI_Illegal)
                     {
-                        compInlineResult->Note(InlineObservation::CALLEE_INTRINSIC);
+                        // Otherwise note "intrinsic" (most likely will be lowered as single instructions)
+                        // except Math where only a few intrinsics won't end up as normal calls
+                        if (!IsMathIntrinsic(ni) || IsTargetIntrinsic(ni))
+                        {
+                            compInlineResult->Note(InlineObservation::CALLEE_INTRINSIC);
+                        }
                     }
                 }
 
@@ -1242,6 +1257,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         }
                     }
                 }
+                break;
             }
 
             // Jumps
