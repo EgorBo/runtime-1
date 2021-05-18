@@ -1081,6 +1081,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                             {
                                 pushedStack.PushUnknown();
                             }
+                            break;
                         }
 
                         case NI_IsSupported_True:
@@ -1104,7 +1105,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                             break;
 #elif defined(TARGET_ARM64) && defined(FEATURE_HW_INTRINSICS)
                         case NI_Vector64_get_Count:
-                        case NI_Vector64_get_Count:
+                        case NI_Vector128_get_Count:
                             foldableIntrinsc = true;
                             pushedStack.PushConstant();
                             break;
@@ -1164,6 +1165,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         continue;
                     }
                 }
+                break;
             }
 
             // Unary operators:
