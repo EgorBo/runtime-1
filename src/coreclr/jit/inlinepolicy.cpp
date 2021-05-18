@@ -99,6 +99,23 @@ InlinePolicy* InlinePolicy::GetPolicy(Compiler* compiler, bool isPrejitRoot)
 }
 
 //------------------------------------------------------------------------
+// Dump: Dump inliner-specific message to the stdout
+//
+// Arguments:
+//    format   - formatted message to dump     
+
+void InlinePolicy::Dump(const char* format, ...) const
+{
+    if (m_RootCompiler->verbose || m_RootCompiler->opts.dspInlinerInfo)
+    {
+        va_list argptr;
+        va_start(argptr, format);
+        vprintf(format, argptr);
+        va_end(argptr);
+    }
+}
+
+//------------------------------------------------------------------------
 // NoteFatal: handle an observation with fatal impact
 //
 // Arguments:
@@ -175,6 +192,7 @@ void LegalPolicy::SetFailure(InlineObservation obs)
             // or if inlining and the observation is CALLSITE_TOO_MANY_LOCALS
             // (since we can't fail fast from lvaGrabTemp).
             assert(m_IsPrejitRoot || (obs == InlineObservation::CALLSITE_TOO_MANY_LOCALS));
+            Dump("SetFailure: %s", InlGetObservationString(obs));
             break;
         case InlineDecision::UNDECIDED:
         case InlineDecision::CANDIDATE:
@@ -204,6 +222,7 @@ void LegalPolicy::SetNever(InlineObservation obs)
         case InlineDecision::NEVER:
             // Repeated never only ok if evaluating a prejit root
             assert(m_IsPrejitRoot);
+            Dump("SetNever: %s", InlGetObservationString(obs));
             break;
         case InlineDecision::UNDECIDED:
         case InlineDecision::CANDIDATE:
@@ -518,7 +537,7 @@ bool DefaultPolicy::BudgetCheck() const
 
         if (allowOverBudget)
         {
-            JITDUMP("Allowing over-budget top-level forceinline\n");
+            Dump("Allowing over-budget top-level forceinline\n");
         }
         else
         {
@@ -707,7 +726,7 @@ double DefaultPolicy::DetermineMultiplier()
     if (m_IsInstanceCtor)
     {
         multiplier += 1.5;
-        JITDUMP("\nmultiplier in instance constructors increased to %g.", multiplier);
+        Dump("\nmultiplier in instance constructors increased to %g.", multiplier);
     }
 
     // Bump up the multiplier for methods in promotable struct
@@ -715,7 +734,7 @@ double DefaultPolicy::DetermineMultiplier()
     if (m_IsFromPromotableValueClass)
     {
         multiplier += 3;
-        JITDUMP("\nmultiplier in methods of promotable struct increased to %g.", multiplier);
+        Dump("\nmultiplier in methods of promotable struct increased to %g.", multiplier);
     }
 
 #ifdef FEATURE_SIMD
@@ -723,8 +742,8 @@ double DefaultPolicy::DetermineMultiplier()
     if (m_HasSimd)
     {
         multiplier += JitConfig.JitInlineSIMDMultiplier();
-        JITDUMP("\nInline candidate has SIMD type args, locals or return value.  Multiplier increased to %g.",
-                multiplier);
+        Dump("\nInline candidate has SIMD type args, locals or return value.  Multiplier increased to %g.",
+                    multiplier);
     }
 
 #endif // FEATURE_SIMD
@@ -732,31 +751,31 @@ double DefaultPolicy::DetermineMultiplier()
     if (m_LooksLikeWrapperMethod)
     {
         multiplier += 1.0;
-        JITDUMP("\nInline candidate looks like a wrapper method.  Multiplier increased to %g.", multiplier);
+        Dump("\nInline candidate looks like a wrapper method.  Multiplier increased to %g.", multiplier);
     }
 
     if (m_ArgFeedsConstantTest > 0)
     {
         multiplier += 1.0;
-        JITDUMP("\nInline candidate has an arg that feeds a constant test.  Multiplier increased to %g.", multiplier);
+        Dump("\nInline candidate has an arg that feeds a constant test.  Multiplier increased to %g.", multiplier);
     }
 
     if (m_MethodIsMostlyLoadStore)
     {
         multiplier += 3.0;
-        JITDUMP("\nInline candidate is mostly loads and stores.  Multiplier increased to %g.", multiplier);
+        Dump("\nInline candidate is mostly loads and stores.  Multiplier increased to %g.", multiplier);
     }
 
     if (m_ArgFeedsRangeCheck > 0)
     {
         multiplier += 0.5;
-        JITDUMP("\nInline candidate has arg that feeds range check.  Multiplier increased to %g.", multiplier);
+        Dump("\nInline candidate has arg that feeds range check.  Multiplier increased to %g.", multiplier);
     }
 
     if (m_FoldableBranch > 0)
     {
         multiplier += 3.0;
-        JITDUMP("\nInline candidate has const arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
+        Dump("\nInline candidate has const arg that feeds a constant test.  Multiplier increased to %g.", multiplier);
     }
 
     // For prejit roots we do not see the call sites. To be suitably optimistic
@@ -764,7 +783,7 @@ double DefaultPolicy::DetermineMultiplier()
     else if (m_IsPrejitRoot && ((m_ArgFeedsConstantTest > 0) || (m_ArgFeedsTest > 0)))
     {
         multiplier += 3.0;
-        JITDUMP("\nPrejit root candidate has arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
+        Dump("\nPrejit root candidate has arg that feeds a conditional.  Multiplier increased to %g.", multiplier);
     }
 
     switch (m_CallsiteFrequency)
@@ -772,23 +791,23 @@ double DefaultPolicy::DetermineMultiplier()
         case InlineCallsiteFrequency::RARE:
             // Note this one is not additive, it uses '=' instead of '+='
             multiplier = 1.3;
-            JITDUMP("\nInline candidate callsite is rare.  Multiplier limited to %g.", multiplier);
+            Dump("\nInline candidate callsite is rare.  Multiplier limited to %g.", multiplier);
             break;
         case InlineCallsiteFrequency::BORING:
             multiplier += 1.3;
-            JITDUMP("\nInline candidate callsite is boring.  Multiplier increased to %g.", multiplier);
+            Dump("\nInline candidate callsite is boring.  Multiplier increased to %g.", multiplier);
             break;
         case InlineCallsiteFrequency::WARM:
             multiplier += 2.0;
-            JITDUMP("\nInline candidate callsite is warm.  Multiplier increased to %g.", multiplier);
+            Dump("\nInline candidate callsite is warm.  Multiplier increased to %g.", multiplier);
             break;
         case InlineCallsiteFrequency::LOOP:
             multiplier += 3.0;
-            JITDUMP("\nInline candidate callsite is in a loop.  Multiplier increased to %g.", multiplier);
+            Dump("\nInline candidate callsite is in a loop.  Multiplier increased to %g.", multiplier);
             break;
         case InlineCallsiteFrequency::HOT:
             multiplier += 3.0;
-            JITDUMP("\nInline candidate callsite is hot.  Multiplier increased to %g.", multiplier);
+            Dump("\nInline candidate callsite is hot.  Multiplier increased to %g.", multiplier);
             break;
         default:
             assert(!"Unexpected callsite frequency");
@@ -799,47 +818,47 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_FoldableBox > 0)
     {
-        JITDUMP("\nInline has %d foldable BOX(s).", m_FoldableBox);
+        Dump("\nInline has %d foldable BOX(s).", m_FoldableBox);
     }
 
     if (m_Intrinsic > 0)
     {
-        JITDUMP("\nInline has %d intrinsic(s).", m_Intrinsic);
+        Dump("\nInline has %d intrinsic(s).", m_Intrinsic);
     }
 
     if (m_UncondBranch > 0)
     {
-        JITDUMP("\nInline has %d unconditional branch(es).", m_UncondBranch);
+        Dump("\nInline has %d unconditional branch(es).", m_UncondBranch);
     }
 
     if (m_ArgMoreConcrete > 0)
     {
-        JITDUMP("\nCallsite passes more concrete %d arg(s) than in callee's sig.", m_ArgMoreConcrete);
+        Dump("\nCallsite passes more concrete %d arg(s) than in callee's sig.", m_ArgMoreConcrete);
     }
 
     if (m_FoldableIntrinsic > 0)
     {
-        JITDUMP("\nInline has %d foldable intrinsic(s).", m_FoldableIntrinsic);
+        Dump("\nInline has %d foldable intrinsic(s).", m_FoldableIntrinsic);
     }
 
     if (m_FoldableExpr > 0)
     {
-        JITDUMP("\nInline has %d foldable binary expression(s).", m_FoldableExpr);
+        Dump("\nInline has %d foldable binary expression(s).", m_FoldableExpr);
     }
 
     if (m_FoldableExprUn > 0)
     {
-        JITDUMP("\nInline has %d foldable unary expression(s).", m_FoldableExprUn);
+        Dump("\nInline has %d foldable unary expression(s).", m_FoldableExprUn);
     }
 
     if (m_FoldableSwitch > 0)
     {
-        JITDUMP("\nInline has %d foldable switch expression(s).", m_FoldableSwitch);
+        Dump("\nInline has %d foldable switch expression(s).", m_FoldableSwitch);
     }
 
     if (m_DivByCns > 0)
     {
-        JITDUMP("\nInline has %d Div-by-const expression(s).", m_DivByCns);
+        Dump("\nInline has %d Div-by-const expression(s).", m_DivByCns);
     }
 
 #ifdef DEBUG
@@ -849,13 +868,13 @@ double DefaultPolicy::DetermineMultiplier()
     if (additionalMultiplier != 0)
     {
         multiplier += additionalMultiplier;
-        JITDUMP("\nmultiplier increased via JitInlineAdditionalMultiplier=%d to %g.", additionalMultiplier, multiplier);
+        Dump("\nmultiplier increased via JitInlineAdditionalMultiplier=%d to %g.", additionalMultiplier, multiplier);
     }
 
     if (m_RootCompiler->compInlineStress())
     {
         multiplier += 10;
-        JITDUMP("\nmultiplier increased via inline stress to %g.", multiplier);
+        Dump("\nmultiplier increased via inline stress to %g.", multiplier);
     }
 
 #endif // DEBUG
@@ -958,7 +977,6 @@ int DefaultPolicy::DetermineCallsiteNativeSizeEstimate(CORINFO_METHOD_INFO* meth
 
 void DefaultPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
 {
-
 #if defined(DEBUG)
 
     // Punt if we're inlining and we've reached the acceptance limit.
@@ -982,19 +1000,17 @@ void DefaultPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     const int threshold          = (int)(m_CallsiteNativeSizeEstimate * m_Multiplier);
 
     // Note the DefaultPolicy estimates are scaled up by SIZE_SCALE
-    JITDUMP("\ncalleeNativeSizeEstimate=%d\n", m_CalleeNativeSizeEstimate)
-    JITDUMP("callsiteNativeSizeEstimate=%d\n", m_CallsiteNativeSizeEstimate);
-    JITDUMP("benefit multiplier=%g\n", m_Multiplier);
-    JITDUMP("threshold=%d\n", threshold);
+    Dump("\ncalleeNativeSizeEstimate=%d\n", m_CalleeNativeSizeEstimate);
+    Dump("callsiteNativeSizeEstimate=%d\n", m_CallsiteNativeSizeEstimate);
+    Dump("benefit multiplier=%g\n", m_Multiplier);
+    Dump("threshold=%d\n", threshold);
 
     // Reject if callee size is over the threshold
     if (m_CalleeNativeSizeEstimate > threshold)
     {
         // Inline appears to be unprofitable
-        JITLOG_THIS(m_RootCompiler,
-                    (LL_INFO100000, "Native estimate for function size exceeds threshold"
-                                    " for inlining %g > %g (multiplier = %g)\n",
-                     (double)m_CalleeNativeSizeEstimate / SIZE_SCALE, (double)threshold / SIZE_SCALE, m_Multiplier));
+        Dump("Native estimate for function size exceeds threshold for inlining %g > %g (multiplier = %g)\n",
+                    (double)m_CalleeNativeSizeEstimate / SIZE_SCALE, (double)threshold / SIZE_SCALE, m_Multiplier);
 
         // Fail the inline
         if (m_IsPrejitRoot)
@@ -1009,10 +1025,8 @@ void DefaultPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     else
     {
         // Inline appears to be profitable
-        JITLOG_THIS(m_RootCompiler,
-                    (LL_INFO100000, "Native estimate for function size is within threshold"
-                                    " for inlining %g <= %g (multiplier = %g)\n",
-                     (double)m_CalleeNativeSizeEstimate / SIZE_SCALE, (double)threshold / SIZE_SCALE, m_Multiplier));
+        Dump("Native estimate for function size is within threshold for inlining %g <= %g (multiplier = %g)\n",
+                    (double)m_CalleeNativeSizeEstimate / SIZE_SCALE, (double)threshold / SIZE_SCALE, m_Multiplier);
 
         // Update candidacy
         if (m_IsPrejitRoot)
@@ -1208,7 +1222,7 @@ void RandomPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     if (randomValue > threshold)
     {
         // Inline appears to be unprofitable
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Random rejection (r=%d > t=%d)\n", randomValue, threshold));
+        Dump("Random rejection (r=%d > t=%d)\n", randomValue, threshold);
 
         // Fail the inline
         if (m_IsPrejitRoot)
@@ -1223,7 +1237,7 @@ void RandomPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     else
     {
         // Inline appears to be profitable
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Random acceptance (r=%d <= t=%d)\n", randomValue, threshold));
+        Dump("Random acceptance (r=%d <= t=%d)\n", randomValue, threshold);
 
         // Update candidacy
         if (m_IsPrejitRoot)
@@ -2221,8 +2235,8 @@ void ModelPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     if (m_ModelCodeSizeEstimate <= 0)
     {
         // Inline will likely decrease code size
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Inline profitable, will decrease code size by %g bytes\n",
-                                     (double)-m_ModelCodeSizeEstimate / SIZE_SCALE));
+        Dump("Inline profitable, will decrease code size by %g bytes\n",
+             (double)-m_ModelCodeSizeEstimate / SIZE_SCALE);
 
         if (m_IsPrejitRoot)
         {
@@ -2291,10 +2305,9 @@ void ModelPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
         double threshold    = 0.20;
         bool   shouldInline = (benefit > threshold);
 
-        JITLOG_THIS(m_RootCompiler,
-                    (LL_INFO100000, "Inline %s profitable: benefit=%g (weight=%g, percall=%g, size=%g)\n",
-                     shouldInline ? "is" : "is not", benefit, callSiteWeight,
-                     (double)m_PerCallInstructionEstimate / SIZE_SCALE, (double)m_ModelCodeSizeEstimate / SIZE_SCALE));
+        Dump("Inline %s profitable: benefit=%g (weight=%g, percall=%g, size=%g)\n",
+             shouldInline ? "is" : "is not", benefit, callSiteWeight,
+             (double)m_PerCallInstructionEstimate / SIZE_SCALE, (double)m_ModelCodeSizeEstimate / SIZE_SCALE);
 
         if (!shouldInline)
         {
@@ -2436,8 +2449,8 @@ void ProfilePolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     if (m_ModelCodeSizeEstimate <= 0)
     {
         // Inline will likely decrease code size
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Inline profitable, will decrease code size by %g bytes\n",
-                                     (double)-m_ModelCodeSizeEstimate / SIZE_SCALE));
+        Dump("Inline profitable, will decrease code size by %g bytes\n",
+             (double)-m_ModelCodeSizeEstimate / SIZE_SCALE);
 
         if (m_IsPrejitRoot)
         {
@@ -2451,7 +2464,7 @@ void ProfilePolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
         return;
     }
 
-    JITDUMP("Have profile data for call site...\n");
+    Dump("Have profile data for call site...\n");
 
     // This is a (projected) size increasing inline, and we have profile
     // data available at the call site.
@@ -2490,10 +2503,9 @@ void ProfilePolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     double threshold    = JitConfig.JitInlinePolicyProfileThreshold() / 256.0;
     bool   shouldInline = (benefit > threshold);
 
-    JITLOG_THIS(m_RootCompiler,
-                (LL_INFO100000, "Inline %s profitable: benefit=%g (perCall=%g, local=%g, global=%g, size=%g)\n",
-                 shouldInline ? "is" : "is not", benefit, perCallBenefit, localBenefit, globalImportance,
-                 (double)m_PerCallInstructionEstimate / SIZE_SCALE, (double)m_ModelCodeSizeEstimate / SIZE_SCALE));
+    Dump("Inline %s profitable: benefit=%g (perCall=%g, local=%g, global=%g, size=%g)\n",
+         shouldInline ? "is" : "is not", benefit, perCallBenefit, localBenefit, globalImportance,
+         (double)m_PerCallInstructionEstimate / SIZE_SCALE, (double)m_ModelCodeSizeEstimate / SIZE_SCALE);
 
     if (!shouldInline)
     {
@@ -2624,9 +2636,7 @@ void SizePolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     if (newSize <= initialSize)
     {
         // Estimated size impact is acceptable, so inline here.
-        JITLOG_THIS(m_RootCompiler,
-                    (LL_INFO100000, "Inline profitable, root size estimate %d is less than initial size %d\n",
-                     newSize / SIZE_SCALE, initialSize / SIZE_SCALE));
+        Dump("Inline profitable, root size estimate %d is less than initial size %d\n", newSize / SIZE_SCALE, initialSize / SIZE_SCALE);
 
         if (m_IsPrejitRoot)
         {
@@ -3130,7 +3140,7 @@ void ReplayPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
 
     if (accept)
     {
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Inline accepted via log replay"));
+        Dump("Inline accepted via log replay");
 
         if (m_IsPrejitRoot)
         {
@@ -3143,7 +3153,7 @@ void ReplayPolicy::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
     }
     else
     {
-        JITLOG_THIS(m_RootCompiler, (LL_INFO100000, "Inline rejected via log replay"));
+        Dump("Inline rejected via log replay");
 
         if (m_IsPrejitRoot)
         {

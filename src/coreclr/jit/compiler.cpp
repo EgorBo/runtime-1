@@ -2973,6 +2973,7 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     opts.dspCode         = false;
     opts.dspEHTable      = false;
     opts.dspDebugInfo    = false;
+    opts.dspInlinerInfo  = false;
     opts.dspGCtbls       = false;
     opts.disAsm2         = false;
     opts.dspUnwind       = false;
@@ -3025,6 +3026,11 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
             if (JitConfig.NgenDebugDump().contains(info.compMethodName, info.compClassName, &info.compMethodInfo->args))
             {
                 opts.dspDebugInfo = true;
+            }
+
+            if (JitConfig.NgenInlinerDump().contains(info.compMethodName, info.compClassName, &info.compMethodInfo->args))
+            {
+                opts.dspInlinerInfo = true;
             }
         }
         else
@@ -3092,6 +3098,12 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
                                                       &info.compMethodInfo->args))
                 {
                     opts.dspDebugInfo = true;
+                }
+
+                if (JitConfig.JitInlinerDump().contains(info.compMethodName, info.compClassName,
+                                                        &info.compMethodInfo->args))
+                {
+                    opts.dspInlinerInfo = true;
                 }
             }
         }

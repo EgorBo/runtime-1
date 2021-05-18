@@ -48,7 +48,7 @@ class LegalPolicy : public InlinePolicy
 
 public:
     // Constructor
-    LegalPolicy(bool isPrejitRoot) : InlinePolicy(isPrejitRoot)
+    LegalPolicy(Compiler* compiler, bool isPrejitRoot) : InlinePolicy(compiler, isPrejitRoot)
     {
         // empty
     }
@@ -83,8 +83,7 @@ class DefaultPolicy : public LegalPolicy
 public:
     // Construct a DefaultPolicy
     DefaultPolicy(Compiler* compiler, bool isPrejitRoot)
-        : LegalPolicy(isPrejitRoot)
-        , m_RootCompiler(compiler)
+        : LegalPolicy(compiler, isPrejitRoot)
         , m_StateMachine(nullptr)
         , m_Multiplier(0.0)
         , m_CodeSize(0)
@@ -161,7 +160,6 @@ protected:
     int DetermineCallsiteNativeSizeEstimate(CORINFO_METHOD_INFO* methodInfo);
 
     // Data members
-    Compiler*               m_RootCompiler; // root compiler instance
     CodeSeqSM*              m_StateMachine;
     double                  m_Multiplier;
     unsigned                m_CodeSize;

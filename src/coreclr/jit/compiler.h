@@ -9184,6 +9184,7 @@ public:
         bool dspCode;                  // Display native code generated
         bool dspEHTable;               // Display the EH table reported to the VM
         bool dspDebugInfo;             // Display the Debug info reported to the VM
+        bool dspInlinerInfo;           // Display the Inliner's decisions
         bool dspInstrs;                // Display the IL instructions intermixed with the native code output
         bool dspLines;                 // Display source-code lines intermixed with native code output
         bool dmpHex;                   // Display raw bytes in hex of native code output

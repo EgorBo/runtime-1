@@ -744,6 +744,15 @@ public:
         // Empty
     }
 
+    enum FgSlot
+    {
+        SLOT_INVALID = UINT_MAX,
+        SLOT_UNKNOWN = 0,
+        SLOT_CONSTANT = 1,
+        SLOT_ARRAYLEN = 2,
+        SLOT_ARGUMENT = 3
+    };
+
     void Clear()
     {
         depth = 0;
@@ -762,31 +771,31 @@ public:
     }
     void PushArgument(unsigned arg)
     {
-        Push(SLOT_ARGUMENT + arg);
+        Push((FgSlot)(SLOT_ARGUMENT + arg));
     }
-    unsigned GetSlot0() const
+    FgSlot GetSlot0() const
     {
         assert(depth >= 1);
         return slot0;
     }
-    unsigned GetSlot1() const
+    FgSlot GetSlot1() const
     {
         assert(depth >= 2);
         return slot1;
     }
-    static bool IsConstant(unsigned value)
+    static bool IsConstant(FgSlot value)
     {
         return value == SLOT_CONSTANT;
     }
-    static bool IsArrayLen(unsigned value)
+    static bool IsArrayLen(FgSlot value)
     {
         return value == SLOT_ARRAYLEN;
     }
-    static bool IsArgument(unsigned value)
+    static bool IsArgument(FgSlot value)
     {
         return value >= SLOT_ARGUMENT;
     }
-    static unsigned SlotTypeToArgNum(unsigned value)
+    static unsigned SlotTypeToArgNum(FgSlot value)
     {
         assert(IsArgument(value));
         return value - SLOT_ARGUMENT;
@@ -805,13 +814,13 @@ public:
     }
     void DuplicateTop()
     {
-        unsigned top = Pop();
+        FgSlot const top = Pop();
         Push(top);
         Push(top);
     }
-    unsigned Pop()
+    FgSlot Pop()
     {
-        unsigned value = slot0;
+        FgSlot value = slot0;
         switch (depth)
         {
         case 0:
@@ -832,16 +841,8 @@ public:
     }
 
 private:
-    enum
-    {
-        SLOT_INVALID  = UINT_MAX,
-        SLOT_UNKNOWN  = 0,
-        SLOT_CONSTANT = 1,
-        SLOT_ARRAYLEN = 2,
-        SLOT_ARGUMENT = 3
-    };
 
-    void Push(int type)
+    void Push(FgSlot type)
     {
         assert(depth <= 2);
         slot1 = slot0;
@@ -852,8 +853,8 @@ private:
         }
     }
 
-    unsigned slot0;
-    unsigned slot1;
+    FgSlot slot0;
+    FgSlot slot1;
     unsigned depth;
 };
 
@@ -875,6 +876,12 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
     unsigned    retBlocks              = 0;
     int         prefixFlags            = 0;
     int         value                  = 0;
+
+    if (resolveTokens && !strncmp(info.compMethodName, "Test", 4))
+    {
+        auto name = info.compMethodName;
+        printf("");
+    }
 
     if (makeInlineObservations)
     {
@@ -1344,20 +1351,20 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         case CEE_BLE_UN_S:
                         case CEE_BLT_UN_S:
                         {
-                            unsigned op2 = pushedStack.Pop();
-                            unsigned op1 = pushedStack.Pop();
+                            FgStack::FgSlot op2 = pushedStack.Pop();
+                            FgStack::FgSlot op1 = pushedStack.Pop();
 
                             if (FgStack::IsConstant(op1) && FgStack::IsConstant(op2))
                             {
                                 compInlineResult->Note(InlineObservation::CALLSITE_FOLDABLE_BRANCH);
                             }
                             else if ((FgStack::IsArgument(op1) && FgStack::IsConstant(op2)) ||
-                                (FgStack::IsArgument(op2) && FgStack::IsConstant(op1)))
+                                     (FgStack::IsArgument(op2) && FgStack::IsConstant(op1)))
                             {
                                 compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_CONSTANT_TEST);
                             }
                             else if ((FgStack::IsArgument(op1) && FgStack::IsArrayLen(op2)) ||
-                                (FgStack::IsArgument(op2) && FgStack::IsArrayLen(op1)))
+                                     (FgStack::IsArgument(op2) && FgStack::IsArrayLen(op1)))
                             {
                                 compInlineResult->Note(InlineObservation::CALLEE_ARG_FEEDS_RANGE_CHECK);
                             }
@@ -1370,7 +1377,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                         case CEE_BRFALSE:
                         case CEE_BRTRUE:
                         {
-                            unsigned op1 = pushedStack.Pop();
+                            FgStack::FgSlot op1 = pushedStack.Pop();
                             if (FgStack::IsConstant(op1))
                             {
                                 compInlineResult->Note(InlineObservation::CALLSITE_FOLDABLE_BRANCH);

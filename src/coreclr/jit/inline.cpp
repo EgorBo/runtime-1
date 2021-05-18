@@ -643,6 +643,13 @@ InlineResult::InlineResult(Compiler* compiler, CORINFO_METHOD_HANDLE method, con
     m_Policy                = InlinePolicy::GetPolicy(m_RootCompiler, isPrejitRoot);
 }
 
+void InlineResult::DetermineProfitability(CORINFO_METHOD_INFO* methodInfo)
+{
+    m_Policy->Dump("\n\nDetermineProfitability for %s:",
+                   m_RootCompiler->info.compCompHnd->getMethodName(methodInfo->ftn, nullptr));
+    m_Policy->DetermineProfitability(methodInfo);
+}
+
 //------------------------------------------------------------------------
 // Report: Dump, log, and report information about an inline decision.
 //
