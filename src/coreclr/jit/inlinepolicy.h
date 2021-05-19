@@ -110,6 +110,7 @@ public:
         , m_IsForceInlineKnown(false)
         , m_IsInstanceCtor(false)
         , m_IsFromPromotableValueClass(false)
+        , m_IsGenericFromNonGeneric(false)
         , m_HasSimd(false)
         , m_LooksLikeWrapperMethod(false)
         , m_MethodIsMostlyLoadStore(false)
@@ -187,6 +188,7 @@ protected:
     bool                    m_IsForceInlineKnown : 1;
     bool                    m_IsInstanceCtor : 1;
     bool                    m_IsFromPromotableValueClass : 1;
+    bool                    m_IsGenericFromNonGeneric : 1;
     bool                    m_HasSimd : 1;
     bool                    m_LooksLikeWrapperMethod : 1;
     bool                    m_MethodIsMostlyLoadStore : 1;

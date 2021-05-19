@@ -311,6 +311,10 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 m_IsFromPromotableValueClass = value;
                 break;
 
+            case InlineObservation::CALLSITE_GENERIC_FROM_NONGENERIC:
+                m_IsGenericFromNonGeneric = value;
+                break;
+
             case InlineObservation::CALLEE_HAS_SIMD:
                 m_HasSimd = value;
                 break;
@@ -754,6 +758,12 @@ double DefaultPolicy::DetermineMultiplier()
     {
         multiplier += 3;
         Dump("\nmultiplier in methods of promotable struct increased to %g.", multiplier);
+    }
+
+    if (m_IsGenericFromNonGeneric)
+    {
+        multiplier += 3;
+        Dump("\nInline candidate is generic and caller is not.  Multiplier increased to %g.", multiplier);
     }
 
 #ifdef FEATURE_SIMD
@@ -2142,6 +2152,7 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_IsForceInline ? 1 : 0);
     fprintf(file, ",%u", m_IsInstanceCtor ? 1 : 0);
     fprintf(file, ",%u", m_IsFromPromotableValueClass ? 1 : 0);
+    fprintf(file, ",%u", m_IsGenericFromNonGeneric ? 1 : 0);
     fprintf(file, ",%u", m_HasSimd ? 1 : 0);
     fprintf(file, ",%u", m_LooksLikeWrapperMethod ? 1 : 0);
     fprintf(file, ",%u", m_ArgFeedsConstantTest);

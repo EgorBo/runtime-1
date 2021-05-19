@@ -165,6 +165,7 @@ INLINE_OBSERVATION(RARE_GC_STRUCT,            bool,   "rarely called, has gc str
 
 // ------ Call Site Information -------
 
+INLINE_OBSERVATION(GENERIC_FROM_NONGENERIC,  bool,    "caller is not generic, callee is",     INFORMATION, CALLSITE)
 INLINE_OBSERVATION(ARG_MORE_CONCRETE,         int,    "arg is more concrete than sig",        INFORMATION, CALLSITE)
 INLINE_OBSERVATION(FOLDABLE_INTRINSIC,        int,    "constant argument feeds intrinsic",    INFORMATION, CALLSITE)
 INLINE_OBSERVATION(FOLDABLE_EXPR,             int,    "foldable binary expression",           INFORMATION, CALLSITE)

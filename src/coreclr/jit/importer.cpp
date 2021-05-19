@@ -18932,6 +18932,31 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
         }
     }
 
+    bool calleeIsGeneric = (info.compMethodInfo->args.callConv & CORINFO_CALLCONV_GENERIC) ||
+                           (info.compClassAttr & CORINFO_FLG_SHAREDINST);
+    bool callerIsGeneric = (rootCompiler->info.compMethodInfo->args.callConv & CORINFO_CALLCONV_GENERIC) ||
+                           (rootCompiler->info.compClassAttr & CORINFO_FLG_SHAREDINST);
+
+    if (!callerIsGeneric && calleeIsGeneric)
+    {
+        inlineResult->Note(InlineObservation::CALLSITE_GENERIC_FROM_NONGENERIC);
+    }
+
+    CORINFO_SIG_INFO        sig    = info.compMethodInfo->args;
+    CORINFO_ARG_LIST_HANDLE sigArg = sig.args;
+    for (int i = 0; i < info.compMethodInfo->args.numArgs; i++)
+    {
+        CORINFO_CLASS_HANDLE argClass;
+        const CorInfoType    corType = strip(info.compCompHnd->getArgType(&sig, sigArg, &argClass));
+        const var_types      sigType = JITtype2varType(corType);
+        sigArg = info.compCompHnd->getArgNext(sigArg);
+
+        // TODO: note the following arguments
+        // 1) promotable structs
+        // 2) SIMD
+        // 3) signature is less concrete than the actual parameter at the callsite
+    }
+
     // Note if the callee's class is a promotable struct
     if ((info.compClassAttr & CORINFO_FLG_VALUECLASS) != 0)
     {
