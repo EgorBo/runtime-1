@@ -18932,6 +18932,7 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
         }
     }
 
+    // Check if callee is a generic method when its caller is not
     bool calleeIsGeneric = (info.compMethodInfo->args.callConv & CORINFO_CALLCONV_GENERIC) ||
                            (info.compClassAttr & CORINFO_FLG_SHAREDINST);
     bool callerIsGeneric = (rootCompiler->info.compMethodInfo->args.callConv & CORINFO_CALLCONV_GENERIC) ||
@@ -18942,19 +18943,52 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
         inlineResult->Note(InlineObservation::CALLSITE_GENERIC_FROM_NONGENERIC);
     }
 
+    // Inspect callee's arguments (and the actual values at the callsite for them)
     CORINFO_SIG_INFO        sig    = info.compMethodInfo->args;
     CORINFO_ARG_LIST_HANDLE sigArg = sig.args;
-    for (int i = 0; i < info.compMethodInfo->args.numArgs; i++)
-    {
-        CORINFO_CLASS_HANDLE argClass;
-        const CorInfoType    corType = strip(info.compCompHnd->getArgType(&sig, sigArg, &argClass));
-        const var_types      sigType = JITtype2varType(corType);
-        sigArg = info.compCompHnd->getArgNext(sigArg);
 
-        // TODO: note the following arguments
-        // 1) promotable structs
-        // 2) SIMD
-        // 3) signature is less concrete than the actual parameter at the callsite
+    GenTreeCall::Use* argUse = pInlineInfo == nullptr ? nullptr : pInlineInfo->iciCall->AsCall()->gtCallArgs;
+    for (unsigned i = 0; i < info.compMethodInfo->args.numArgs; i++)
+    {
+        //const CorInfoType corType = strip(info.compCompHnd->getArgType(&sig, sigArg, &sigClass));
+        CORINFO_CLASS_HANDLE sigClass = info.compCompHnd->getArgClass(&sig, sigArg);
+        GenTree* argNode = argUse == nullptr ? nullptr : argUse->GetNode()->gtSkipPutArgType();
+
+        // Prepare for the next iteration
+        sigArg = info.compCompHnd->getArgNext(sigArg);
+        argUse = argUse->GetNext();
+
+        if ((sigClass != nullptr) && structPromotionHelper->CanPromoteStructType(sigClass))
+        {
+            // The argument is a promotable struct. It means we'll have a smaller callsiteSize (and calleeSize)
+            inlineResult->Note(InlineObservation::CALLEE_ARG_PROMOTABLE);
+        }
+        else if (argNode != nullptr)
+        {
+            bool                 isExact   = false;
+            bool                 isNonNull = false;
+            CORINFO_CLASS_HANDLE argCls    = gtGetClassHandle(argNode, &isExact, &isNonNull);
+            if (isExact && (argCls != nullptr))
+            {
+                if ((argCls != sigClass) && (sigClass != nullptr))
+                {
+                    if (eeIsValueClass(argCls) && !eeIsValueClass(sigClass))
+                    {
+                        // E.g. sig accepts object and we pass Guid - we'll have to box it.
+                        inlineResult->Note(InlineObservation::CALLSITE_ARG_IS_BOXED);
+                    }
+                    else
+                    {
+                        // E.g. sig accepts object and we pass String
+                        inlineResult->Note(InlineObservation::CALLSITE_ARG_FINAL_SIG_IS_NOT);
+                    }
+                }
+                else
+                {
+                    inlineResult->Note(InlineObservation::CALLSITE_ARG_FINAL);
+                }
+            }
+        }
     }
 
     // Note if the callee's class is a promotable struct

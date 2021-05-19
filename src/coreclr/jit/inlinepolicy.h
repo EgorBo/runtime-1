@@ -97,7 +97,9 @@ public:
         , m_FoldableBox(0)
         , m_Intrinsic(0)
         , m_UncondBranch(0)
-        , m_ArgMoreConcrete(0)
+        , m_ArgIsFinal(0)
+        , m_ArgIsFinalSigIsNot(0)
+        , m_ArgIsBoxed(0)
         , m_FoldableIntrinsic(0)
         , m_FoldableExpr(0)
         , m_FoldableExprUn(0)
@@ -175,7 +177,9 @@ protected:
     unsigned                m_FoldableBox;
     unsigned                m_Intrinsic;
     unsigned                m_UncondBranch;
-    unsigned                m_ArgMoreConcrete;
+    unsigned                m_ArgIsFinal;
+    unsigned                m_ArgIsFinalSigIsNot;
+    unsigned                m_ArgIsBoxed;
     unsigned                m_FoldableIntrinsic;
     unsigned                m_FoldableExpr;
     unsigned                m_FoldableExprUn;

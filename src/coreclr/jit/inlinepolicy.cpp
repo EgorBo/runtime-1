@@ -352,8 +352,16 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 m_UncondBranch++;
                 break;
 
-            case InlineObservation::CALLSITE_ARG_MORE_CONCRETE:
-                m_ArgMoreConcrete++;
+            case InlineObservation::CALLSITE_ARG_FINAL:
+                m_ArgIsFinal++;
+                break;
+
+            case InlineObservation::CALLSITE_ARG_IS_BOXED:
+                m_ArgIsBoxed++;
+                break;
+
+            case InlineObservation::CALLSITE_ARG_FINAL_SIG_IS_NOT:
+                m_ArgIsFinalSigIsNot++;
                 break;
 
             case InlineObservation::CALLSITE_FOLDABLE_INTRINSIC:
@@ -365,7 +373,7 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 break;
 
             case InlineObservation::CALLSITE_FOLDABLE_EXPR_UN:
-                m_FoldableExprUn;
+                m_FoldableExprUn++;
                 break;
 
             case InlineObservation::CALLSITE_FOLDABLE_BRANCH:
@@ -860,9 +868,20 @@ double DefaultPolicy::DetermineMultiplier()
         Dump("\nInline has %d unconditional branch(es).", m_UncondBranch);
     }
 
-    if (m_ArgMoreConcrete > 0)
+    if (m_ArgIsBoxed > 0)
     {
-        Dump("\nCallsite passes more concrete %d arg(s) than in callee's sig.", m_ArgMoreConcrete);
+        // TODO: check if we have UNBOX ops in the callee 
+        Dump("\nCallsite is going to box %d argument(s)", m_ArgIsBoxed);
+    }
+
+    if (m_ArgIsFinalSigIsNot > 0)
+    {
+        Dump("\nCallsite passes %d argument(s) of sealed class(es) while callee accepts non final ones", m_ArgIsFinalSigIsNot);
+    }
+
+    if (m_ArgIsFinal > 0)
+    {
+        Dump("\nCallsite passes %d argument(s) of sealed class(es)", m_ArgIsFinal);
     }
 
     if (m_FoldableIntrinsic > 0)
@@ -2161,7 +2180,9 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_FoldableBox);
     fprintf(file, ",%u", m_Intrinsic);
     fprintf(file, ",%u", m_UncondBranch);
-    fprintf(file, ",%u", m_ArgMoreConcrete);
+    fprintf(file, ",%u", m_ArgIsFinal);
+    fprintf(file, ",%u", m_ArgIsFinalSigIsNot);
+    fprintf(file, ",%u", m_ArgIsBoxed);
     fprintf(file, ",%u", m_FoldableIntrinsic);
     fprintf(file, ",%u", m_FoldableExpr);
     fprintf(file, ",%u", m_FoldableExprUn);
