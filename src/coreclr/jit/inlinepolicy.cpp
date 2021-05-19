@@ -925,13 +925,13 @@ int DefaultPolicy::DetermineNativeSizeEstimate()
     // For each foldable branch we decrease NativeSize by 30% and 40% for switches
     if (m_FoldableBranch > 0)
     {
-        nativeSize = (double)nativeSize / pow(1.3, m_FoldableBranch);
+        nativeSize = (int)(nativeSize / pow(1.3, m_FoldableBranch));
         Dump("NativeSizeEstimate is reduced to %d due to %d foldable branch(es)\n", nativeSize, m_FoldableBranch);
     }
 
     if (m_FoldableSwitch > 0)
     {
-        nativeSize = (double)nativeSize / pow(1.4, m_FoldableSwitch);
+        nativeSize = (int)(nativeSize / pow(1.4, m_FoldableSwitch));
         Dump("NativeSizeEstimate is reduced to %d due to %d foldable switch(es)\n", nativeSize, m_FoldableSwitch);
     }
 
