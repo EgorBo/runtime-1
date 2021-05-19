@@ -594,7 +594,7 @@ void DefaultPolicy::NoteInt(InlineObservation obs, int value)
             {
                 SetNever(InlineObservation::CALLEE_DOES_NOT_RETURN);
             }
-            else if (!m_IsForceInline && (basicBlockCount > MAX_BASIC_BLOCKS))
+            else if (!m_IsForceInline && (basicBlockCount > (MAX_BASIC_BLOCKS + m_FoldableBranch + (m_FoldableSwitch * 5))))
             {
                 SetNever(InlineObservation::CALLEE_TOO_MANY_BASIC_BLOCKS);
             }
@@ -774,8 +774,8 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_FoldableBranch > 0)
     {
-        multiplier += 3.0;
-        Dump("\nInline candidate has const arg that feeds a constant test.  Multiplier increased to %g.", multiplier);
+        multiplier += 3.0 * m_FoldableBranch;
+        Dump("\nInline candidate has %d foldable branch(es).  Multiplier increased to %g.", m_FoldableBranch, multiplier);
     }
 
     // For prejit roots we do not see the call sites. To be suitably optimistic
