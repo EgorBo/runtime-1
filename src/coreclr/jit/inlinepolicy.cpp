@@ -106,6 +106,7 @@ InlinePolicy* InlinePolicy::GetPolicy(Compiler* compiler, bool isPrejitRoot)
 
 void InlinePolicy::Dump(const char* format, ...) const
 {
+#ifdef DEBUG
     if (m_RootCompiler->verbose || m_RootCompiler->opts.dspInlinerInfo)
     {
         va_list argptr;
@@ -113,6 +114,7 @@ void InlinePolicy::Dump(const char* format, ...) const
         vprintf(format, argptr);
         va_end(argptr);
     }
+#endif
 }
 
 //------------------------------------------------------------------------
