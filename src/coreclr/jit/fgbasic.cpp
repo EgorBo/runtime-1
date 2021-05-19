@@ -878,13 +878,6 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
     const bool  resolveTokens          = makeInlineObservations && (isTier1 || isPreJit);
     unsigned    retBlocks              = 0;
     int         prefixFlags            = 0;
-    int         value                  = 0;
-
-    if (!strncmp(info.compMethodName, "Test", 4) && isInlining)
-    {
-        auto name = info.compMethodName;
-        printf("");
-    }
 
     if (makeInlineObservations)
     {
@@ -1053,9 +1046,8 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
 
                         // These are foldable if the first argument is a constant
                         case NI_System_Type_get_IsValueType:
-                        //// the following needs https://github.com/dotnet/runtime/pull/52156
-                        // case NI_System_Type_GetTypeFromHandle:
-                        // case NI_System_String_get_String: 
+                        case NI_System_Type_GetTypeFromHandle:
+                        case NI_System_String_get_Length: 
                         case NI_System_Buffers_Binary_BinaryPrimitives_ReverseEndianness:
                         case NI_System_Numerics_BitOperations_PopCount:
                         {
@@ -1071,11 +1063,10 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                             break;
                         }
 
-                        //// the following needs https://github.com/dotnet/runtime/pull/52156
                         // These are foldable if two arguments are constants
-                        //case NI_System_Type_op_Equality:
-                        //case NI_System_Type_op_Inequality:
-                        //case NI_System_String_get_Chars:
+                        case NI_System_Type_op_Equality:
+                        case NI_System_Type_op_Inequality:
+                        case NI_System_String_get_Chars:
 
                         // If first argument of Vector(64/128/256).Create is a constant - we most likely will fold it
 #if defined(TARGET_XARCH) && defined(FEATURE_HW_INTRINSICS)
@@ -1478,7 +1469,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                 noway_assert(sz == sizeof(__int8));
                 prefixFlags |= PREFIX_UNALIGNED;
 
-                value = getU1LittleEndian(codeAddr);
+                int value = getU1LittleEndian(codeAddr);
                 codeAddr += sizeof(__int8);
 
                 impValidateMemoryAccessOpcode(codeAddr, codeEndp, false);

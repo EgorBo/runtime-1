@@ -918,19 +918,21 @@ int DefaultPolicy::DetermineNativeSizeEstimate()
     // Should be a discretionary candidate.
     assert(m_StateMachine != nullptr);
 
-    double nativeSize = m_StateMachine->NativeSize;
+    int nativeSize = m_StateMachine->NativeSize;
+
+    Dump("NativeSizeEstimate is %d\n", nativeSize);
 
     // For each foldable branch we decrease NativeSize by 30% and 40% for switches
     if (m_FoldableBranch > 0)
     {
-        nativeSize /= pow(1.3, m_FoldableBranch);
-        Dump("NativeSizeEstimate is reduced to %d due to %d foldable branch(es)\n", (int)nativeSize, m_FoldableBranch);
+        nativeSize = (double)nativeSize / pow(1.3, m_FoldableBranch);
+        Dump("NativeSizeEstimate is reduced to %d due to %d foldable branch(es)\n", nativeSize, m_FoldableBranch);
     }
 
     if (m_FoldableSwitch > 0)
     {
-        nativeSize /= pow(1.4, m_FoldableSwitch);
-        Dump("NativeSizeEstimate is reduced to %d due to %d foldable switch(es)\n", (int)nativeSize, m_FoldableSwitch);
+        nativeSize = (double)nativeSize / pow(1.4, m_FoldableSwitch);
+        Dump("NativeSizeEstimate is reduced to %d due to %d foldable switch(es)\n", nativeSize, m_FoldableSwitch);
     }
 
     return (int)nativeSize;
