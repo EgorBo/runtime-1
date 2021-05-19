@@ -183,6 +183,7 @@ void LegalPolicy::SetFailure(InlineObservation obs)
 {
     // Expect a valid observation
     assert(InlIsValidObservation(obs));
+    Dump("SetFailure: %s\n", InlGetObservationString(obs));
 
     switch (m_Decision)
     {
@@ -192,7 +193,6 @@ void LegalPolicy::SetFailure(InlineObservation obs)
             // or if inlining and the observation is CALLSITE_TOO_MANY_LOCALS
             // (since we can't fail fast from lvaGrabTemp).
             assert(m_IsPrejitRoot || (obs == InlineObservation::CALLSITE_TOO_MANY_LOCALS));
-            Dump("SetFailure: %s", InlGetObservationString(obs));
             break;
         case InlineDecision::UNDECIDED:
         case InlineDecision::CANDIDATE:
@@ -216,13 +216,13 @@ void LegalPolicy::SetNever(InlineObservation obs)
 {
     // Expect a valid observation
     assert(InlIsValidObservation(obs));
+    Dump("SetNever: %s\n", InlGetObservationString(obs));
 
     switch (m_Decision)
     {
         case InlineDecision::NEVER:
             // Repeated never only ok if evaluating a prejit root
             assert(m_IsPrejitRoot);
-            Dump("SetNever: %s", InlGetObservationString(obs));
             break;
         case InlineDecision::UNDECIDED:
         case InlineDecision::CANDIDATE:
@@ -410,6 +410,14 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                     m_MethodIsMostlyLoadStore = true;
                 }
 
+                // Don't inline calls inside no-return blocks (BBJ_THROW)
+                // it's not profitable
+                if (m_CallsiteIsInNoReturnRegion)
+                {
+                    SetFailure(InlineObservation::CALLSITE_NOT_PROFITABLE_INLINE);
+                    return;
+                }
+
                 // Budget check.
                 //
                 // Conceptually this should happen when we
@@ -440,6 +448,10 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 }
                 break;
             }
+
+            case InlineObservation::CALLSITE_IN_NORETURN_REGION:
+                m_CallsiteIsInNoReturnRegion = true;
+                break;
 
             case InlineObservation::CALLSITE_IN_TRY_REGION:
                 m_CallsiteIsInTryRegion = true;
@@ -587,16 +599,23 @@ void DefaultPolicy::NoteInt(InlineObservation obs, int value)
             // failure to inline could negatively impact code quality.
             //
 
-            unsigned basicBlockCount = static_cast<unsigned>(value);
+            const unsigned basicBlockCount = static_cast<unsigned>(value);
 
             // CALLEE_IS_FORCE_INLINE overrides CALLEE_DOES_NOT_RETURN
             if (!m_IsForceInline && m_IsNoReturn && (basicBlockCount == 1))
             {
                 SetNever(InlineObservation::CALLEE_DOES_NOT_RETURN);
             }
-            else if (!m_IsForceInline && (basicBlockCount > (MAX_BASIC_BLOCKS + m_FoldableBranch + (m_FoldableSwitch * 5))))
+            else if (!m_IsForceInline)
             {
-                SetNever(InlineObservation::CALLEE_TOO_MANY_BASIC_BLOCKS);
+                // For each foldable branch we'll get rid of at least two basic-blocks
+                // TODO: store exact number of cases for foldable switches, for now let's assume it's 5 in average
+                const unsigned basicBlockLimit = MAX_BASIC_BLOCKS + (m_FoldableBranch * 2) + (m_FoldableSwitch * 5);
+                if (basicBlockCount > basicBlockLimit)
+                {
+                    Dump("basicBlockCount=%d > basicBlockLimit=%d\n", basicBlockCount, basicBlockLimit);
+                    SetNever(InlineObservation::CALLEE_TOO_MANY_BASIC_BLOCKS);
+                }
             }
 
             break;
@@ -774,7 +793,7 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_FoldableBranch > 0)
     {
-        multiplier += 3.0 * m_FoldableBranch;
+        multiplier += 4.0 * m_FoldableBranch;
         Dump("\nInline candidate has %d foldable branch(es).  Multiplier increased to %g.", m_FoldableBranch, multiplier);
     }
 
@@ -899,7 +918,22 @@ int DefaultPolicy::DetermineNativeSizeEstimate()
     // Should be a discretionary candidate.
     assert(m_StateMachine != nullptr);
 
-    return m_StateMachine->NativeSize;
+    double nativeSize = m_StateMachine->NativeSize;
+
+    // For each foldable branch we decrease NativeSize by 30% and 40% for switches
+    if (m_FoldableBranch > 0)
+    {
+        nativeSize /= pow(1.3, m_FoldableBranch);
+        Dump("NativeSizeEstimate is reduced to %d due to %d foldable branch(es)\n", (int)nativeSize, m_FoldableBranch);
+    }
+
+    if (m_FoldableSwitch > 0)
+    {
+        nativeSize /= pow(1.4, m_FoldableSwitch);
+        Dump("NativeSizeEstimate is reduced to %d due to %d foldable switch(es)\n", (int)nativeSize, m_FoldableSwitch);
+    }
+
+    return (int)nativeSize;
 }
 
 //------------------------------------------------------------------------

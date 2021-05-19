@@ -114,6 +114,7 @@ public:
         , m_LooksLikeWrapperMethod(false)
         , m_MethodIsMostlyLoadStore(false)
         , m_CallsiteIsInTryRegion(false)
+        , m_CallsiteIsInNoReturnRegion(false)
         , m_CallsiteIsInLoop(false)
         , m_IsNoReturn(false)
         , m_IsNoReturnKnown(false)
@@ -190,6 +191,7 @@ protected:
     bool                    m_LooksLikeWrapperMethod : 1;
     bool                    m_MethodIsMostlyLoadStore : 1;
     bool                    m_CallsiteIsInTryRegion : 1;
+    bool                    m_CallsiteIsInNoReturnRegion : 1;
     bool                    m_CallsiteIsInLoop : 1;
     bool                    m_IsNoReturn : 1;
     bool                    m_IsNoReturnKnown : 1;

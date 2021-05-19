@@ -827,24 +827,20 @@ public:
     }
     FgSlot Pop()
     {
-        FgSlot value = slot0;
-        switch (depth)
+        if (depth == 0)
         {
-        case 0:
-            // We don't model a 100% precise stack
-            value = SLOT_UNKNOWN;
-            break;
-        case 1:
-            slot0 = slot1;
-            depth--;
-            break;
-        case 2:
-            depth--;
-            break;
-        default:
-            unreached();
+            // We don't maintain a 100% precise stack
+            return SLOT_UNKNOWN;
         }
-        return value;
+        if (depth == 1 || depth == 2)
+        {
+            const FgSlot value = slot0;
+            slot0 = slot1;
+            slot1 = SLOT_UNKNOWN; // not necessary, just for debug purposes
+            depth--;
+            return value;
+        }
+        unreached();
     }
 
 private:
@@ -884,7 +880,7 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
     int         prefixFlags            = 0;
     int         value                  = 0;
 
-    if (resolveTokens && !strncmp(info.compMethodName, "Test", 4))
+    if (!strncmp(info.compMethodName, "Test", 4) && isInlining)
     {
         auto name = info.compMethodName;
         printf("");
@@ -900,6 +896,12 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
         if (isInlining && impInlineInfo->iciBlock->hasTryIndex())
         {
             compInlineResult->Note(InlineObservation::CALLSITE_IN_TRY_REGION);
+        }
+
+        // Determine if the call site is in a loop.
+        if (isInlining && (impInlineInfo->iciBlock->bbJumpKind == BBJ_THROW))
+        {
+            compInlineResult->Note(InlineObservation::CALLSITE_IN_NORETURN_REGION);
         }
 
         // Determine if the call site is in a loop.
@@ -1792,20 +1794,6 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
             case CEE_LDARG_1:
             case CEE_LDARG_2:
             case CEE_LDARG_3:
-                if (makeInlineObservations)
-                {
-                    if (isInlining && impInlineInfo->inlArgInfo[opcode - CEE_LDARG_0].argIsInvariant)
-                    {
-                        pushedStack.PushConstant();
-                    }
-                    else
-                    {
-                        pushedStack.PushArgument(opcode - CEE_LDARG_0);
-                    }
-                    handled = true;
-                }
-                break;
-
             case CEE_LDARG_S:
             case CEE_LDARG:
             {
@@ -1814,17 +1802,31 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                     goto TOO_FAR;
                 }
 
-                varNum = (sz == sizeof(BYTE)) ? getU1LittleEndian(codeAddr) : getU2LittleEndian(codeAddr);
+                if ((opcode == CEE_LDARG) || (opcode == CEE_LDARG_S))
+                {
+                    varNum = (sz == sizeof(BYTE)) ? getU1LittleEndian(codeAddr) : getU2LittleEndian(codeAddr);
+                }
+                else
+                {
+                    varNum = opcode - CEE_LDARG_0;
+                }
 
                 if (makeInlineObservations)
                 {
+                    bool isCns = false;
                     if (isInlining && impInlineInfo->inlArgInfo[varNum].argIsInvariant)
                     {
-                        pushedStack.PushConstant();
+                        GenTree* argNode = impInlineInfo->inlArgInfo[varNum].argNode;
+                        if (argNode == nullptr || !argNode->OperIsLocal())
+                        {
+                            // Don't PushConstant for invariant locals
+                            pushedStack.PushConstant();
+                            isCns = true;
+                        }
                     }
-                    else
+                    if (!isCns)
                     {
-                        pushedStack.PushArgument(varNum);
+                        pushedStack.PushArgument(opcode - CEE_LDARG_0);
                     }
                     handled = true;
                 }
@@ -1861,9 +1863,17 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
         // Note the opcode we just saw
         if (makeInlineObservations)
         {
-            InlineObservation obs =
-                typeIsNormed ? InlineObservation::CALLEE_OPCODE_NORMED : InlineObservation::CALLEE_OPCODE;
-            compInlineResult->NoteInt(obs, opcode);
+            if (handled && pushedStack.IsStackAtLeastOneDeep() && FgStack::IsConstant(pushedStack.GetSlot0()))
+            {
+                // if opcode was handled in one of the cases above and we put a constant to the FgStack
+                // we can just ignore it to avoid size estimations since it's going to be folded anyway.
+            }
+            else
+            {
+                InlineObservation obs =
+                    typeIsNormed ? InlineObservation::CALLEE_OPCODE_NORMED : InlineObservation::CALLEE_OPCODE;
+                compInlineResult->NoteInt(obs, opcode);
+            }
         }
 
         typeIsNormed = false;
