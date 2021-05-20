@@ -18956,7 +18956,7 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
 
         // Prepare for the next iteration
         sigArg = info.compCompHnd->getArgNext(sigArg);
-        argUse = argUse->GetNext();
+        argUse = argUse == nullptr ? nullptr : argUse->GetNext();
 
         if ((sigClass != nullptr) && structPromotionHelper->CanPromoteStructType(sigClass))
         {
