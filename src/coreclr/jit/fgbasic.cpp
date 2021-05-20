@@ -1168,10 +1168,12 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                     {
                         // toSkip > 0 means we most likely will hit a pattern (e.g. box+isinst+brtrue) that
                         // will be folded into a const
+        
                         codeAddr += toSkip;
+
                         pushedStack.PushConstant();
                         handled = true;
-                        continue;
+                        break;
                     }
                 }
                 break;

@@ -19072,13 +19072,9 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
         assert(callSiteWeight >= 0);
         assert(entryWeight >= 0);
 
-        if (entryWeight != 0)
-        {
-            inlineResult->NoteBool(InlineObservation::CALLSITE_HAS_PROFILE, true);
-
-            double frequency = callSiteWeight / entryWeight;
-            inlineResult->NoteDouble(InlineObservation::CALLSITE_PROFILE_FREQUENCY, frequency);
-        }
+        inlineResult->NoteBool(InlineObservation::CALLSITE_HAS_PROFILE, true);
+        double frequency = entryWeight == 0.0 ? 0.0 : callSiteWeight / entryWeight;
+        inlineResult->NoteDouble(InlineObservation::CALLSITE_PROFILE_FREQUENCY, frequency);
     }
 }
 
