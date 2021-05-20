@@ -342,6 +342,14 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 propagate = true;
                 break;
 
+            case InlineObservation::CALLEE_ARG_PROMOTABLE:
+                m_ArgPromotable++;
+                break;
+
+            case InlineObservation::CALLEE_ARG_FEEDS_CAST:
+                m_ArgCasted++;
+                break;
+
             case InlineObservation::CALLEE_FOLDABLE_BOX:
                 m_FoldableBox++;
                 break;
@@ -388,6 +396,10 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
 
             case InlineObservation::CALLSITE_DIV_BY_CNS:
                 m_DivByCns++;
+                break;
+
+            case InlineObservation::CALLSITE_HAS_PROFILE:
+                m_HasProfile = value;
                 break;
 
             case InlineObservation::CALLEE_BEGIN_OPCODE_SCAN:
@@ -559,7 +571,7 @@ bool DefaultPolicy::BudgetCheck() const
         //
         assert(m_IsForceInlineKnown);
         assert(m_CallsiteDepth > 0);
-        const bool allowOverBudget = m_IsForceInline && (m_CallsiteDepth == 1);
+        const bool allowOverBudget = m_HasProfile && m_IsForceInline && (m_CallsiteDepth == 1);
 
         if (allowOverBudget)
         {
@@ -739,9 +751,8 @@ void DefaultPolicy::NoteInt(InlineObservation obs, int value)
 
 void DefaultPolicy::NoteDouble(InlineObservation obs, double value)
 {
-    // By default, ignore this observation.
-    //
     assert(obs == InlineObservation::CALLSITE_PROFILE_FREQUENCY);
+    m_ProfileFrequency = value;
 }
 
 //------------------------------------------------------------------------
@@ -766,13 +777,13 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_IsFromPromotableValueClass)
     {
-        multiplier += 3;
+        multiplier += 3.0;
         Dump("\nmultiplier in methods of promotable struct increased to %g.", multiplier);
     }
 
     if (m_IsGenericFromNonGeneric)
     {
-        multiplier += 3;
+        multiplier += 5.0;
         Dump("\nInline candidate is generic and caller is not.  Multiplier increased to %g.", multiplier);
     }
 
@@ -853,62 +864,94 @@ double DefaultPolicy::DetermineMultiplier()
             break;
     }
 
-    // No-op observation (for now):
+    if (m_HasProfile)
+    {
+        if (m_ProfileFrequency < 0.1)
+        {
+            multiplier = min(multiplier, 3.0);
+        }
+        else
+        {
+            multiplier += (10.0 * m_ProfileFrequency);
+            Dump("\nCallsite has profile.  Multiplier increased to %g.", multiplier);
+        }
+    }
+
+    if (m_ArgCasted > 0)
+    {
+        multiplier += m_ArgCasted;
+        Dump("\nArgument feeds ISINST/CASTCLASS %d times.  Multiplier increased to %g.", m_ArgCasted, multiplier);
+    }
+
+    if (m_ArgPromotable > 0)
+    {
+        multiplier += m_ArgPromotable;
+        Dump("\n%d arguments are promotable structs.  Multiplier increased to %g.", m_ArgPromotable, multiplier);
+    }
 
     if (m_FoldableBox > 0)
     {
-        Dump("\nInline has %d foldable BOX(s).", m_FoldableBox);
+        multiplier += (2 * m_FoldableBox);
+        Dump("\nInline has %d foldable BOX ops.  Multiplier increased to %g.", m_FoldableBox, multiplier);
     }
 
     if (m_Intrinsic > 0)
     {
-        Dump("\nInline has %d intrinsic(s).", m_Intrinsic);
+        multiplier += (0.5 * m_Intrinsic);
+        Dump("\nInline has %d intrinsics.  Multiplier increased to %g.", m_Intrinsic, multiplier);
     }
 
     if (m_UncondBranch > 0)
     {
-        Dump("\nInline has %d unconditional branch(es).", m_UncondBranch);
+        Dump("\nInline has %d unconditional branches.  Multiplier increased to %g.", m_UncondBranch, multiplier);
     }
 
     if (m_ArgIsBoxed > 0)
     {
-        // TODO: check if we have UNBOX ops in the callee 
-        Dump("\nCallsite is going to box %d argument(s)", m_ArgIsBoxed);
+        // TODO: check if we have UNBOX ops in the callee
+        Dump("\nCallsite is going to box %d arguments.  Multiplier increased to %g.", m_ArgIsBoxed, multiplier);
     }
 
     if (m_ArgIsFinalSigIsNot > 0)
     {
-        Dump("\nCallsite passes %d argument(s) of sealed class(es) while callee accepts non final ones", m_ArgIsFinalSigIsNot);
+        multiplier += (5.0 * m_ArgIsFinalSigIsNot);
+        Dump("\nCallsite passes %d arguments of sealed classes while callee accepts non final ones.   Multiplier increased to %g.", m_ArgIsFinalSigIsNot, multiplier);
     }
 
     if (m_ArgIsFinal > 0)
     {
-        Dump("\nCallsite passes %d argument(s) of sealed class(es)", m_ArgIsFinal);
+        multiplier += m_ArgIsFinal;
+        Dump("\nCallsite passes %d arguments of sealed classes.   Multiplier increased to %g.", m_ArgIsFinal, multiplier);
     }
 
     if (m_FoldableIntrinsic > 0)
     {
-        Dump("\nInline has %d foldable intrinsic(s).", m_FoldableIntrinsic);
+        multiplier += (1 * m_FoldableIntrinsic);
+        Dump("\nInline has %d foldable intrinsics.  Multiplier increased to %g.", m_FoldableIntrinsic, multiplier);
     }
 
     if (m_FoldableExpr > 0)
     {
-        Dump("\nInline has %d foldable binary expression(s).", m_FoldableExpr);
+        multiplier += (1 * m_FoldableExpr);
+        Dump("\nInline has %d foldable binary expressions.  Multiplier increased to %g.", m_FoldableExpr, multiplier);
     }
 
     if (m_FoldableExprUn > 0)
     {
-        Dump("\nInline has %d foldable unary expression(s).", m_FoldableExprUn);
+        multiplier += (0.5 * m_FoldableExprUn);
+        Dump("\nInline has %d foldable unary expressions.  Multiplier increased to %g.", m_FoldableExprUn, multiplier);
     }
 
     if (m_FoldableSwitch > 0)
     {
-        Dump("\nInline has %d foldable switch expression(s).", m_FoldableSwitch);
+        multiplier += (5.0 * m_FoldableSwitch);
+        Dump("\nInline has %d foldable switch expressions.  Multiplier increased to %g.", m_FoldableSwitch, multiplier);
     }
 
     if (m_DivByCns > 0)
     {
-        Dump("\nInline has %d Div-by-const expression(s).", m_DivByCns);
+        multiplier += (1 * m_DivByCns);
+        Dump("\nInline has %d Div-by-const expressions.  Multiplier increased to %g.", m_DivByCns, multiplier);
     }
 
 #ifdef DEBUG
@@ -2179,6 +2222,8 @@ void DiscretionaryPolicy::DumpData(FILE* file) const
     fprintf(file, ",%u", m_ArgFeedsConstantTest);
     fprintf(file, ",%u", m_MethodIsMostlyLoadStore ? 1 : 0);
     fprintf(file, ",%u", m_ArgFeedsRangeCheck);
+    fprintf(file, ",%u", m_ArgPromotable);
+    fprintf(file, ",%u", m_ArgCasted);
     fprintf(file, ",%u", m_FoldableBox);
     fprintf(file, ",%u", m_Intrinsic);
     fprintf(file, ",%u", m_UncondBranch);

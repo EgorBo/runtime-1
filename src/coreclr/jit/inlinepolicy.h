@@ -86,6 +86,7 @@ public:
         : LegalPolicy(compiler, isPrejitRoot)
         , m_StateMachine(nullptr)
         , m_Multiplier(0.0)
+        , m_ProfileFrequency(0)
         , m_CodeSize(0)
         , m_CallsiteFrequency(InlineCallsiteFrequency::UNUSED)
         , m_CallsiteDepth(0)
@@ -94,6 +95,8 @@ public:
         , m_ArgFeedsTest(0)
         , m_ArgFeedsConstantTest(0)
         , m_ArgFeedsRangeCheck(0)
+        , m_ArgCasted(0)
+        , m_ArgPromotable(0)
         , m_FoldableBox(0)
         , m_Intrinsic(0)
         , m_UncondBranch(0)
@@ -121,6 +124,7 @@ public:
         , m_CallsiteIsInLoop(false)
         , m_IsNoReturn(false)
         , m_IsNoReturnKnown(false)
+        , m_HasProfile(false)
     {
         // empty
     }
@@ -166,6 +170,7 @@ protected:
     // Data members
     CodeSeqSM*              m_StateMachine;
     double                  m_Multiplier;
+    double                  m_ProfileFrequency;
     unsigned                m_CodeSize;
     InlineCallsiteFrequency m_CallsiteFrequency;
     unsigned                m_CallsiteDepth;
@@ -174,6 +179,8 @@ protected:
     unsigned                m_ArgFeedsTest;
     unsigned                m_ArgFeedsConstantTest;
     unsigned                m_ArgFeedsRangeCheck;
+    unsigned                m_ArgCasted;
+    unsigned                m_ArgPromotable;
     unsigned                m_FoldableBox;
     unsigned                m_Intrinsic;
     unsigned                m_UncondBranch;
@@ -201,6 +208,7 @@ protected:
     bool                    m_CallsiteIsInLoop : 1;
     bool                    m_IsNoReturn : 1;
     bool                    m_IsNoReturnKnown : 1;
+    bool                    m_HasProfile : 1;
 };
 
 // DiscretionaryPolicy is a variant of the default policy.  It
