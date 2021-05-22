@@ -822,12 +822,6 @@ double DefaultPolicy::DetermineMultiplier()
         Dump("\nInline candidate has arg that feeds range check.  Multiplier increased to %g.", multiplier);
     }
 
-    if (m_FoldableBranch > 0)
-    {
-        multiplier += 4.0 * m_FoldableBranch;
-        Dump("\nInline candidate has %d foldable branch(es).  Multiplier increased to %g.", m_FoldableBranch, multiplier);
-    }
-
     // For prejit roots we do not see the call sites. To be suitably optimistic
     // assume that call sites may pass constants.
     else if (m_IsPrejitRoot && ((m_ArgFeedsConstantTest > 0) || (m_ArgFeedsTest > 0)))
@@ -840,6 +834,7 @@ double DefaultPolicy::DetermineMultiplier()
     {
         case InlineCallsiteFrequency::RARE:
             // Note this one is not additive, it uses '=' instead of '+='
+            // NOTE: I hope we use RARE only for blocks we specify as cold by hands (not from PGO).
             multiplier = 1.3;
             Dump("\nInline candidate callsite is rare.  Multiplier limited to %g.", multiplier);
             break;
@@ -866,55 +861,71 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_HasProfile)
     {
-        if (m_ProfileFrequency < 0.1)
-        {
-            multiplier = min(multiplier, 3.0);
-        }
-        else
-        {
-            multiplier += (10.0 * m_ProfileFrequency);
-            Dump("\nCallsite has profile.  Multiplier increased to %g.", multiplier);
-        }
+        // m_ProfileFrequency values:
+        //   > 1  -- the callsight is inside a hot loop
+        //   1    -- the callsight is as hot as its method's first block
+        //   ~= 0 -- the callsight is cold. Since we don't have context-sensitive PGO data yet we should
+        //           leave the current multiplier as is and not decreasing it.
+        multiplier *= (1.0 + max(m_ProfileFrequency, 2.0));
+        Dump("\nCallsite has profile.  Multiplier increased to %g.", multiplier);
+    }
+
+    if (m_FoldableBranch > 0)
+    {
+        // Examples:
+        //
+        //  if (typeof(T) == typeof(int)) {
+        //  if (Avx2.IsSupported) {
+        //  if (arg0 / 10 > 100) { // where arg0 is a constant at the callsight
+        //  if (Math.Abs(arg0) > 10) { // same here
+        //  etc.
+        //
+        multiplier += (4.0 * m_FoldableBranch);
+        Dump("\nInline candidate has %d foldable branch(es).  Multiplier increased to %g.", m_FoldableBranch, multiplier);
     }
 
     if (m_ArgCasted > 0)
     {
-        multiplier += m_ArgCasted;
+        multiplier += (0.5 * m_ArgCasted);
         Dump("\nArgument feeds ISINST/CASTCLASS %d times.  Multiplier increased to %g.", m_ArgCasted, multiplier);
     }
 
     if (m_ArgPromotable > 0)
     {
-        multiplier += m_ArgPromotable;
+        multiplier += (0.5 * m_ArgPromotable);
         Dump("\n%d arguments are promotable structs.  Multiplier increased to %g.", m_ArgPromotable, multiplier);
     }
 
     if (m_FoldableBox > 0)
     {
-        multiplier += (2 * m_FoldableBox);
+        // We met some BOX+ISINST+BR or BOX+UNBOX patterns (see impBoxPatternMatch).
+        multiplier += (1.5 * m_FoldableBox);
         Dump("\nInline has %d foldable BOX ops.  Multiplier increased to %g.", m_FoldableBox, multiplier);
     }
 
     if (m_Intrinsic > 0)
     {
+        // In most cases such intrinsics are lowered as single CPU instructions
         multiplier += (0.5 * m_Intrinsic);
         Dump("\nInline has %d intrinsics.  Multiplier increased to %g.", m_Intrinsic, multiplier);
     }
 
     if (m_UncondBranch > 0)
     {
-        Dump("\nInline has %d unconditional branches.  Multiplier increased to %g.", m_UncondBranch, multiplier);
+        Dump("\nInline has %d unconditional branches.", m_UncondBranch);
     }
 
     if (m_ArgIsBoxed > 0)
     {
-        // TODO: check if we have UNBOX ops in the callee
+        // This observation means "arg is boxed at the callsight" and not "arg is boxed inside the callee" (see m_FoldableBox).
+        multiplier += m_ArgIsBoxed;
         Dump("\nCallsite is going to box %d arguments.  Multiplier increased to %g.", m_ArgIsBoxed, multiplier);
     }
 
     if (m_ArgIsFinalSigIsNot > 0)
     {
-        multiplier += (5.0 * m_ArgIsFinalSigIsNot);
+        // If we inline such a callee - we will be able to devirtualize all the calls for such arguments
+        multiplier += (4.0 * m_ArgIsFinalSigIsNot);
         Dump("\nCallsite passes %d arguments of sealed classes while callee accepts non final ones.   Multiplier increased to %g.", m_ArgIsFinalSigIsNot, multiplier);
     }
 
@@ -926,13 +937,13 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_FoldableIntrinsic > 0)
     {
-        multiplier += (1 * m_FoldableIntrinsic);
+        multiplier += (1.5 * m_FoldableIntrinsic);
         Dump("\nInline has %d foldable intrinsics.  Multiplier increased to %g.", m_FoldableIntrinsic, multiplier);
     }
 
     if (m_FoldableExpr > 0)
     {
-        multiplier += (1 * m_FoldableExpr);
+        multiplier += (1.0 * m_FoldableExpr);
         Dump("\nInline has %d foldable binary expressions.  Multiplier increased to %g.", m_FoldableExpr, multiplier);
     }
 
@@ -950,7 +961,9 @@ double DefaultPolicy::DetermineMultiplier()
 
     if (m_DivByCns > 0)
     {
-        multiplier += (1 * m_DivByCns);
+        // E.g. callee has "x / arg0" where arg0 is a const at the callsight - we'll avoid the expensive DIV instruction
+        // if we inline the callee.
+        multiplier += (1.0 * m_DivByCns);
         Dump("\nInline has %d Div-by-const expressions.  Multiplier increased to %g.", m_DivByCns, multiplier);
     }
 
