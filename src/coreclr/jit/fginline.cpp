@@ -154,6 +154,18 @@ PhaseStatus Compiler::fgInline()
 
                     fgMorphCallInline(call, &inlineResult);
 
+                    if ((call->gtCallType == CT_INDIRECT) && (call->gtCallAddr != nullptr) &&
+                        (call->gtCallAddr->OperIs(GT_FTN_ADDR)) && !call->IsUnmanaged()/* &&
+                        (call->callSig->getCallConv() == CORINFO_CALLCONV_DEFAULT)*/)
+                    {
+                        gtDispTree(call);
+                        GenTreeFptrVal*       fptr         = call->gtCallAddr->AsFptrVal();
+                        CORINFO_METHOD_HANDLE targetMethod = fptr->gtFptrMethod;
+                        call->gtCallType                   = CT_USER_FUNC;
+                        call->gtCallMethHnd                = targetMethod;
+                        DEBUG_DESTROY_NODE(fptr);
+                    }
+
                     // If there's a candidate to process, we will make changes
                     madeChanges = true;
 
@@ -1616,10 +1628,10 @@ Statement* Compiler::fgInlinePrependStatements(InlineInfo* inlineInfo)
                    subsequent uses of the arg would have worked with the bashed value */
                 if (argInfo.argIsInvariant)
                 {
-                    assert(argNode->OperIsConst() || argNode->gtOper == GT_ADDR);
+                    assert(argNode->IsInvariant());
                 }
                 noway_assert((argInfo.argIsLclVar == 0) ==
-                             (argNode->gtOper != GT_LCL_VAR || (argNode->gtFlags & GTF_GLOB_REF)));
+                             (!argNode->OperIs(GT_LCL_VAR) || (argNode->gtFlags & GTF_GLOB_REF)));
 
                 /* If the argument has side effects, append it */
 
@@ -1629,7 +1641,7 @@ Statement* Compiler::fgInlinePrependStatements(InlineInfo* inlineInfo)
                     newStmt     = nullptr;
                     bool append = true;
 
-                    if (argNode->gtOper == GT_OBJ || argNode->gtOper == GT_MKREFANY)
+                    if (argNode->OperIs(GT_OBJ, GT_MKREFANY))
                     {
                         // Don't put GT_OBJ node under a GT_COMMA.
                         // Codegen can't deal with it.

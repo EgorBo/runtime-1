@@ -7322,7 +7322,7 @@ GenTreeCall* Compiler::impImportIndirectCall(CORINFO_SIG_INFO* sig, IL_OFFSETX i
      */
 
     // Ignore this trivial case.
-    if (impStackTop().val->gtOper != GT_LCL_VAR)
+    if (!impStackTop().val->OperIs(GT_FTN_ADDR, GT_LCL_VAR))
     {
         impSpillStackEntry(verCurrentState.esStackDepth - 1,
                            BAD_VAR_NUM DEBUGARG(false) DEBUGARG("impImportIndirectCall"));
