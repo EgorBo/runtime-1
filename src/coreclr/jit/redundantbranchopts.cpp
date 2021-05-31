@@ -150,6 +150,9 @@ bool Compiler::optRedundantBranch(BasicBlock* const block)
 
                         if (wasThreaded)
                         {
+                            // Recompute doms and try to find more branches to fold.
+                            fgComputeDoms();
+                            optRedundantBranches();
                             return true;
                         }
                     }
