@@ -151,7 +151,7 @@ bool Compiler::optRedundantBranch(BasicBlock* const block)
                         if (wasThreaded)
                         {
                             // Recompute doms and try to find more branches to fold.
-                            fgComputeDoms();
+                            fgUpdateChangedFlowGraph(true, true);
                             optRedundantBranches();
                             return true;
                         }
