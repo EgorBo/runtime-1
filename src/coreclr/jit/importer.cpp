@@ -2532,6 +2532,12 @@ bool Compiler::impSpillStackEntry(unsigned level,
             ici->preexistingSpillTemp = tnum;
         }
     }
+    else if (lvaTable[tnum].lvSingleDef && (lvaTable[tnum].lvType == TYP_REF) &&
+             (lvaTable[tnum].lvClassHnd == NO_CLASS_HANDLE))
+    {
+        CORINFO_CLASS_HANDLE stkHnd = verCurrentState.esStack[level].seTypeInfo.GetClassHandle();
+        lvaSetClass(tnum, tree, stkHnd);
+    }
 
     // The tree type may be modified by impAssignTempGen, so use the type of the lclVar.
     var_types type                     = genActualType(lvaTable[tnum].TypeGet());
@@ -17811,6 +17817,11 @@ SPILLSTACK:
         JITDUMP("\nSpilling stack entries into temps\n");
         for (level = 0, tempNum = baseTmp; level < verCurrentState.esStackDepth; level++, tempNum++)
         {
+            if (newTemps)
+            {
+                lvaTable[tempNum].lvSingleDef = 1;
+            }
+
             GenTree* tree = verCurrentState.esStack[level].val;
 
             /* VC generates code where it pushes a byref from one branch, and an int (ldc.i4 0) from
