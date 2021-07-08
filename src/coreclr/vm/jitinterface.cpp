@@ -4602,6 +4602,16 @@ TypeCompareState CEEInfo::compareTypesForEquality(
     // If neither type is a canonical subtype, type handle comparison suffices
     if (!hnd1.IsCanonicalSubtype() && !hnd2.IsCanonicalSubtype())
     {
+        if (hnd1.IsEnum())
+        {
+            // Compare with Enum's underlying primitive
+            hnd1 = CoreLibBinder::GetElementType(hnd1.GetVerifierCorElementType());
+        }
+        if (hnd2.IsEnum())
+        {
+            // Compare with Enum's underlying primitive
+            hnd2 = CoreLibBinder::GetElementType(hnd1.GetVerifierCorElementType());
+        }
         result = (hnd1 == hnd2 ? TypeCompareState::Must : TypeCompareState::MustNot);
     }
     // If either or both types are canonical subtypes, we can sometimes prove inequality.
