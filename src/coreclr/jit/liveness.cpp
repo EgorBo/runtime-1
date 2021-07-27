@@ -1872,6 +1872,7 @@ void Compiler::fgComputeLifeLIR(VARSET_TP& life, BasicBlock* block, VARSET_VALAR
     for (GenTree *node = blockRange.LastNode(), *next = nullptr, *end = firstNode->gtPrev; node != end; node = next)
     {
         next = node->gtPrev;
+    startOver:
 
         bool isDeadStore;
         switch (node->OperGet())
@@ -1915,6 +1916,28 @@ void Compiler::fgComputeLifeLIR(VARSET_TP& life, BasicBlock* block, VARSET_VALAR
                 }
                 else
                 {
+                    if (call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC)
+                    {
+                        auto ni = lookupNamedIntrinsic(call->gtCallMethHnd);
+                        if ((ni == NI_System_Collections_Generic_Comparer_get_Default) ||
+                            (ni == NI_System_Collections_Generic_EqualityComparer_get_Default))
+                        {
+                            auto cls =    info.compCompHnd->getMethodClass(call->gtCallMethHnd);
+                            auto fld =    info.compCompHnd->getFieldInClass(cls, 0);
+                            auto fldAdr = info.compCompHnd->getFieldAddress(fld);
+
+                            GenTree* comma =  gtNewOperNode(GT_COMMA, TYP_REF,
+                                fgGetStaticsCCtorHelper(cls, CORINFO_HELP_CLASSINIT_SHARED_DYNAMICCLASS),
+                                gtNewIndir(TYP_I_IMPL, gtNewIconNode((size_t)fldAdr, TYP_I_IMPL)));
+
+                            blockRange.InsertBefore(node, comma);
+                            blockRange.Remove(node);
+
+                            node = comma;
+                            goto startOver;
+                        }
+                    }
+
                     fgComputeLifeCall(life, call);
                 }
                 break;
