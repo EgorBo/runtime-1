@@ -180,6 +180,18 @@ GenTree* LC_Condition::ToGenTree(Compiler* comp, BasicBlock* bb)
 {
     GenTree* op1Tree = op1.ToGenTree(comp, bb);
     GenTree* op2Tree = op2.ToGenTree(comp, bb);
+    unsigned op1Size = genTypeSize(genActualType(op1Tree));
+    unsigned op2Size = genTypeSize(genActualType(op2Tree));
+
+    if (op1Size < op2Size)
+    {
+        comp->optNarrowTree(op2Tree, op2Tree->TypeGet(), op1Tree->TypeGet(), op2Tree->gtVNPair, true);
+    }
+    else if (op1Size > op2Size)
+    {
+        comp->optNarrowTree(op1Tree, op1Tree->TypeGet(), op2Tree->TypeGet(), op1Tree->gtVNPair, true);
+    }
+
     assert(genTypeSize(genActualType(op1Tree->TypeGet())) == genTypeSize(genActualType(op2Tree->TypeGet())));
     return comp->gtNewOperNode(oper, TYP_INT, op1Tree, op2Tree);
 }

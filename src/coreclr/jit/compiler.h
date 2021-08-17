@@ -6607,6 +6607,8 @@ public:
                        BasicBlock*   exit,
                        unsigned char exitCnt);
 
+    bool optNarrowTree(GenTree* tree, var_types srct, var_types dstt, ValueNumPair vnpNarrow, bool doit);
+
 protected:
     unsigned optCallCount;         // number of calls made in the method
     unsigned optIndirectCallCount; // number of virtual, interface and indirect calls made in the method
@@ -6735,8 +6737,6 @@ protected:
     bool optIsVarAssgLoop(unsigned lnum, unsigned var);
 
     int optIsSetAssgLoop(unsigned lnum, ALLVARSET_VALARG_TP vars, varRefKinds inds = VR_NONE);
-
-    bool optNarrowTree(GenTree* tree, var_types srct, var_types dstt, ValueNumPair vnpNarrow, bool doit);
 
     /**************************************************************************
      *                       Optimization conditions
