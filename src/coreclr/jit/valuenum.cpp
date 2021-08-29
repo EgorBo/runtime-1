@@ -9251,26 +9251,24 @@ void Compiler::fgValueNumberHWIntrinsic(GenTree* tree)
         fgMutateGcHeap(tree DEBUGARG("HWIntrinsic - MemoryStore"));
     }
 
-    if ((tree->AsOp()->gtOp1 != nullptr) && tree->gtGetOp1()->OperIs(GT_LIST))
-    {
-        // TODO-CQ: allow intrinsics with GT_LIST to be properly VN'ed, it will
-        // allow use to process things like Vector128.Create(1,2,3,4) etc.
-        // Generate unique VN for now.
-        tree->gtVNPair.SetBoth(vnStore->VNForExpr(compCurBB, tree->TypeGet()));
-        return;
-    }
-
     // We don't expect GT_LIST to be in the second op
     assert((tree->AsOp()->gtOp2 == nullptr) || !tree->gtGetOp2()->OperIs(GT_LIST));
 
     VNFunc func         = GetVNFuncForNode(tree);
     bool   isMemoryLoad = hwIntrinsicNode->OperIsMemoryLoad();
-
+    bool   isMultiArg   = (tree->AsOp()->gtOp1 != nullptr) && tree->gtGetOp1()->OperIs(GT_LIST);
+    
     // If we have a MemoryLoad operation we will use the fgValueNumberByrefExposedLoad
     // method to assign a value number that depends upon fgCurMemoryVN[ByrefExposed] ValueNumber
     //
     if (isMemoryLoad)
     {
+        if (isMultiArg)
+        {
+            tree->gtVNPair.SetBoth(vnStore->VNForExpr(compCurBB, tree->TypeGet()));
+            return;
+        }
+
         ValueNumPair op1vnp;
         ValueNumPair op1Xvnp;
         vnStore->VNPUnpackExc(tree->AsOp()->gtOp1->gtVNPair, &op1vnp, &op1Xvnp);
@@ -9317,8 +9315,31 @@ void Compiler::fgValueNumberHWIntrinsic(GenTree* tree)
 
     const bool isVariableNumArgs = HWIntrinsicInfo::lookupNumArgs(hwIntrinsicNode->gtHWIntrinsicId) == -1;
 
+    if (isMultiArg && (vnStore->VNFuncArity(func) > 2))
+    {
+        normalPair = ValueNumPair(ValueNumStore::VNForNull(), ValueNumStore::VNForNull());
+        for (GenTree* list = tree->gtGetOp1(); list != nullptr; list = list->gtGetOp2())
+        {
+            assert(list->OperGet() == GT_LIST);
+            const GenTree* listItem = list->gtGetOp1();
+
+            if (!listItem->OperIs(GT_CNS_DBL, GT_CNS_INT) || varTypeGCtype(listItem))
+            {
+                // Bail out
+                tree->gtVNPair.SetBoth(vnStore->VNForExpr(compCurBB, tree->TypeGet()));
+                return;
+            }
+
+            normalPair = vnStore->VNPairForFunc(tree->TypeGet(), VNF_Arg, normalPair, listItem->gtVNPair);
+        }
+
+        ValueNumPair addArg =
+            encodeResultType ? resvnp : ValueNumPair(ValueNumStore::VNForNull(), ValueNumStore::VNForNull());
+        normalPair = vnStore->VNPairForFunc(tree->TypeGet(), func, normalPair, addArg);
+
+    }
     // There are some HWINTRINSICS operations that have zero args, i.e.  NI_Vector128_Zero
-    if (tree->AsOp()->gtOp1 == nullptr)
+    else if (tree->AsOp()->gtOp1 == nullptr)
     {
         // Currently we don't have intrinsics with variable number of args with a parameter-less option.
         assert(!isVariableNumArgs);

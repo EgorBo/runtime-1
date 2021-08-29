@@ -161,6 +161,8 @@ ValueNumFuncDef(ADD_UN_OVF, 2, true, false, false)  // unsigned overflow checkin
 ValueNumFuncDef(SUB_UN_OVF, 2, false, false, false)
 ValueNumFuncDef(MUL_UN_OVF, 2, true, false, false)
 
+ValueNumFuncDef(Arg, 2, false, false, false)
+
 #ifdef FEATURE_SIMD
 ValueNumFuncDef(SimdType, 2, false, false, false)  // A value number function to compose a SIMD type
 #endif
