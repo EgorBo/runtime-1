@@ -15007,6 +15007,13 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                             op1->gtFlags |= GTF_IND_TGTANYWHERE;
                         }
 
+                        if ((fieldInfo.fieldFlags & CORINFO_FLG_FIELD_FINAL) &&
+                            (info.compCompHnd->getFieldClass(resolvedToken.hField) == info.compClassHnd) &&
+                            ((info.compFlags & CORINFO_FLG_CONSTRUCTOR) == 0))
+                        {
+                            op1->gtFlags |= GTF_IND_INVARIANT;
+                        }
+
                         DWORD typeFlags = info.compCompHnd->getClassAttribs(resolvedToken.hClass);
                         if (StructHasOverlappingFields(typeFlags))
                         {
