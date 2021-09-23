@@ -11619,8 +11619,24 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
         case GT_RUNTIMELOOKUP:
             return fgMorphTree(op1);
 
-#ifdef TARGET_ARM
         case GT_INTRINSIC:
+            if ((tree->AsIntrinsic()->gtIntrinsicId == CORINFO_INTRINSIC_Object_GetType) && op1->IsBoxedValue())
+            {
+                bool                 isExact   = false;
+                bool                 isNonNull = false;
+                CORINFO_CLASS_HANDLE cls       = gtGetClassHandle(op1->gtGetOp1(), &isExact, &isNonNull);
+                if ((cls != NO_CLASS_HANDLE) && isExact)
+                {
+                    gtTryRemoveBoxUpstreamEffects(op1);
+                    GenTreeCall::Use* args = gtNewCallArgs(gtNewIconEmbClsHndNode(cls));
+                    GenTree*          tree =
+                        fgMorphCall(gtNewHelperCallNode(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE, TYP_REF, args));
+                    INDEBUG(tree->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+                    return tree;
+                }
+                break;
+            }
+#ifdef TARGET_ARM
             if (tree->AsIntrinsic()->gtIntrinsicName == NI_System_Math_Round)
             {
                 switch (tree->TypeGet())
@@ -11633,8 +11649,8 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac)
                         unreached();
                 }
             }
-            break;
 #endif
+            break;
         case GT_LIST:
             // Special handling for the arg list.
             return fgMorphArgList(tree->AsArgList(), mac);
