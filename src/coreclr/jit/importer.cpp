@@ -19512,7 +19512,8 @@ void Compiler::impCheckCanInline(GenTreeCall*           call,
                 pInfo = new (pParam->pThis, CMK_Inlining) InlineCandidateInfo;
 
                 // Null out bits we don't use when we're just inlining
-                pInfo->guardedClassHandle              = nullptr;
+                pInfo->guardedPrimaryClassHandle       = nullptr;
+                pInfo->guardedSecondaryClassHandle     = nullptr;
                 pInfo->guardedMethodHandle             = nullptr;
                 pInfo->guardedMethodUnboxedEntryHandle = nullptr;
                 pInfo->stubAddr                        = nullptr;
@@ -21905,7 +21906,8 @@ void Compiler::considerGuardedDevirtualization(
     unsigned       likelihood          = 0;
     unsigned       numberOfClasses     = 0;
 
-    CORINFO_CLASS_HANDLE likelyClass = NO_CLASS_HANDLE;
+    CORINFO_CLASS_HANDLE primaryLikelyClass   = NO_CLASS_HANDLE;
+    CORINFO_CLASS_HANDLE secondaryLikelyClass = NO_CLASS_HANDLE;
 
     bool doRandomDevirt = false;
 
@@ -21940,8 +21942,8 @@ void Compiler::considerGuardedDevirtualization(
 
     // For now we only use the most popular type
 
-    likelihood  = likelyClasses[0].likelihood;
-    likelyClass = likelyClasses[0].clsHandle;
+    likelihood         = likelyClasses[0].likelihood;
+    primaryLikelyClass = likelyClasses[0].clsHandle;
 
     if (numberOfClasses < 1)
     {
@@ -21949,7 +21951,7 @@ void Compiler::considerGuardedDevirtualization(
         return;
     }
 
-    assert(likelyClass != NO_CLASS_HANDLE);
+    assert(primaryLikelyClass != NO_CLASS_HANDLE);
 
     // Print all likely classes
     JITDUMP("%s classes for %p (%s):\n", doRandomDevirt ? "Random" : "Likely", dspPtr(objClass), objClassName)
@@ -21975,7 +21977,7 @@ void Compiler::considerGuardedDevirtualization(
     //
     CORINFO_DEVIRTUALIZATION_INFO dvInfo;
     dvInfo.virtualMethod               = baseMethod;
-    dvInfo.objClass                    = likelyClass;
+    dvInfo.objClass                    = primaryLikelyClass;
     dvInfo.context                     = *pContextHandle;
     dvInfo.exactContext                = *pContextHandle;
     dvInfo.pResolvedTokenVirtualMethod = nullptr;
@@ -21991,12 +21993,21 @@ void Compiler::considerGuardedDevirtualization(
     CORINFO_METHOD_HANDLE likelyMethod = dvInfo.devirtualizedMethod;
     JITDUMP("%s call would invoke method %s\n", callKind, eeGetMethodName(likelyMethod, nullptr));
 
+    // See if others (TODO: 2nd only currently) likely classes target exactly the same method
+    //
+    if ((numberOfClasses > 1) && (likelyClasses[1].likelihood > 10))
+    {
+        dvInfo.objClass = likelyClasses[1].clsHandle;
+        if (info.compCompHnd->resolveVirtualMethod(&dvInfo) && (likelyMethod == dvInfo.devirtualizedMethod))
+        {
+            secondaryLikelyClass = likelyClasses[1].clsHandle;
+            JITDUMP("%s 2nd most likely class '%s' targets the same method\n", eeGetClassName(likelyClasses[1].clsHandle));
+        }
+    }
+
     // Add this as a potential candidate.
     //
-    uint32_t const likelyMethodAttribs = info.compCompHnd->getMethodAttribs(likelyMethod);
-    uint32_t const likelyClassAttribs  = info.compCompHnd->getClassAttribs(likelyClass);
-    addGuardedDevirtualizationCandidate(call, likelyMethod, likelyClass, likelyMethodAttribs, likelyClassAttribs,
-                                        likelihood);
+    addGuardedDevirtualizationCandidate(call, likelyMethod, primaryLikelyClass, secondaryLikelyClass, likelihood);
 }
 
 //------------------------------------------------------------------------
@@ -22022,9 +22033,8 @@ void Compiler::considerGuardedDevirtualization(
 //
 void Compiler::addGuardedDevirtualizationCandidate(GenTreeCall*          call,
                                                    CORINFO_METHOD_HANDLE methodHandle,
-                                                   CORINFO_CLASS_HANDLE  classHandle,
-                                                   unsigned              methodAttr,
-                                                   unsigned              classAttr,
+                                                   CORINFO_CLASS_HANDLE  primaryClassHandle,
+                                                   CORINFO_CLASS_HANDLE  secondaryClassHandle,
                                                    unsigned              likelihood)
 {
     // This transformation only makes sense for virtual calls
@@ -22079,7 +22089,7 @@ void Compiler::addGuardedDevirtualizationCandidate(GenTreeCall*          call,
     // We're all set, proceed with candidate creation.
     //
     JITDUMP("Marking call [%06u] as guarded devirtualization candidate; will guess for class %s\n", dspTreeID(call),
-            eeGetClassName(classHandle));
+            eeGetClassName(primaryClassHandle));
     setMethodHasGuardedDevirtualization();
     call->SetGuardedDevirtualizationCandidate();
 
@@ -22095,13 +22105,24 @@ void Compiler::addGuardedDevirtualizationCandidate(GenTreeCall*          call,
 
     pInfo->guardedMethodHandle             = methodHandle;
     pInfo->guardedMethodUnboxedEntryHandle = nullptr;
-    pInfo->guardedClassHandle              = classHandle;
+    pInfo->guardedPrimaryClassHandle       = primaryClassHandle;
+    pInfo->guardedSecondaryClassHandle     = secondaryClassHandle;
     pInfo->likelihood                      = likelihood;
     pInfo->requiresInstMethodTableArg      = false;
 
+    const bool isPrimaryClsVT = info.compCompHnd->getClassAttribs(primaryClassHandle) & CORINFO_FLG_VALUECLASS;
+
+#if DEBUG
+    if ((secondaryClassHandle != NO_CLASS_HANDLE))
+    {
+        const bool isSecondaryClsVT = info.compCompHnd->getClassAttribs(secondaryClassHandle) & CORINFO_FLG_VALUECLASS;
+        assert(isPrimaryClsVT == isSecondaryClsVT);
+    }
+#endif
+
     // If the guarded class is a value class, look for an unboxed entry point.
     //
-    if ((classAttr & CORINFO_FLG_VALUECLASS) != 0)
+    if (isPrimaryClsVT)
     {
         JITDUMP("    ... class is a value class, looking for unboxed entry\n");
         bool                  requiresInstMethodTableArg = false;

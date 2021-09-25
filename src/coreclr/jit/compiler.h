@@ -7300,9 +7300,8 @@ public:
 
     void addGuardedDevirtualizationCandidate(GenTreeCall*          call,
                                              CORINFO_METHOD_HANDLE methodHandle,
-                                             CORINFO_CLASS_HANDLE  classHandle,
-                                             unsigned              methodAttr,
-                                             unsigned              classAttr,
+                                             CORINFO_CLASS_HANDLE  primaryClassHandle,
+                                             CORINFO_CLASS_HANDLE  secondaryClassHandle,
                                              unsigned              likelihood);
 
     bool doesMethodHaveExpRuntimeLookup()

@@ -615,17 +615,35 @@ private:
 
             // Find target method table
             //
-            GenTree*                              methodTable       = compiler->gtNewMethodTableLookup(thisTree);
-            GuardedDevirtualizationCandidateInfo* guardedInfo       = origCall->gtGuardedDevirtualizationCandidateInfo;
-            CORINFO_CLASS_HANDLE                  clsHnd            = guardedInfo->guardedClassHandle;
-            GenTree*                              targetMethodTable = compiler->gtNewIconEmbClsHndNode(clsHnd);
+            GenTree* primaryMethodTable    = compiler->gtNewMethodTableLookup(thisTree);
+            auto     guardedInfo           = origCall->gtGuardedDevirtualizationCandidateInfo;
+            auto     primaryClsHnd         = guardedInfo->guardedPrimaryClassHandle;
+            auto     secondClsHnd          = guardedInfo->guardedSecondaryClassHandle;
+            GenTree* targetPrimaryMethodTable = compiler->gtNewIconEmbClsHndNode(primaryClsHnd);
 
-            // Compare and jump to else (which does the indirect call) if NOT equal
-            //
-            GenTree*   methodTableCompare = compiler->gtNewOperNode(GT_NE, TYP_INT, targetMethodTable, methodTable);
-            GenTree*   jmpTree            = compiler->gtNewOperNode(GT_JTRUE, TYP_VOID, methodTableCompare);
-            Statement* jmpStmt            = compiler->fgNewStmtFromTree(jmpTree, stmt->GetILOffsetX());
-            compiler->fgInsertStmtAtEnd(checkBlock, jmpStmt);
+            if (guardedInfo->guardedSecondaryClassHandle == NO_CLASS_HANDLE)
+            {
+                // Compare and jump to else (which does the indirect call) if NOT equal
+                //
+                GenTree*   methodTableCompare = compiler->gtNewOperNode(GT_NE, TYP_INT, targetPrimaryMethodTable, primaryMethodTable);
+                GenTree*   jmpTree            = compiler->gtNewOperNode(GT_JTRUE, TYP_VOID, methodTableCompare);
+                Statement* jmpStmt            = compiler->fgNewStmtFromTree(jmpTree, stmt->GetILOffsetX());
+                compiler->fgInsertStmtAtEnd(checkBlock, jmpStmt);
+            }
+            else
+            {
+                // if (((IND1 EQ CLS1) OR (IND2 EQ CLS2)) EQ 0)
+                //
+                GenTree*   secondaryMethodTable       = compiler->gtNewMethodTableLookup(compiler->gtCloneExpr(thisTree));
+                GenTree*   targetSecondaryMethodTable = compiler->gtNewIconEmbClsHndNode(secondClsHnd);
+                GenTree*   methodTableCompare1        = compiler->gtNewOperNode(GT_EQ, TYP_INT, targetPrimaryMethodTable, primaryMethodTable);
+                GenTree*   methodTableCompare2        = compiler->gtNewOperNode(GT_EQ, TYP_INT, targetSecondaryMethodTable, secondaryMethodTable);
+                GenTree*   and                        = compiler->gtNewOperNode(GT_OR, TYP_INT, methodTableCompare1, methodTableCompare2);
+                GenTree*   eqZero                     = compiler->gtNewOperNode(GT_EQ, TYP_INT, and, compiler->gtNewIconNode(0));
+                GenTree*   jmpTree                    = compiler->gtNewOperNode(GT_JTRUE, TYP_VOID, eqZero);
+                Statement* jmpStmt                    = compiler->fgNewStmtFromTree(jmpTree, stmt->GetILOffsetX());
+                compiler->fgInsertStmtAtEnd(checkBlock, jmpStmt);
+            }
         }
 
         //------------------------------------------------------------------------
@@ -728,7 +746,7 @@ private:
             thenBlock->bbFlags |= currBlock->bbFlags & BBF_SPLIT_GAINED;
 
             InlineCandidateInfo* inlineInfo = origCall->gtInlineCandidateInfo;
-            CORINFO_CLASS_HANDLE clsHnd     = inlineInfo->guardedClassHandle;
+            CORINFO_CLASS_HANDLE clsHnd     = inlineInfo->guardedPrimaryClassHandle;
 
             // copy 'this' to temp with exact type.
             const unsigned thisTemp  = compiler->lvaGrabTemp(false DEBUGARG("guarded devirt this exact temp"));

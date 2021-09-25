@@ -562,7 +562,8 @@ struct ClassProfileCandidateInfo
 //
 struct GuardedDevirtualizationCandidateInfo : ClassProfileCandidateInfo
 {
-    CORINFO_CLASS_HANDLE  guardedClassHandle;
+    CORINFO_CLASS_HANDLE  guardedPrimaryClassHandle;
+    CORINFO_CLASS_HANDLE  guardedSecondaryClassHandle;
     CORINFO_METHOD_HANDLE guardedMethodHandle;
     CORINFO_METHOD_HANDLE guardedMethodUnboxedEntryHandle;
     unsigned              likelihood;
