@@ -20382,10 +20382,16 @@ GenTree* Compiler::impInlineFetchArg(unsigned lclNum, InlArgInfo* inlArgInfo, In
                     break;
                 }
 #endif
-
-                // TODO: Enable substitution for CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE (typeof(T))
-                // but in order to benefit from that, we need to move various "typeof + IsValueType"
-                // optimizations from importer to morph.
+                case GT_CALL:
+                {
+                    GenTreeCall* call = argNode->AsCall();
+                    if ((call->gtCallType == CT_HELPER) &&
+                        (call->gtCallMethHnd == eeFindHelper(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE)))
+                    {
+                        substitute = true;
+                    }
+                    break;
+                }
 
                 default:
                     break;
