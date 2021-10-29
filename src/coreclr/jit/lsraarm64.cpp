@@ -267,7 +267,7 @@ int LinearScan::BuildNode(GenTree* tree)
             }
             else if (tree->OperIs(GT_ADD) && tree->gtGetOp1()->isContained() && tree->gtGetOp1()->OperIs(GT_LSH))
             {
-                assert(tree->gtGetOp2()->IsCnsIntOrI());
+                assert(tree->gtGetOp1()->gtGetOp2()->IsCnsIntOrI());
                 assert(!tree->gtOverflow());
                 GenTree* lshOpOp = tree->gtGetOp1()->gtGetOp1();
                 if (lshOpOp->isContained())
