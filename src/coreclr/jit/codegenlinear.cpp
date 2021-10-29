@@ -1612,6 +1612,21 @@ void CodeGen::genConsumeRegs(GenTree* tree)
         {
             genConsumeReg(tree->gtGetOp1());
         }
+#ifdef TARGET_ARM64
+        else if (tree->OperIs(GT_LSH))
+        {
+            assert(tree->gtGetOp2()->IsCnsIntOrI());
+            if (tree->gtGetOp1()->isContained())
+            {
+                assert(tree->gtGetOp1()->OperIs(GT_CAST));
+                genConsumeReg(tree->gtGetOp1()->gtGetOp1());
+            }
+            else
+            {
+                genConsumeReg(tree->gtGetOp1());
+            }
+        }
+#endif
         else
         {
 #ifdef FEATURE_SIMD

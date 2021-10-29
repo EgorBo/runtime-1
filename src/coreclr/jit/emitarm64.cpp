@@ -13597,6 +13597,51 @@ regNumber emitter::emitInsTernary(instruction ins, emitAttr attr, GenTree* dst, 
         // src2 can only be a reg
         assert(!src2->isContained());
     }
+    else if (src1->isContained() && src1->OperIs(GT_LSH))
+    {
+        assert(!src2->isContained());
+
+        insOpts   opts    = INS_OPTS_NONE;
+        const int shiftBy = (int)src1->gtGetOp2()->AsIntCon()->IconValue();
+        regNumber lshReg  = REG_NA;
+
+        if (src1->gtGetOp1()->isContained())
+        {
+            GenTreeCast* castOp = src1->gtGetOp1()->AsCast();
+            assert((shiftBy >= 0) && (shiftBy <= 4));
+            assert(castOp->isContained());
+
+            const unsigned fromSize = genTypeSize(castOp->CastFromType());
+            if (fromSize >= genTypeSize(castOp->CastToType()))
+            {
+                opts = INS_OPTS_LSL;
+            }
+            if (fromSize == 2)
+            {
+                opts = castOp->IsUnsigned() ? INS_OPTS_UXTW : INS_OPTS_SXTW;
+            }
+            else if (fromSize == 4)
+            {
+                opts = castOp->IsUnsigned() ? INS_OPTS_UXTH : INS_OPTS_SXTH;
+            }
+            else
+            {
+                // TODO: support UXTB/SXTB
+                unreached();
+            }
+            lshReg = castOp->gtGetOp1()->GetRegNum();
+        }
+        else
+        {
+            lshReg = src1->gtGetOp1()->GetRegNum();
+            opts   = INS_OPTS_LSL;
+        }
+
+        assert(lshReg != REG_NA);
+        assert(opts != INS_OPTS_NONE);
+        emitIns_R_R_R_I(INS_add, attr, dst->GetRegNum(), lshReg, src2->GetRegNum(), shiftBy, opts);
+        return dst->GetRegNum();
+    }
     else // not floating point
     {
         // src2 can be immed or reg

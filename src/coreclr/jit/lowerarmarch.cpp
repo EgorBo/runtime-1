@@ -1565,8 +1565,41 @@ void Lowering::ContainCheckIndir(GenTreeIndir* indirNode)
 //
 void Lowering::ContainCheckBinary(GenTreeOp* node)
 {
+    GenTree* op1 = node->gtGetOp1();
+    GenTree* op2 = node->gtGetOp2();
+
+#ifdef TARGET_ARM64
+    if (node->OperIs(GT_ADD) && op1->OperIs(GT_LSH) && op1->gtGetOp2()->IsCnsIntOrI() && !op2->isContained() &&
+        !op2->IsRegOptional() && !node->gtOverflow())
+    {
+        const ssize_t shiftBy = op1->gtGetOp2()->AsIntCon()->IconValue();
+        GenTree*      op1op1  = op1->gtGetOp1();
+
+        if ((shiftBy >= 0) && (shiftBy <= 4))
+        {
+            if (op1op1->OperIs(GT_CAST) && !op1op1->gtGetOp1()->isContained() && !op1op1->gtGetOp1()->IsRegOptional() &&
+                !op1op1->gtOverflow())
+            {
+                // TODO: it can be CAST(CAST()) e.g. for ulong <- ubyte <- int
+                // so we can then emit it as UXTB/SXTB #shiftBy
+
+                MakeSrcContained(node->gtGetOp1(), op1op1);
+                MakeSrcContained(node, node->gtGetOp1());
+                return;
+            }
+
+            if (!op1op1->isContained() && !op1op1->IsRegOptional())
+            {
+                // In this case we'll use LSL #shiftBy
+                MakeSrcContained(node, node->gtGetOp1());
+                return;
+            }
+        }
+    }
+#endif
+
     // Check and make op2 contained (if it is a containable immediate)
-    CheckImmedAndMakeContained(node, node->gtOp2);
+    CheckImmedAndMakeContained(node, op2);
 }
 
 //------------------------------------------------------------------------
