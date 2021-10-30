@@ -1570,7 +1570,7 @@ void Lowering::ContainCheckBinary(GenTreeOp* node)
 
 #ifdef TARGET_ARM64
     if (node->OperIs(GT_ADD) && op1->OperIs(GT_LSH) && op1->gtGetOp2()->IsCnsIntOrI() && !op2->isContained() &&
-        !op2->IsRegOptional() && !node->gtOverflow())
+        !op2->IsRegOptional() && !node->gtOverflow() && !node->isContained() && !varTypeIsGC(node) && !(node->gtFlags & (GTF_ADDRMODE_NO_CSE)))
     {
         const ssize_t shiftBy = op1->gtGetOp2()->AsIntCon()->IconValue();
         GenTree*      op1op1  = op1->gtGetOp1();

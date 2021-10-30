@@ -13616,7 +13616,11 @@ regNumber emitter::emitInsTernary(instruction ins, emitAttr attr, GenTree* dst, 
             {
                 opts = INS_OPTS_LSL;
             }
-            if (fromSize == 2)
+            else if (fromSize == 1)
+            {
+                opts = castOp->IsUnsigned() ? INS_OPTS_UXTB : INS_OPTS_SXTB;
+            }
+            else if (fromSize == 2)
             {
                 opts = castOp->IsUnsigned() ? INS_OPTS_UXTW : INS_OPTS_SXTW;
             }
@@ -13626,7 +13630,6 @@ regNumber emitter::emitInsTernary(instruction ins, emitAttr attr, GenTree* dst, 
             }
             else
             {
-                // TODO: support UXTB/SXTB
                 unreached();
             }
             lshReg = castOp->gtGetOp1()->GetRegNum();
