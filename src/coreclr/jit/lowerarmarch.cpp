@@ -1568,9 +1568,12 @@ void Lowering::ContainCheckBinary(GenTreeOp* node)
     GenTree* op1 = node->gtGetOp1();
     GenTree* op2 = node->gtGetOp2();
 
+    // Check and make op2 contained (if it is a containable immediate)
+    CheckImmedAndMakeContained(node, op2);
+
 #ifdef TARGET_ARM64
     if (node->OperIs(GT_ADD) && op1->OperIs(GT_LSH) && op1->gtGetOp2()->IsCnsIntOrI() && !op2->isContained() &&
-        !op2->IsRegOptional() && !node->gtOverflow() && !node->isContained() && !varTypeIsGC(node) && !(node->gtFlags & (GTF_ADDRMODE_NO_CSE)))
+        !op2->IsRegOptional() && !node->gtOverflow() && !node->isContained() && !op2->isContained() && !varTypeIsGC(node) && !(node->gtFlags & GTF_ADDRMODE_NO_CSE))
     {
         const ssize_t shiftBy = op1->gtGetOp2()->AsIntCon()->IconValue();
         GenTree*      op1op1  = op1->gtGetOp1();
@@ -1597,9 +1600,6 @@ void Lowering::ContainCheckBinary(GenTreeOp* node)
         }
     }
 #endif
-
-    // Check and make op2 contained (if it is a containable immediate)
-    CheckImmedAndMakeContained(node, op2);
 }
 
 //------------------------------------------------------------------------
