@@ -11490,9 +11490,11 @@ GenTree* Compiler::impOptimizeCastClassOrIsInst(GenTree* op1, CORINFO_RESOLVED_T
 GenTree* Compiler::impCastClassOrIsInstToTree(GenTree*                op1,
                                               GenTree*                op2,
                                               CORINFO_RESOLVED_TOKEN* pResolvedToken,
-                                              bool                    isCastClass)
+                                              bool                    isCastClass,
+                                              bool                    asBoolExpr)
 {
-    assert(op1->TypeGet() == TYP_REF);
+    assert(op1->TypeIs(TYP_REF));
+    assert(!(isCastClass && asBoolExpr));
 
     // Optimistically assume the jit should expand this as an inline test
     bool shouldExpandInline = true;
@@ -11576,6 +11578,22 @@ GenTree* Compiler::impCastClassOrIsInstToTree(GenTree*                op1,
     // op1 is now known to be a non-complex tree
     // thus we can use gtClone(op1) from now on
     //
+
+
+    if (asBoolExpr)
+    {
+        // a != null && a->pMT == 0xDEADBEEF
+        // return QMARK(A != NULL, a->pMT == 0xDEADBEEF, FALSE)
+        temp = gtNewMethodTableLookup(temp);
+        condMT = gtNewOperNode(GT_EQ, TYP_INT, temp, op2);
+        auto colonko = new (this, GT_COLON) GenTreeColon(TYP_INT, gtNewIconNode(0), condMT);
+        auto qmarko = gtNewQmarkNode(TYP_INT, gtNewOperNode(GT_EQ, TYP_INT, op1, gtNewIconNode(0, TYP_REF)), colonko);
+        unsigned tmp = lvaGrabTemp(true DEBUGARG("spilling QMark2"));
+        impAssignTempGen(tmp, qmarko, (unsigned)CHECK_SPILL_NONE);
+        LclVarDsc* lclDsc = lvaGetDesc(tmp);
+        lclDsc->lvSingleDef = 1;
+        return gtNewLclvNode(tmp, TYP_INT);
+    }
 
     GenTree* op2Var = op2;
     if (isCastClass)
@@ -16202,7 +16220,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 }
                 else
                 {
-
+                    bool skipCgt = false;
 #ifdef FEATURE_READYTORUN
                     if (opts.IsReadyToRun())
                     {
@@ -16233,14 +16251,44 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     if (!usingReadyToRunHelper)
 #endif
                     {
-                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, false);
+                        bool isInst = false;
+
+                        auto nextOpcode = getU1LittleEndian(codeAddr + sizeof(mdToken));
+                        switch (nextOpcode)
+                        {
+                            case CEE_BRTRUE:
+                            case CEE_BRTRUE_S:
+                            case CEE_BRFALSE:
+                            case CEE_BRFALSE_S:
+                                isInst = true;
+                                break;
+                            case CEE_LDNULL:
+                                if ((getU1LittleEndian(codeAddr + 1 + sizeof(mdToken)) == CEE_PREFIX1) &&
+                                    (impGetNonPrefixOpcode(codeAddr + 1 + sizeof(mdToken), codeEndp) == CEE_CGT_UN))
+                                {
+                                    isInst = true;
+                                    skipCgt = true;
+                                }
+                                break;
+                            default:
+                            break;
+                        }
+                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, false, isInst);
                     }
                     if (compDonotInline())
                     {
                         return;
                     }
 
-                    impPushOnStack(op1, tiRetVal);
+                    if (skipCgt && op1->TypeIs(TYP_INT))
+                    {
+                        impPushOnStack(op1, typeInfo(TYP_INT));
+                        sz += 3;
+                    }
+                    else
+                    {
+                        impPushOnStack(op1, tiRetVal);
+                    }
                 }
                 break;
             }
@@ -16828,7 +16876,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     if (!usingReadyToRunHelper)
 #endif
                     {
-                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, true);
+                        op1 = impCastClassOrIsInstToTree(op1, op2, &resolvedToken, true, false);
                     }
                     if (compDonotInline())
                     {
