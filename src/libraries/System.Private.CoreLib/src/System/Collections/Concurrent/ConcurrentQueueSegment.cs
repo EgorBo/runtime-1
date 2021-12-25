@@ -164,7 +164,7 @@ namespace System.Collections.Concurrent
                     // empty or if we're just waiting for items in flight or after this one to become available.
                     bool frozen = _frozenForEnqueues;
                     int currentTail = Volatile.Read(ref _headAndTail.Tail);
-                    if (currentTail - currentHead <= 0 || (frozen && (currentTail - FreezeOffset - currentHead <= 0)))
+                    if (currentTail <= currentHead || (frozen && (currentTail - FreezeOffset - currentHead <= 0)))
                     {
                         item = default;
                         return false;
@@ -233,7 +233,7 @@ namespace System.Collections.Concurrent
                     // empty or if we're just waiting for items in flight or after this one to become available.
                     bool frozen = _frozenForEnqueues;
                     int currentTail = Volatile.Read(ref _headAndTail.Tail);
-                    if (currentTail - currentHead <= 0 || (frozen && (currentTail - FreezeOffset - currentHead <= 0)))
+                    if (currentTail <= currentHead || (frozen && (currentTail - FreezeOffset - currentHead <= 0)))
                     {
                         result = default;
                         return false;
