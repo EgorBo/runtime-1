@@ -22,6 +22,10 @@ namespace System
             if (valueLength == 0)
                 return 0;  // A zero-length sequence is always treated as "found" at the start of the search space.
 
+            // Try "Algorithm 1: Generic SIMD" as described in http://0x80.pl/articles/simd-strfind.html#algorithm-1-generic-simd
+            if (valueLength > 1 && searchSpaceLength >= Vector256<ushort>.Count && Avx2.IsSupported)
+                goto AVX;
+
             char valueHead = value;
             ref char valueTail = ref Unsafe.Add(ref value, 1);
             int valueTailLength = valueLength - 1;
@@ -54,6 +58,48 @@ namespace System
                 index++;
             }
             return -1;
+
+        AVX:
+            Debug.Assert(searchSpaceLength >= Vector256<ushort>.Count);
+            Debug.Assert(valueLength >= 2);
+
+            nuint searchSpaceLengthU = (nuint)searchSpaceLength;
+            nuint valueTailLengthU = (nuint)valueLength - 1;
+            Vector256<ushort> first = Vector256.Create(value);
+            Vector256<ushort> last = Vector256.Create(Unsafe.Add(ref value, valueTailLengthU));
+            // TODO-PERF: probe a different character if first == last ?
+
+            nuint offset = 0;
+        NEXT_AVX:
+            Vector256<ushort> valueCh1 = LoadVector256(ref searchSpace, offset);
+            Vector256<ushort> valueCh2 = LoadVector256(ref searchSpace, offset + valueTailLengthU);
+            Vector256<ushort> eqCh1 = Avx2.CompareEqual(first, valueCh1);
+            Vector256<ushort> eqCh2 = Avx2.CompareEqual(last, valueCh2);
+
+            uint mask = (uint)Avx2.MoveMask(Avx2.And(eqCh1, eqCh2).AsByte());
+            while (mask != 0)
+            {
+                uint bitpos = (uint)BitOperations.TrailingZeroCount(mask) / 2;
+                if (SequenceEqual(
+                        ref Unsafe.As<char, byte>(ref Unsafe.Add(ref searchSpace, offset + bitpos)),
+                        ref Unsafe.As<char, byte>(ref value),
+                        valueTailLengthU * 2))
+                {
+                    return (int)(offset + bitpos);
+                }
+                mask &= (mask - 1); // BLSR?
+            }
+            offset += (nuint)Vector256<ushort>.Count;
+
+            // We're done and nothing was found
+            if (offset == searchSpaceLengthU)
+                return -1;
+
+            // Overlap with the current chunk if there is not enough room for the next one
+            if (offset + (nuint)Vector256<ushort>.Count > searchSpaceLengthU)
+                offset = searchSpaceLengthU - (nuint)Vector256<ushort>.Count;
+
+            goto NEXT_AVX;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
