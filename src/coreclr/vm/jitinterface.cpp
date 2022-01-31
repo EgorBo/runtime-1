@@ -690,6 +690,13 @@ const char16_t* CEEInfo::getStringLiteral (
         {
             // For string.Empty pString will be null
             *length = dwCharCount;
+
+            // Save metaTOK for empty string (if from corelib)
+            if (dwCharCount == 0 && CoreLibBinder::GetModule() == module)
+            {
+                CoreLibBinder::SetEmptyStringToken(metaTOK);
+            }
+
             result = (const char16_t *)pString;
         }
         else
@@ -11340,8 +11347,13 @@ WORD CEEJitInfo::getRelocTypeHint(void * target)
 uint32_t CEEJitInfo::getExpectedTargetArchitecture()
 {
     LIMITED_METHOD_CONTRACT;
-
     return IMAGE_FILE_MACHINE_NATIVE;
+}
+
+uint32_t CEEJitInfo::getEmptyStringMdToken()
+{
+    LIMITED_METHOD_CONTRACT;
+    return (uint32_t)CoreLibBinder::GetEmptyStringToken();
 }
 
 bool CEEJitInfo::doesFieldBelongToClass(CORINFO_FIELD_HANDLE fldHnd, CORINFO_CLASS_HANDLE cls)
@@ -14070,8 +14082,13 @@ WORD CEEInfo::getRelocTypeHint(void * target)
 uint32_t CEEInfo::getExpectedTargetArchitecture()
 {
     LIMITED_METHOD_CONTRACT;
-
     return IMAGE_FILE_MACHINE_NATIVE;
+}
+
+uint32_t CEEInfo::getEmptyStringMdToken()
+{
+    LIMITED_METHOD_CONTRACT;
+    return 0;
 }
 
 bool CEEInfo::doesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls)

@@ -761,6 +761,10 @@ public:
     void dmpGetExpectedTargetArchitecture(DWORD key, DWORD result);
     DWORD repGetExpectedTargetArchitecture();
 
+    void recGetEmptyStringMdToken(DWORD result);
+    void dmpGetEmptyStringMdToken(DWORD key, DWORD result);
+    DWORD repGetEmptyStringMdToken();
+
     void recDoesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls, bool result);
     void dmpDoesFieldBelongToClass(DLDL key, bool value);
     bool repDoesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls);
@@ -1097,6 +1101,7 @@ enum mcPackets
     Packet_GetAssemblyName = 191,
     Packet_IsIntrinsic = 192,
     Packet_UpdateEntryPointForTailCall = 193,
+    Packet_GetEmptyStringMdToken = 194
 };
 
 void SetDebugDumpVariables();

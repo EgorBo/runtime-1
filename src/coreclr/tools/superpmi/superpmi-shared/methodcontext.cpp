@@ -6220,6 +6220,25 @@ DWORD MethodContext::repGetExpectedTargetArchitecture()
     return value;
 }
 
+void MethodContext::recGetEmptyStringMdToken(DWORD result)
+{
+    if (GetEmptyStringMdToken == nullptr)
+        GetEmptyStringMdToken = new LightWeightMap<DWORD, DWORD>();
+
+    GetEmptyStringMdToken->Add(0, result);
+    DEBUG_REC(dmpGetEmptyStringMdToken(0, result));
+}
+void MethodContext::dmpGetEmptyStringMdToken(DWORD key, DWORD result)
+{
+    printf("GetEmptyStringMdToken key %u, res %u", key, result);
+}
+DWORD MethodContext::repGetEmptyStringMdToken()
+{
+    DWORD value = GetEmptyStringMdToken->Get(0);
+    DEBUG_REP(dmpGetEmptyStringMdToken(key, value));
+    return value;
+}
+
 void MethodContext::recDoesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls, bool result)
 {
     if (DoesFieldBelongToClass == nullptr)

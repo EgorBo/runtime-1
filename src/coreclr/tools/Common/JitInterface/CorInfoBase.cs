@@ -2520,6 +2520,21 @@ namespace Internal.JitInterface
         }
 
         [UnmanagedCallersOnly]
+        static uint _getEmptyStringMdToken(IntPtr thisHandle, IntPtr* ppException)
+        {
+            var _this = GetThis(thisHandle);
+            try
+            {
+                return _this.getEmptyStringMdToken();
+            }
+            catch (Exception ex)
+            {
+                *ppException = _this.AllocException(ex);
+                return default;
+            }
+        }
+
+        [UnmanagedCallersOnly]
         static uint _getJitFlags(IntPtr thisHandle, IntPtr* ppException, CORJIT_FLAGS* flags, uint sizeInBytes)
         {
             var _this = GetThis(thisHandle);
@@ -2552,7 +2567,7 @@ namespace Internal.JitInterface
 
         static IntPtr GetUnmanagedCallbacks()
         {
-            void** callbacks = (void**)Marshal.AllocCoTaskMem(sizeof(IntPtr) * 172);
+            void** callbacks = (void**)Marshal.AllocCoTaskMem(sizeof(IntPtr) * 173);
 
             callbacks[0] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_METHOD_STRUCT_*, byte>)&_isIntrinsic;
             callbacks[1] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_METHOD_STRUCT_*, uint>)&_getMethodAttribs;
@@ -2724,8 +2739,9 @@ namespace Internal.JitInterface
             callbacks[167] = (delegate* unmanaged<IntPtr, IntPtr*, void*, void*, void*, ushort, ushort, int, void>)&_recordRelocation;
             callbacks[168] = (delegate* unmanaged<IntPtr, IntPtr*, void*, ushort>)&_getRelocTypeHint;
             callbacks[169] = (delegate* unmanaged<IntPtr, IntPtr*, uint>)&_getExpectedTargetArchitecture;
-            callbacks[170] = (delegate* unmanaged<IntPtr, IntPtr*, CORJIT_FLAGS*, uint, uint>)&_getJitFlags;
-            callbacks[171] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_FIELD_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte>)&_doesFieldBelongToClass;
+            callbacks[170] = (delegate* unmanaged<IntPtr, IntPtr*, uint>)&_getEmptyStringMdToken;
+            callbacks[171] = (delegate* unmanaged<IntPtr, IntPtr*, CORJIT_FLAGS*, uint, uint>)&_getJitFlags;
+            callbacks[172] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_FIELD_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte>)&_doesFieldBelongToClass;
 
             return (IntPtr)callbacks;
         }

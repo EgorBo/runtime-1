@@ -1994,6 +1994,14 @@ uint32_t interceptor_ICJI::getExpectedTargetArchitecture()
     return result;
 }
 
+uint32_t interceptor_ICJI::getEmptyStringMdToken()
+{
+    mc->cr->AddCall("getEmptyStringMdToken");
+    DWORD result = original_ICorJitInfo->getEmptyStringMdToken();
+    mc->recGetEmptyStringMdToken(result);
+    return result;
+}
+
 bool interceptor_ICJI::notifyInstructionSetUsage(CORINFO_InstructionSet instructionSet, bool supported)
 {
     return original_ICorJitInfo->notifyInstructionSetUsage(instructionSet, supported);

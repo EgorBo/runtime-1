@@ -1150,6 +1150,8 @@ void CoreLibBinder::SetDescriptions(Module * pModule,
 
     m_fieldDescriptions = pFieldDescriptions;
     m_cFields = nFields;
+
+    m_EmptyStrMdToken = 0;
 }
 
 void CoreLibBinder::AllocateTables()

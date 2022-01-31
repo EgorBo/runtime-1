@@ -1864,3 +1864,10 @@ uint32_t MyICJI::getExpectedTargetArchitecture()
     DWORD result = jitInstance->mc->repGetExpectedTargetArchitecture();
     return result;
 }
+
+uint32_t MyICJI::getEmptyStringMdToken()
+{
+    jitInstance->mc->cr->AddCall("getEmptyStringMdToken");
+    DWORD result = jitInstance->mc->repGetEmptyStringMdToken();
+    return result;
+}

@@ -3642,6 +3642,11 @@ namespace Internal.JitInterface
             }
         }
 
+        private uint getEmptyStringMdToken()
+        {
+            return 0;
+        }
+
         private bool doesFieldBelongToClass(CORINFO_FIELD_STRUCT_* fld, CORINFO_CLASS_STRUCT_* cls)
         {
             var field = HandleToObject(fld);

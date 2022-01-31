@@ -1670,6 +1670,14 @@ uint32_t WrapICorJitInfo::getExpectedTargetArchitecture()
     return temp;
 }
 
+uint32_t WrapICorJitInfo::getEmptyStringMdToken()
+{
+    API_ENTER(getEmptyStringMdToken);
+    uint32_t temp = wrapHnd->getEmptyStringMdToken();
+    API_LEAVE(getEmptyStringMdToken);
+    return temp;
+}
+
 uint32_t WrapICorJitInfo::getJitFlags(
           CORJIT_FLAGS* flags,
           uint32_t sizeInBytes)

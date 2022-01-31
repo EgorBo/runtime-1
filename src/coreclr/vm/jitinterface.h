@@ -671,6 +671,8 @@ public:
 
     uint32_t getExpectedTargetArchitecture() override final;
 
+    uint32_t getEmptyStringMdToken() override final;
+
     bool doesFieldBelongToClass(CORINFO_FIELD_HANDLE fld, CORINFO_CLASS_HANDLE cls) override final;
 
     void ResetForJitRetry()

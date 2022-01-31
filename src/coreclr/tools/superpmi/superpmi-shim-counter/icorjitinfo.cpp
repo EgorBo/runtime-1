@@ -1373,6 +1373,12 @@ uint32_t interceptor_ICJI::getExpectedTargetArchitecture()
     return original_ICorJitInfo->getExpectedTargetArchitecture();
 }
 
+uint32_t interceptor_ICJI::getEmptyStringMdToken()
+{
+    mcs->AddCall("getEmptyStringMdToken");
+    return original_ICorJitInfo->getEmptyStringMdToken();
+}
+
 uint32_t interceptor_ICJI::getJitFlags(
           CORJIT_FLAGS* flags,
           uint32_t sizeInBytes)

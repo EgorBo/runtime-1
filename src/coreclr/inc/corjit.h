@@ -485,6 +485,9 @@ public:
     //
     virtual uint32_t getExpectedTargetArchitecture() = 0;
 
+    // Obtains MdToken corresponding to "". It's used to import String.Empty as GT_CNS_STR
+    virtual uint32_t getEmptyStringMdToken() = 0;
+
     // Fetches extended flags for a particular compilation instance. Returns
     // the number of bytes written to the provided buffer.
     virtual uint32_t getJitFlags(

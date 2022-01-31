@@ -160,6 +160,11 @@ class CoreLibBinder
     static LPCUTF8 GetClassNameSpace(BinderClassID id);
     static LPCUTF8 GetClassName(BinderClassID id);
 
+    // Saved mdToken for empty string (""). It's needed
+    // mainly to replace string.Empty with "" on JIT side
+    static mdToken GetEmptyStringToken();
+    static void SetEmptyStringToken(mdToken token);
+
     //
     // Utilities for methods
     //
@@ -292,6 +297,8 @@ private:
     USHORT m_cClasses;
     USHORT m_cMethods;
     USHORT m_cFields;
+
+    mdToken m_EmptyStrMdToken;
 
     static CrstStatic s_SigConvertCrst;
 
@@ -455,6 +462,18 @@ FORCEINLINE LPCUTF8 CoreLibBinder::GetClassName(BinderClassID id)
     _ASSERTE(id != CLASS__NIL);
     _ASSERTE(id <= (&g_CoreLib)->m_cClasses);
     return (&g_CoreLib)->m_classDescriptions[id].name;
+}
+
+FORCEINLINE mdToken CoreLibBinder::GetEmptyStringToken()
+{
+    LIMITED_METHOD_CONTRACT;
+    return (&g_CoreLib)->m_EmptyStrMdToken;
+}
+
+FORCEINLINE void CoreLibBinder::SetEmptyStringToken(mdToken token)
+{
+    LIMITED_METHOD_CONTRACT;
+    (&g_CoreLib)->m_EmptyStrMdToken = token;
 }
 
 FORCEINLINE LPCUTF8 CoreLibBinder::GetMethodName(BinderMethodID id)

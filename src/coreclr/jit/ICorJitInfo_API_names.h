@@ -174,6 +174,7 @@ DEF_CLR_API(recordCallSite)
 DEF_CLR_API(recordRelocation)
 DEF_CLR_API(getRelocTypeHint)
 DEF_CLR_API(getExpectedTargetArchitecture)
+DEF_CLR_API(getEmptyStringMdToken)
 DEF_CLR_API(getJitFlags)
 DEF_CLR_API(doesFieldBelongToClass)
 

@@ -15115,9 +15115,20 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     {
                         assert(aflags & CORINFO_ACCESS_GET);
 
-                        LPVOID         pValue;
-                        InfoAccessType iat = info.compCompHnd->emptyStringLiteral(&pValue);
-                        op1                = gtNewStringLiteralNode(iat, pValue);
+                        // Try to import String.Empty as "" (GT_CNS_STR) if VM has a mdToken for ""
+                        uint32_t emptyStrTok = info.compCompHnd->getEmptyStringMdToken();
+                        if (emptyStrTok > 0)
+                        {
+                            // emptyStrTok is always from corelib 
+                            op1 = gtNewSconNode(emptyStrTok, info.compCompHnd->getClassModule(impGetObjectClass()));
+                        }
+                        else
+                        {
+                            // Import normally
+                            LPVOID         pValue;
+                            InfoAccessType iat = info.compCompHnd->emptyStringLiteral(&pValue);
+                            op1                = gtNewStringLiteralNode(iat, pValue);
+                        }
                         goto FIELD_DONE;
                     }
                     break;

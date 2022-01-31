@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.Loader;
 using System.Runtime.Versioning;
@@ -135,9 +136,16 @@ namespace System
             }
         }
 
+
 #if !CORERT
+        // Let VM to cache metadata token corresponding to empty string
+        // in order to import string.Empty as "" (it's more opt friendly)
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
+        private static int RememberEmptyString() => "".Length;
+
         internal static unsafe void Setup(char** pNames, char** pValues, int count)
         {
+            RememberEmptyString();
             Debug.Assert(s_dataStore == null, "s_dataStore is not expected to be inited before Setup is called");
             s_dataStore = new Dictionary<string, object?>(count);
             for (int i = 0; i < count; i++)
