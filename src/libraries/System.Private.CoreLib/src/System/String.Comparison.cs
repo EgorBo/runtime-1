@@ -9,6 +9,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Unicode;
+using System.Buffers.Binary;
 
 using Internal.Runtime.CompilerServices;
 
@@ -961,6 +962,25 @@ namespace System
             if (value is null)
             {
                 throw new ArgumentNullException(nameof(value));
+            }
+
+            // Optimize constant input for Length [1..4] with Ordinal comparison
+            // Normally, inliner just skips such big methods, but it can do it for DynamicPGO - IsKnownConstant will
+            // trigger inlining. TODO: do the same for OrdinalIgnoreCase
+            if (RuntimeHelpers.IsKnownConstant(value) && BitConverter.IsLittleEndian && RuntimeHelpers.IsKnownConstant((int)comparisonType) && comparisonType == StringComparison.Ordinal)
+            {
+                if (value.Length == 1)
+                    // TODO: we can skip Length check for this case - we can take 2 bytes from Length and 2 bytes of '\0'
+                    return _stringLength >= 1 && _firstChar == value[0];
+                if (value.Length == 2)
+                    return _stringLength >= 2 && Unsafe.ReadUnaligned<uint>(ref Unsafe.As<char, byte>(ref _firstChar)) ==
+                                                        BinaryPrimitives.ReverseEndianness(((uint)value[1] << 16) | value[0]);
+                if (value.Length == 3)
+                    return _stringLength >= 3 && Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref _firstChar)) ==
+                                                        BinaryPrimitives.ReverseEndianness(((ulong)value[2] << 48) | ((ulong)value[1] << 32) | ((ulong)value[0] << 16));
+                if (value.Length == 4)
+                    return _stringLength >= 4 && Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref _firstChar)) ==
+                                                        BinaryPrimitives.ReverseEndianness(((ulong)value[3] << 48) | ((ulong)value[2] << 32) | ((ulong)value[1] << 16) | value[0]);
             }
 
             if ((object)this == (object)value)
