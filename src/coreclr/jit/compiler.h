@@ -4424,6 +4424,7 @@ protected:
         Eq,  // (d1 == cns1) && (s2 == cns2)
         Xor, // (d1 ^ cns1) | (s2 ^ cns2)
     };
+    int impGetMaxVectorWidth();
     GenTree* impStringEqualsOrStartsWith(bool startsWith, CORINFO_SIG_INFO* sig, unsigned methodFlags);
     GenTree* impSpanEqualsOrStartsWith(bool startsWith, CORINFO_SIG_INFO* sig, unsigned methodFlags);
     GenTree* impExpandHalfConstEquals(GenTreeLclVar*   data,
@@ -4444,6 +4445,8 @@ protected:
         GenTreeLclVar* data, WCHAR* cns, int len, int dataOffset, StringComparison cmpMode);
     GenTree* impExpandHalfConstEqualsSIMD(
         GenTreeLclVar* data, WCHAR* cns, int len, int dataOffset, StringComparison cmpMode);
+    GenTree* impUnrollWithTwoVectors(
+        GenTreeLclVar* data, WCHAR* cns, int len, int offset, StringComparison cmpMode);
     GenTreeStrCon* impGetStrConFromSpan(GenTree* span);
 
     GenTree* impIntrinsic(GenTree*                newobjThis,

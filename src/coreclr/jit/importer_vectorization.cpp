@@ -66,6 +66,43 @@ static bool ConvertToLowerCase(WCHAR* input, WCHAR* mask, int length)
 }
 
 #if defined(FEATURE_HW_INTRINSICS) && defined(TARGET_64BIT)
+int Compiler::impGetMaxVectorWidth()
+{
+#if defined(TARGET_XARCH)
+    if (compOpportunisticallyDependsOn(InstructionSet_Vector256))
+    {
+        return 256 / BITS_IN_BYTE;
+    }
+#endif
+    if (compOpportunisticallyDependsOn(InstructionSet_Vector128))
+    {
+        return 128 / BITS_IN_BYTE;
+    }
+    return 0;
+}
+
+static GenTree* GenerateIsVectorZero(Compiler* comp, GenTreeHWIntrinsic* vector)
+{
+    unsigned simdSize = 16;
+    NamedIntrinsic niZero = NI_Vector128_get_Zero;
+    NamedIntrinsic niEquals = NI_Vector128_op_Equality;
+#if defined(TARGET_XARCH)
+    if (vector->TypeIs(TYP_SIMD32))
+    {
+        simdSize = 32;
+        niZero = NI_Vector256_get_Zero;
+        niEquals = NI_Vector256_op_Equality;
+    }
+    else
+#endif
+    {
+        assert(vector->TypeIs(TYP_SIMD16));
+    }
+    CorInfoType baseType = vector->GetSimdBaseJitType();
+    GenTree* zero = comp->gtNewSimdHWIntrinsicNode(vector->TypeGet(), niZero, baseType, simdSize);
+    return comp->gtNewSimdHWIntrinsicNode(TYP_BOOL, vector, zero, niEquals, baseType, simdSize);
+}
+
 //------------------------------------------------------------------------
 // CreateConstVector: a helper to create Vector128/256.Create(<cns>) node
 //
@@ -102,6 +139,79 @@ static GenTreeHWIntrinsic* CreateConstVector(Compiler* comp, var_types simdType,
     return comp->gtNewSimdHWIntrinsicNode(simdType, long1, long2, NI_Vector128_Create, baseType, 16);
 }
 
+
+GenTree* Compiler::impExpandHalfConstEqualsSIMD(
+    GenTreeLclVar* data, WCHAR* cns, int len, int dataOffset, StringComparison cmpMode)
+{
+    assert(len >= 8);
+
+    // Vector[128/256]<ushort>.Count * 2
+    const int maxDoubleVectorSize = (impGetMaxVectorWidth() / sizeof(USHORT)) * 2;
+    if (maxDoubleVectorSize == 0)
+    {
+        return nullptr;
+    }
+
+    if (len <= maxDoubleVectorSize)
+    {
+        // Always unroll data that can be processed via two vectors
+        GenTree* cmp = impUnrollWithTwoVectors(gtClone(data)->AsLclVar(), cns, len, dataOffset, cmpMode);
+        if (cmp != nullptr)
+        {
+            return GenerateIsVectorZero(this, cmp->AsHWIntrinsic());
+        }
+        return nullptr;
+    }
+
+    int maxLengthToUnroll = maxDoubleVectorSize * 4;
+    //if (compCurBB->getBBWeight(this) >= 1.0)
+    //{
+    //    maxLengthToUnroll *= 4;
+    //}
+    //else if (compCurBB->getBBWeight(this) >= 0.5)
+    //{
+    //    maxLengthToUnroll *= 2;
+    //}
+
+    GenTreeHWIntrinsic* result = nullptr;
+    if (len <= maxLengthToUnroll)
+    {
+        int offset = 0;
+        do
+        {
+            GenTree* cmp = impUnrollWithTwoVectors(gtClone(data)->AsLclVar(), cns + offset, maxDoubleVectorSize, offset * 2 + dataOffset, cmpMode);
+            if (cmp == nullptr)
+            {
+                return nullptr;
+            }
+
+            GenTreeHWIntrinsic* hwCmp = cmp->AsHWIntrinsic();
+            if (result == nullptr)
+            {
+                result = hwCmp;
+            }
+            else
+            {
+                result = gtNewSimdBinOpNode(GT_OR, hwCmp->TypeGet(), result, hwCmp, hwCmp->GetSimdBaseJitType(), hwCmp->GetSimdSize(), false)->AsHWIntrinsic();
+            }
+
+            offset += maxDoubleVectorSize;
+            if (offset == len)
+                break;
+
+            // Overlap with the current chunk for trailing elements
+            if (offset > len - maxDoubleVectorSize)
+                offset = len - maxDoubleVectorSize;
+        } while (true);
+
+        if (result != nullptr)
+        {
+            return GenerateIsVectorZero(this, result);
+        }
+    }
+    return nullptr;
+}
+
 //------------------------------------------------------------------------
 // impExpandHalfConstEqualsSIMD: Attempts to unroll and vectorize
 //    Equals against a constant WCHAR data for Length in [8..32] range
@@ -136,7 +246,7 @@ static GenTreeHWIntrinsic* CreateConstVector(Compiler* comp, var_types simdType,
 //    This function doesn't check obj for null or its Length, it's just an internal helper
 //    for impExpandHalfConstEquals
 //
-GenTree* Compiler::impExpandHalfConstEqualsSIMD(
+GenTree* Compiler::impUnrollWithTwoVectors(
     GenTreeLclVar* data, WCHAR* cns, int len, int dataOffset, StringComparison cmpMode)
 {
     constexpr int maxPossibleLength = 32;
@@ -152,9 +262,6 @@ GenTree* Compiler::impExpandHalfConstEqualsSIMD(
 
     int       simdSize;
     var_types simdType;
-
-    NamedIntrinsic niZero;
-    NamedIntrinsic niEquals;
 
     GenTree* cnsVec1     = nullptr;
     GenTree* cnsVec2     = nullptr;
@@ -184,9 +291,6 @@ GenTree* Compiler::impExpandHalfConstEqualsSIMD(
         simdSize = 32;
         simdType = TYP_SIMD32;
 
-        niZero   = NI_Vector256_get_Zero;
-        niEquals = NI_Vector256_op_Equality;
-
         // Special case: use a single vector for Length == 16
         useSingleVector = len == 16;
 
@@ -209,9 +313,6 @@ GenTree* Compiler::impExpandHalfConstEqualsSIMD(
         simdSize = 16;
         simdType = TYP_SIMD16;
 
-        niZero   = NI_Vector128_get_Zero;
-        niEquals = NI_Vector128_op_Equality;
-
         // Special case: use a single vector for Length == 8
         useSingleVector = len == 8;
 
@@ -230,8 +331,6 @@ GenTree* Compiler::impExpandHalfConstEqualsSIMD(
         // NOTE: We might consider using four V128 for ARM64
         return nullptr;
     }
-
-    GenTree* zero = gtNewSimdHWIntrinsicNode(simdType, niZero, baseType, simdSize);
 
     GenTree* offset1  = gtNewIconNode(dataOffset, TYP_I_IMPL);
     GenTree* offset2  = gtNewIconNode(dataOffset + len * sizeof(USHORT) - simdSize, TYP_I_IMPL);
@@ -264,11 +363,17 @@ GenTree* Compiler::impExpandHalfConstEqualsSIMD(
         vec2 = gtNewSimdBinOpNode(GT_OR, simdType, vec2, toLowerVec2, baseType, simdSize, false);
     }
 
-    // ((v1 ^ cns1) | (v2 ^ cns2)) == zero
     GenTree* xor1 = gtNewSimdBinOpNode(GT_XOR, simdType, vec1, cnsVec1, baseType, simdSize, false);
+    if (useSingleVector)
+    {
+        // (v1 ^ cns1)
+        return xor1;
+    }
+
+    // ((v1 ^ cns1) | (v2 ^ cns2))
     GenTree* xor2 = gtNewSimdBinOpNode(GT_XOR, simdType, vec2, cnsVec2, baseType, simdSize, false);
     GenTree* orr  = gtNewSimdBinOpNode(GT_OR, simdType, xor1, xor2, baseType, simdSize, false);
-    return gtNewSimdHWIntrinsicNode(TYP_BOOL, useSingleVector ? xor1 : orr, zero, niEquals, baseType, simdSize);
+    return orr;
 }
 #endif // defined(FEATURE_HW_INTRINSICS) && defined(TARGET_64BIT)
 
@@ -513,7 +618,7 @@ GenTree* Compiler::impExpandHalfConstEquals(GenTreeLclVar*   data,
             indirCmp = impExpandHalfConstEqualsSWAR(gtClone(data)->AsLclVar(), cnsData, len, dataOffset, cmpMode);
         }
 #if defined(FEATURE_HW_INTRINSICS) && defined(TARGET_64BIT)
-        else if (len <= 32)
+        else
         {
             indirCmp = impExpandHalfConstEqualsSIMD(gtClone(data)->AsLclVar(), cnsData, len, dataOffset, cmpMode);
         }
