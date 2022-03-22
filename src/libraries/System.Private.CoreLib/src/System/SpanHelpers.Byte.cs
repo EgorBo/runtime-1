@@ -578,7 +578,7 @@ namespace System
                     }
                 }
             }
-            else if (Sse2.IsSupported)
+            else if (Vector128.IsHardwareAccelerated)
             {
                 if (offset < (nuint)(uint)length)
                 {
@@ -587,10 +587,10 @@ namespace System
                     Vector128<byte> values = Vector128.Create(value);
                     while (lengthToExamine > offset)
                     {
-                        Vector128<byte> search = LoadVector128(ref searchSpace, offset);
+                        Vector128<byte> search = Vector128.LoadUnsafe(ref searchSpace, offset);
 
                         // Same method as above
-                        int matches = Sse2.MoveMask(Sse2.CompareEqual(values, search));
+                        uint matches = Vector128.Equals(values, search).ExtractMostSignificantBits();
                         if (matches == 0)
                         {
                             // Zero flags set so no matches
@@ -600,40 +600,6 @@ namespace System
 
                         // Find bitflag offset of first match and add to current offset
                         return (int)(offset + (uint)BitOperations.TrailingZeroCount(matches));
-                    }
-
-                    if (offset < (nuint)(uint)length)
-                    {
-                        lengthToExamine = ((nuint)(uint)length - offset);
-                        goto SequentialScan;
-                    }
-                }
-            }
-            else if (AdvSimd.Arm64.IsSupported)
-            {
-                if (offset < (nuint)(uint)length)
-                {
-                    lengthToExamine = GetByteVector128SpanLength(offset, length);
-
-                    // Mask to help find the first lane in compareResult that is set.
-                    // MSB 0x10 corresponds to 1st lane, 0x01 corresponds to 0th lane and so forth.
-                    Vector128<byte> mask = Vector128.Create((ushort)0x1001).AsByte();
-                    int matchedLane = 0;
-
-                    Vector128<byte> values = Vector128.Create(value);
-                    while (lengthToExamine > offset)
-                    {
-                        Vector128<byte> search = LoadVector128(ref searchSpace, offset);
-                        Vector128<byte> compareResult = AdvSimd.CompareEqual(values, search);
-
-                        if (!TryFindFirstMatchedLane(mask, compareResult, ref matchedLane))
-                        {
-                            // Zero flags set so no matches
-                            offset += (nuint)Vector128<byte>.Count;
-                            continue;
-                        }
-
-                        return (int)(offset + (uint)matchedLane);
                     }
 
                     if (offset < (nuint)(uint)length)
