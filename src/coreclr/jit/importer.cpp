@@ -4844,6 +4844,37 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
     return retNode;
 }
 
+bool Compiler::impIsTypeObject(GenTree* tree, CORINFO_CLASS_HANDLE* cls, bool* isExact, bool* isNonNull)
+{
+    if (tree->IsCall())
+    {
+        CORINFO_METHOD_HANDLE hTypeof = eeFindHelper(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE);
+        if (tree->AsCall()->gtCallMethHnd == hTypeof)
+        {
+            *cls       = gtGetHelperArgClassHandle(tree->AsCall()->gtCallArgs->GetNode());
+            *isExact   = true;
+            *isNonNull = true;
+            return *cls != NO_CLASS_HANDLE;
+        }
+    }
+    else if (tree->OperIs(GT_INTRINSIC))
+    {
+        GenTree* op1 = tree->gtGetOp1();
+        GenTreeIntrinsic* intrins = tree->AsIntrinsic();
+        // Limit it to locals for now for simpler nullchecks
+        if ((intrins->gtIntrinsicName == NI_System_Object_GetType) && op1->TypeIs(TYP_REF) && op1->IsLocal())
+        {
+            *cls = gtGetClassHandle(op1, isExact, isNonNull);
+            if (*cls != NO_CLASS_HANDLE)
+            {
+                *isExact = impIsClassExact(*cls);
+                return op1->IsLocal();
+            }
+        }
+    }
+    return false;
+}
+
 GenTree* Compiler::impTypeIsAssignable(GenTree* typeTo, GenTree* typeFrom)
 {
     // Optimize patterns like:
@@ -4855,36 +4886,50 @@ GenTree* Compiler::impTypeIsAssignable(GenTree* typeTo, GenTree* typeFrom)
     //
     // to true/false
 
-    if (typeTo->IsCall() && typeFrom->IsCall())
+    bool                 classToIsExact     = false;
+    bool                 classToIsNonNull   = false;
+    bool                 classFromIsExact   = false;
+    bool                 classFromIsNonNull = false;
+    CORINFO_CLASS_HANDLE hClassTo           = NO_CLASS_HANDLE;
+    CORINFO_CLASS_HANDLE hClassFrom         = NO_CLASS_HANDLE;
+    if (impIsTypeObject(typeTo, &hClassTo, &classToIsExact, &classToIsNonNull) &&
+        impIsTypeObject(typeFrom, &hClassFrom, &classFromIsExact, &classFromIsNonNull))
     {
-        // make sure both arguments are `typeof()`
-        CORINFO_METHOD_HANDLE hTypeof = eeFindHelper(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE);
-        if ((typeTo->AsCall()->gtCallMethHnd == hTypeof) && (typeFrom->AsCall()->gtCallMethHnd == hTypeof))
+        if ((hClassTo == NO_CLASS_HANDLE) || (hClassFrom == NO_CLASS_HANDLE))
         {
-            CORINFO_CLASS_HANDLE hClassTo   = gtGetHelperArgClassHandle(typeTo->AsCall()->gtCallArgs->GetNode());
-            CORINFO_CLASS_HANDLE hClassFrom = gtGetHelperArgClassHandle(typeFrom->AsCall()->gtCallArgs->GetNode());
-
-            if (hClassTo == NO_CLASS_HANDLE || hClassFrom == NO_CLASS_HANDLE)
-            {
-                return nullptr;
-            }
-
-            TypeCompareState castResult = info.compCompHnd->compareTypesForCast(hClassFrom, hClassTo);
-            if (castResult == TypeCompareState::May)
-            {
-                // requires runtime check
-                // e.g. __Canon, COMObjects, Nullable
-                return nullptr;
-            }
-
-            GenTreeIntCon* retNode = gtNewIconNode((castResult == TypeCompareState::Must) ? 1 : 0);
-            impPopStack(); // drop both CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE calls
-            impPopStack();
-
-            return retNode;
+            return nullptr;
         }
-    }
 
+        TypeCompareState castResult = info.compCompHnd->compareTypesForCast(hClassFrom, hClassTo);
+        if (castResult == TypeCompareState::May)
+        {
+            // requires runtime check
+            // e.g. __Canon, COMObjects, Nullable
+            return nullptr;
+        }
+
+        // we're don't know the exact types but at least we can handle the MustNot case
+        if ((!classToIsExact || !classFromIsExact) && (castResult != TypeCompareState::MustNot))
+        {
+            return nullptr;
+        }
+
+        GenTree* retNode = gtNewIconNode((castResult == TypeCompareState::Must) ? 1 : 0);
+        impPopStack(); // drop both CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE calls
+        impPopStack();
+
+        if (!classFromIsNonNull)
+        {
+            retNode = gtNewOperNode(GT_COMMA, TYP_REF, gtNewNullCheck(typeFrom->gtGetOp1(), compCurBB), retNode);
+        }
+
+        if (!classToIsNonNull)
+        {
+            retNode = gtNewOperNode(GT_COMMA, TYP_REF, gtNewNullCheck(typeTo->gtGetOp1(), compCurBB), retNode);
+        }
+
+        return retNode;
+    }
     return nullptr;
 }
 

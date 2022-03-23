@@ -4432,6 +4432,7 @@ protected:
 
     void impImportLeave(BasicBlock* block);
     void impResetLeaveBlock(BasicBlock* block, unsigned jmpAddr);
+    bool impIsTypeObject(GenTree* tree, CORINFO_CLASS_HANDLE* cls, bool* isExact, bool* isNonNull);
     GenTree* impTypeIsAssignable(GenTree* typeTo, GenTree* typeFrom);
 
     // Mirrors StringComparison.cs
