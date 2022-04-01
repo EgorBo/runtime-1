@@ -617,6 +617,293 @@ namespace System
                 Vector128<byte> values = Vector128.Create(value);
                 int matchedLane = 0;
 
+                // 2*4*Vec128
+                if (offset < (nuint)(uint)length)
+                {
+                    lengthToExamine = GetByteEightVector128SpanLength(offset, length);
+                    if (lengthToExamine > offset)
+                    {
+                        while (lengthToExamine > offset)
+                        {
+                            Vector128<byte> search1 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 0);
+                            Vector128<byte> search2 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 1);
+                            Vector128<byte> search3 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 2);
+                            Vector128<byte> search4 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 3);
+
+                            Vector128<byte> compareResult1 = Vector128.Equals(values, search1);
+                            Vector128<byte> compareResult2 = Vector128.Equals(values, search2);
+                            Vector128<byte> compareResult3 = Vector128.Equals(values, search3);
+                            Vector128<byte> compareResult4 = Vector128.Equals(values, search4);
+
+                            Vector128<byte> search5 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 4);
+                            Vector128<byte> search6 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 5);
+                            Vector128<byte> search7 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 6);
+                            Vector128<byte> search8 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 7);
+
+                            Vector128<byte> compareResult5 = Vector128.Equals(values, search5);
+                            Vector128<byte> compareResult6 = Vector128.Equals(values, search6);
+                            Vector128<byte> compareResult7 = Vector128.Equals(values, search7);
+                            Vector128<byte> compareResult8 = Vector128.Equals(values, search8);
+
+                            var or1 = compareResult1 | compareResult2;
+                            var or2 = compareResult3 | compareResult4;
+                            var or3 = compareResult5 | compareResult6;
+                            var or4 = compareResult7 | compareResult8;
+
+                            var orr1 = or1 | or2;
+                            var orr2 = or3 | or4;
+
+                            // Fast path: no matches in both comparisons
+                            if ((orr1 | orr2) == Vector128<byte>.Zero)
+                            {
+                                offset += (nuint)Vector128<byte>.Count * 8;
+                                continue;
+                            }
+
+                            if (!TryFindFirstMatchedLane(mask, compareResult1, ref matchedLane))
+                            {
+                                // The match is in the second comparison
+                                offset += (nuint)Vector128<byte>.Count;
+                                if (!TryFindFirstMatchedLane(mask, compareResult2, ref matchedLane))
+                                {
+                                    // The match is in the second comparison
+                                    offset += (nuint)Vector128<byte>.Count;
+                                    if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                    {
+                                        // The match is in the second comparison
+                                        offset += (nuint)Vector128<byte>.Count;
+                                        if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                        {
+                                            // The match is in the second comparison
+                                            offset += (nuint)Vector128<byte>.Count;
+                                            if (!TryFindFirstMatchedLane(mask, compareResult4, ref matchedLane))
+                                            {
+                                                // The match is in the second comparison
+                                                offset += (nuint)Vector128<byte>.Count;
+                                                if (!TryFindFirstMatchedLane(mask, compareResult5, ref matchedLane))
+                                                {
+                                                    // The match is in the second comparison
+                                                    offset += (nuint)Vector128<byte>.Count;
+                                                    if (!TryFindFirstMatchedLane(mask, compareResult6, ref matchedLane))
+                                                    {
+                                                        // The match is in the second comparison
+                                                        offset += (nuint)Vector128<byte>.Count;
+                                                        if (!TryFindFirstMatchedLane(mask, compareResult7,
+                                                                ref matchedLane))
+                                                        {
+                                                            // The match is in the second comparison
+                                                            offset += (nuint)Vector128<byte>.Count;
+                                                            bool found = TryFindFirstMatchedLane(mask, compareResult8,
+                                                                ref matchedLane);
+                                                            Debug.Assert(found);
+                                                            return (int)(offset + (uint)matchedLane);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 8*Vec128
+                if (offset < (nuint)(uint)length)
+                {
+                    lengthToExamine = GetByteEightVector128SpanLength(offset, length);
+                    if (lengthToExamine > offset)
+                    {
+                        while (lengthToExamine > offset)
+                        {
+                            Vector128<byte> search1 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 0);
+                            Vector128<byte> search2 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 1);
+                            Vector128<byte> search3 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 2);
+                            Vector128<byte> search4 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 3);
+
+                            Vector128<byte> search5 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 4);
+                            Vector128<byte> search6 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 5);
+                            Vector128<byte> search7 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 6);
+                            Vector128<byte> search8 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 7);
+
+                            Vector128<byte> compareResult1 = Vector128.Equals(values, search1);
+                            Vector128<byte> compareResult2 = Vector128.Equals(values, search2);
+                            Vector128<byte> compareResult3 = Vector128.Equals(values, search3);
+                            Vector128<byte> compareResult4 = Vector128.Equals(values, search4);
+
+                            Vector128<byte> compareResult5 = Vector128.Equals(values, search5);
+                            Vector128<byte> compareResult6 = Vector128.Equals(values, search6);
+                            Vector128<byte> compareResult7 = Vector128.Equals(values, search7);
+                            Vector128<byte> compareResult8 = Vector128.Equals(values, search8);
+
+                            var or1 = compareResult1 | compareResult2;
+                            var or2 = compareResult3 | compareResult4;
+                            var or3 = compareResult5 | compareResult6;
+                            var or4 = compareResult7 | compareResult8;
+
+                            var orr1 = or1 | or2;
+                            var orr2 = or3 | or4;
+
+                            // Fast path: no matches in both comparisons
+                            if ((orr1 | orr2) == Vector128<byte>.Zero)
+                            {
+                                offset += (nuint)Vector128<byte>.Count * 8;
+                                continue;
+                            }
+
+                            if (!TryFindFirstMatchedLane(mask, compareResult1, ref matchedLane))
+                            {
+                                // The match is in the second comparison
+                                offset += (nuint)Vector128<byte>.Count;
+                                if (!TryFindFirstMatchedLane(mask, compareResult2, ref matchedLane))
+                                {
+                                    // The match is in the second comparison
+                                    offset += (nuint)Vector128<byte>.Count;
+                                    if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                    {
+                                        // The match is in the second comparison
+                                        offset += (nuint)Vector128<byte>.Count;
+                                        if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                        {
+                                            // The match is in the second comparison
+                                            offset += (nuint)Vector128<byte>.Count;
+                                            if (!TryFindFirstMatchedLane(mask, compareResult4, ref matchedLane))
+                                            {
+                                                // The match is in the second comparison
+                                                offset += (nuint)Vector128<byte>.Count;
+                                                if (!TryFindFirstMatchedLane(mask, compareResult5, ref matchedLane))
+                                                {
+                                                    // The match is in the second comparison
+                                                    offset += (nuint)Vector128<byte>.Count;
+                                                    if (!TryFindFirstMatchedLane(mask, compareResult6, ref matchedLane))
+                                                    {
+                                                        // The match is in the second comparison
+                                                        offset += (nuint)Vector128<byte>.Count;
+                                                        if (!TryFindFirstMatchedLane(mask, compareResult7,
+                                                                ref matchedLane))
+                                                        {
+                                                            // The match is in the second comparison
+                                                            offset += (nuint)Vector128<byte>.Count;
+                                                            bool found = TryFindFirstMatchedLane(mask, compareResult8,
+                                                                ref matchedLane);
+                                                            Debug.Assert(found);
+                                                            return (int)(offset + (uint)matchedLane);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4*Vec128
+                if (offset < (nuint)(uint)length)
+                {
+                    lengthToExamine = GetByteFourVector128SpanLength(offset, length);
+                    if (lengthToExamine > offset)
+                    {
+                        while (lengthToExamine > offset)
+                        {
+                            Vector128<byte> search1 = Vector128.LoadUnsafe(ref searchSpace, offset);
+                            Vector128<byte> search2 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count);
+                            Vector128<byte> search3 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 2);
+                            Vector128<byte> search4 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 3);
+
+                            Vector128<byte> compareResult1 = Vector128.Equals(values, search1);
+                            Vector128<byte> compareResult2 = Vector128.Equals(values, search2);
+                            Vector128<byte> compareResult3 = Vector128.Equals(values, search3);
+                            Vector128<byte> compareResult4 = Vector128.Equals(values, search4);
+
+                            var or1 = compareResult1 | compareResult2;
+                            var or2 = compareResult3 | compareResult4;
+
+                            // Fast path: no matches in both comparisons
+                            if ((or1 | or2) == Vector128<byte>.Zero)
+                            {
+                                offset += (nuint)Vector128<byte>.Count * 4;
+                                continue;
+                            }
+
+                            if (!TryFindFirstMatchedLane(mask, compareResult1, ref matchedLane))
+                            {
+                                // The match is in the second comparison
+                                offset += (nuint)Vector128<byte>.Count;
+                                if (!TryFindFirstMatchedLane(mask, compareResult2, ref matchedLane))
+                                {
+                                    // The match is in the second comparison
+                                    offset += (nuint)Vector128<byte>.Count;
+                                    if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                    {
+                                        // The match is in the second comparison
+                                        offset += (nuint)Vector128<byte>.Count;
+                                        bool found = TryFindFirstMatchedLane(mask, compareResult4, ref matchedLane);
+                                        Debug.Assert(found);
+                                        return (int)(offset + (uint)matchedLane);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2*2*Vec128
+                if (offset < (nuint)(uint)length)
+                {
+                    lengthToExamine = GetByteFourVector128SpanLength(offset, length);
+                    if (lengthToExamine > offset)
+                    {
+                        while (lengthToExamine > offset)
+                        {
+                            Vector128<byte> search1 = Vector128.LoadUnsafe(ref searchSpace, offset);
+                            Vector128<byte> search2 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count);
+
+                            Vector128<byte> compareResult1 = Vector128.Equals(values, search1);
+                            Vector128<byte> compareResult2 = Vector128.Equals(values, search2);
+
+                            Vector128<byte> search3 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 2);
+                            Vector128<byte> search4 = Vector128.LoadUnsafe(ref searchSpace, offset + (nuint)Vector128<byte>.Count * 3);
+
+                            Vector128<byte> compareResult3 = Vector128.Equals(values, search3);
+                            Vector128<byte> compareResult4 = Vector128.Equals(values, search4);
+
+                            var or1 = compareResult1 | compareResult2;
+                            var or2 = compareResult3 | compareResult4;
+
+                            // Fast path: no matches in both comparisons
+                            if ((or1 | or2) == Vector128<byte>.Zero)
+                            {
+                                offset += (nuint)Vector128<byte>.Count * 4;
+                                continue;
+                            }
+
+                            if (!TryFindFirstMatchedLane(mask, compareResult1, ref matchedLane))
+                            {
+                                // The match is in the second comparison
+                                offset += (nuint)Vector128<byte>.Count;
+                                if (!TryFindFirstMatchedLane(mask, compareResult2, ref matchedLane))
+                                {
+                                    // The match is in the second comparison
+                                    offset += (nuint)Vector128<byte>.Count;
+                                    if (!TryFindFirstMatchedLane(mask, compareResult3, ref matchedLane))
+                                    {
+                                        // The match is in the second comparison
+                                        offset += (nuint)Vector128<byte>.Count;
+                                        bool found = TryFindFirstMatchedLane(mask, compareResult4, ref matchedLane);
+                                        Debug.Assert(found);
+                                        return (int)(offset + (uint)matchedLane);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2*Vec128
                 if (offset < (nuint)(uint)length)
                 {
                     // Try to process data using two Vector128 since we don't have Vector256 on ARM
@@ -2237,6 +2524,16 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static nuint GetByteTwoVector128SpanLength(nuint offset, int length)
             => (nuint)(uint)((length - (int)offset) & ~(Vector128<byte>.Count * 2 - 1));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static nuint GetByteFourVector128SpanLength(nuint offset, int length)
+            => (nuint)(uint)((length - (int)offset) & ~(Vector128<byte>.Count * 4 - 1));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static nuint GetByteEightVector128SpanLength(nuint offset, int length)
+            => (nuint)(uint)((length - (int)offset) & ~(Vector128<byte>.Count * 8 - 1));
+
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static nuint GetByteVector256SpanLength(nuint offset, int length)
