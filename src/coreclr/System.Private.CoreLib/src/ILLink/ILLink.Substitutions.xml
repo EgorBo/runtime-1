@@ -3,5 +3,9 @@
     <type fullname="System.StartupHookProvider" feature="System.StartupHookProvider.IsSupported" featurevalue="false">
       <method signature="System.Boolean get_IsSupported()" body="stub" value="false" />
     </type>
+
+    <!-- These are only instanciated by coreclr internally -->
+    <type fullname="System.Collections.Generic.NullableEnumComparer`1" />
+    <type fullname="System.Collections.Generic.NullableEnumEqualityComparer`1" />
   </assembly>
 </linker>
