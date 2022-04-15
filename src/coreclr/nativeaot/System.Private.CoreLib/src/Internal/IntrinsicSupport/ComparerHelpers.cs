@@ -64,6 +64,11 @@ namespace Internal.IntrinsicSupport
                     openComparerType = typeof(NullableComparer<>).TypeHandle;
                     comparerTypeArgument = nullableType;
                 }
+                else if (EqualityComparerHelpers.IsEnum(nullableType))
+                {
+                    openComparerType = typeof(NullableEnumComparer<>).TypeHandle;
+                    comparerTypeArgument = t;
+                }
             }
             if (EqualityComparerHelpers.IsEnum(t))
             {

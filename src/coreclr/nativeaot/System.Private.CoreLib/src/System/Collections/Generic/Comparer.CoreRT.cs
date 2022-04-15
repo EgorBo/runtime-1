@@ -51,4 +51,28 @@ namespace System.Collections.Generic
             return ComparerHelpers.EnumOnlyCompare(x, y);
         }
     }
+
+    internal sealed partial class NullableEnumComparer<T> : Comparer<T?> where T : struct, Enum
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int Compare(T? x, T? y)
+        {
+            if (x.HasValue)
+            {
+                if (y.HasValue)
+                {
+                    return ComparerHelpers.EnumOnlyCompare(x.Value, y.Value);
+                }
+                return 1;
+            }
+            if (y.HasValue)
+            {
+                return -1;
+            }
+            return 0;
+        }
+
+        public override bool Equals(object? obj) => obj != null && GetType() == obj.GetType();
+        public override int GetHashCode() => GetType().GetHashCode();
+    }
 }

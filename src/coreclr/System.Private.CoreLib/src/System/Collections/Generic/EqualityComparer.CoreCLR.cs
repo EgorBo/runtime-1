@@ -165,7 +165,7 @@ namespace System.Collections.Generic
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(T x, T y)
         {
-            return System.Runtime.CompilerServices.RuntimeHelpers.EnumEquals(x, y);
+            return RuntimeHelpers.EnumEquals(x, y);
         }
 
         internal override int IndexOf(T[] array, T value, int startIndex, int count)
@@ -173,7 +173,7 @@ namespace System.Collections.Generic
             int endIndex = startIndex + count;
             for (int i = startIndex; i < endIndex; i++)
             {
-                if (System.Runtime.CompilerServices.RuntimeHelpers.EnumEquals(array[i], value)) return i;
+                if (RuntimeHelpers.EnumEquals(array[i], value)) return i;
             }
             return -1;
         }
@@ -183,9 +183,34 @@ namespace System.Collections.Generic
             int endIndex = startIndex - count + 1;
             for (int i = startIndex; i >= endIndex; i--)
             {
-                if (System.Runtime.CompilerServices.RuntimeHelpers.EnumEquals(array[i], value)) return i;
+                if (RuntimeHelpers.EnumEquals(array[i], value)) return i;
             }
             return -1;
         }
+    }
+
+    // Instantiated internally by VM
+    internal sealed class NullableEnumEqualityComparer<T> : EqualityComparer<T?> where T : struct, Enum
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(T? x, T? y)
+        {
+            if (x.HasValue)
+            {
+                if (y.HasValue)
+                {
+                    return RuntimeHelpers.EnumEquals(x.Value, y.Value);
+                }
+            }
+            if (y.HasValue)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        public override int GetHashCode(T? obj) => obj.GetHashCode();
+        public override int GetHashCode() => GetType().GetHashCode();
+        public override bool Equals(object? obj) => obj != null && GetType() == obj.GetType();
     }
 }

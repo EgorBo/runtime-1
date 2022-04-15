@@ -8819,11 +8819,33 @@ CORINFO_CLASS_HANDLE CEEInfo::getDefaultComparerClassHelper(CORINFO_CLASS_HANDLE
     if (Nullable::IsNullableType(elemTypeHnd))
     {
         Instantiation nullableInst = elemTypeHnd.AsMethodTable()->GetInstantiation();
+        TypeHandle firstInst = nullableInst[0];
         TypeHandle iequatable = TypeHandle(CoreLibBinder::GetClass(CLASS__IEQUATABLEGENERIC)).Instantiate(nullableInst);
-        if (nullableInst[0].CanCastTo(iequatable))
+        if (firstInst.CanCastTo(iequatable))
         {
             TypeHandle resultTh = ((TypeHandle)CoreLibBinder::GetClass(CLASS__NULLABLE_COMPARER)).Instantiate(nullableInst);
             return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
+        }
+        else if (firstInst.IsEnum())
+        {
+            switch (firstInst.GetVerifierCorElementType())
+            {
+                case ELEMENT_TYPE_I1:
+                case ELEMENT_TYPE_I2:
+                case ELEMENT_TYPE_U1:
+                case ELEMENT_TYPE_U2:
+                case ELEMENT_TYPE_I4:
+                case ELEMENT_TYPE_U4:
+                case ELEMENT_TYPE_I8:
+                case ELEMENT_TYPE_U8:
+                {
+                    TypeHandle resultTh = (TypeHandle)CoreLibBinder::GetClass(CLASS__NULLABLEENUM_COMPARER);
+                    return CORINFO_CLASS_HANDLE(resultTh.Instantiate(nullableInst).GetMethodTable());
+                }
+
+                default:
+                    break;
+            }
         }
     }
 
@@ -8920,11 +8942,33 @@ CORINFO_CLASS_HANDLE CEEInfo::getDefaultEqualityComparerClassHelper(CORINFO_CLAS
     if (Nullable::IsNullableType(elemTypeHnd))
     {
         Instantiation nullableInst = elemTypeHnd.AsMethodTable()->GetInstantiation();
+        TypeHandle firstInst = nullableInst[0];
         TypeHandle iequatable = TypeHandle(CoreLibBinder::GetClass(CLASS__IEQUATABLEGENERIC)).Instantiate(nullableInst);
-        if (nullableInst[0].CanCastTo(iequatable))
+        if (firstInst.CanCastTo(iequatable))
         {
             TypeHandle resultTh = ((TypeHandle)CoreLibBinder::GetClass(CLASS__NULLABLE_EQUALITYCOMPARER)).Instantiate(nullableInst);
             return CORINFO_CLASS_HANDLE(resultTh.GetMethodTable());
+        }
+        else if (firstInst.IsEnum())
+        {
+            switch (firstInst.GetVerifierCorElementType())
+            {
+                case ELEMENT_TYPE_I1:
+                case ELEMENT_TYPE_I2:
+                case ELEMENT_TYPE_U1:
+                case ELEMENT_TYPE_U2:
+                case ELEMENT_TYPE_I4:
+                case ELEMENT_TYPE_U4:
+                case ELEMENT_TYPE_I8:
+                case ELEMENT_TYPE_U8:
+                {
+                    TypeHandle resultTh = (TypeHandle)CoreLibBinder::GetClass(CLASS__NULLABLEENUM_EQUALITYCOMPARER);
+                    return CORINFO_CLASS_HANDLE(resultTh.Instantiate(nullableInst).GetMethodTable());
+                }
+
+                default:
+                    break;
+            }
         }
     }
 

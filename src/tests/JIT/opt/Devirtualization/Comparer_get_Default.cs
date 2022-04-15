@@ -219,6 +219,7 @@ class Program
         AssertEquals("System.Collections.Generic.GenericComparer`1[System.String]", Comparer<string>.Default.GetType().ToString());
         AssertEquals("System.Collections.Generic.GenericComparer`1[System.Guid]", Comparer<Guid>.Default.GetType().ToString());
         AssertEquals("System.Collections.Generic.EnumComparer`1[System.Runtime.CompilerServices.MethodImplOptions]", Comparer<MethodImplOptions>.Default.GetType().ToString());
+        AssertEquals("System.Collections.Generic.NullableEnumComparer`1[System.Runtime.CompilerServices.MethodImplOptions]", Comparer<MethodImplOptions?>.Default.GetType().ToString());
         AssertEquals("System.Collections.Generic.NullableComparer`1[System.Byte]", Comparer<byte?>.Default.GetType().ToString());
         AssertEquals("System.Collections.Generic.ObjectComparer`1[Struct1]", Comparer<Struct1>.Default.GetType().ToString());
     }

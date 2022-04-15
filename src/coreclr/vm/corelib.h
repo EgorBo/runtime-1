@@ -1229,6 +1229,7 @@ DEFINE_CLASS(ENUM_EQUALITYCOMPARER, CollectionsGeneric, EnumEqualityComparer`1)
 DEFINE_CLASS(NULLABLE_EQUALITYCOMPARER, CollectionsGeneric, NullableEqualityComparer`1)
 DEFINE_CLASS(GENERIC_EQUALITYCOMPARER, CollectionsGeneric, GenericEqualityComparer`1)
 DEFINE_CLASS(OBJECT_EQUALITYCOMPARER, CollectionsGeneric, ObjectEqualityComparer`1)
+DEFINE_CLASS(NULLABLEENUM_EQUALITYCOMPARER, CollectionsGeneric, NullableEnumEqualityComparer`1)
 
 // Classes referenced in Comparer<T>.Default optimization
 
@@ -1236,6 +1237,7 @@ DEFINE_CLASS(GENERIC_COMPARER, CollectionsGeneric, GenericComparer`1)
 DEFINE_CLASS(OBJECT_COMPARER, CollectionsGeneric, ObjectComparer`1)
 DEFINE_CLASS(ENUM_COMPARER, CollectionsGeneric, EnumComparer`1)
 DEFINE_CLASS(NULLABLE_COMPARER, CollectionsGeneric, NullableComparer`1)
+DEFINE_CLASS(NULLABLEENUM_COMPARER, CollectionsGeneric, NullableEnumComparer`1)
 
 DEFINE_CLASS(INATTRIBUTE, Interop, InAttribute)
 
