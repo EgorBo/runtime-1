@@ -3778,9 +3778,9 @@ public:
     Statement* impExtractLastStmt();
     GenTree* impCloneExpr(GenTree*             tree,
                           GenTree**            clone,
-                          CORINFO_CLASS_HANDLE structHnd,
-                          unsigned             curLevel,
-                          Statement** pAfterStmt DEBUGARG(const char* reason));
+                          CORINFO_CLASS_HANDLE structHnd = NO_CLASS_HANDLE,
+                          unsigned             curLevel  = (unsigned)-1,
+                          Statement** pAfterStmt = nullptr DEBUGARG(const char* reason = "clonning tree"));
     GenTree* impAssignStruct(GenTree*             dest,
                              GenTree*             src,
                              CORINFO_CLASS_HANDLE structHnd,

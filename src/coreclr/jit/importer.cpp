@@ -4219,6 +4219,93 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_Nullable_Equals:
+            {
+                GenTree* op1 = impStackTop(1).val;
+                GenTree* op2 = impStackTop(0).val;
+
+                auto getNullableType = [](Compiler* comp, GenTree* obj, CORINFO_CLASS_HANDLE* cls,
+                                          var_types* primitiveType) -> GenTree* {
+                    CORINFO_CLASS_HANDLE boxCls = NO_CLASS_HANDLE;
+                    if (obj->IsCall() && obj->AsCall()->IsHelperCall(comp, CORINFO_HELP_BOX_NULLABLE))
+                    {
+                        GenTreeCall* call = obj->AsCall();
+                        boxCls = comp->gtGetHelperArgClassHandle(call->gtArgs.GetArgByIndex(0)->GetEarlyNode());
+                        obj    = call->gtArgs.GetArgByIndex(1)->GetEarlyNode();
+                        if (boxCls == NO_CLASS_HANDLE)
+                        {
+                            return nullptr;
+                        }
+                    }
+
+                    if (obj->OperIs(GT_ADDR) && varTypeIsStruct(obj->gtGetOp1()))
+                    {
+                        CORINFO_CLASS_HANDLE objCls = comp->gtGetStructHandle(obj->gtGetOp1());
+                        if (comp->info.compCompHnd->getBoxHelper(objCls) == CORINFO_HELP_BOX_NULLABLE)
+                        {
+                            CORINFO_CLASS_HANDLE type = comp->info.compCompHnd->getTypeForBox(objCls);
+                            if (type != NO_CLASS_HANDLE)
+                            {
+                                auto corType = comp->info.compCompHnd->asCorInfoType(type);
+                                if (comp->impIsPrimitive(corType) &&
+                                    ((boxCls == NO_CLASS_HANDLE) || (boxCls == objCls)))
+                                {
+                                    *primitiveType = JITtype2varType(corType);
+                                    *cls           = objCls;
+                                    return obj;
+                                }
+                            }
+                        }
+                    }
+                    return nullptr;
+                };
+
+                CORINFO_CLASS_HANDLE op1Cls  = NO_CLASS_HANDLE;
+                CORINFO_CLASS_HANDLE op2Cls  = NO_CLASS_HANDLE;
+                var_types            op1Type = TYP_UNDEF;
+                var_types            op2Type = TYP_UNDEF;
+                GenTree*             op1Obj  = getNullableType(this, op1, &op1Cls, &op1Type);
+                GenTree*             op2Obj  = getNullableType(this, op2, &op2Cls, &op2Type);
+
+                if ((op1Obj == nullptr) || (op2Obj == nullptr) || (op1Cls != op2Cls) || (op1Cls == NO_CLASS_HANDLE))
+                {
+                    break;
+                }
+
+                assert((op1Type == op2Type));
+                assert(op1Obj->TypeIs(TYP_BYREF) && op2Obj->TypeIs(TYP_BYREF));
+
+                CORINFO_FIELD_HANDLE hasValueHnd = info.compCompHnd->getFieldInClass(op1Cls, 0);
+                CORINFO_FIELD_HANDLE valueHnd    = info.compCompHnd->getFieldInClass(op1Cls, 1);
+                const unsigned       valueOffset = info.compCompHnd->getFieldOffset(valueHnd);
+
+                GenTree* op1Value = gtNewFieldRef(op1Type, valueHnd, op1Obj, valueOffset);
+                GenTree* op2Value = gtNewFieldRef(op1Type, valueHnd, op2Obj, valueOffset);
+
+                impCloneExpr(op1Obj, &op1Obj);
+                impCloneExpr(op2Obj, &op2Obj);
+
+                GenTree* op1HasValue = gtNewFieldRef(op1Type, hasValueHnd, op1Obj, valueOffset);
+                GenTree* op2HasValue = gtNewFieldRef(op1Type, hasValueHnd, op2Obj, valueOffset);
+
+                GenTree* op2ValueClone;
+                op2Value = impCloneExpr(op2Value, &op2ValueClone);
+
+                GenTreeColon* colonNode = gtNewColonNode(op1Type, gtNewOperNode(GT_NEG, op1Type, op2Value),
+                                                         gtNewOperNode(GT_EQ, op1Type, op1Value, op2ValueClone));
+
+                GenTree* cond = gtNewOperNode(GT_GT, TYP_INT, gtNewOperNode(GT_AND, TYP_INT, op1HasValue, op2HasValue),
+                                              gtNewIconNode(0));
+
+                // QMARK can't be a root node
+                unsigned rootTmp = lvaGrabTemp(true DEBUGARG("spilling qmark"));
+                impAssignTempGen(rootTmp, gtNewQmarkNode(TYP_INT, cond, colonNode));
+                retNode = gtNewLclvNode(rootTmp, TYP_INT);
+                impPopStack();
+                impPopStack();
+                break;
+            }
+
             case NI_System_Type_get_IsValueType:
             case NI_System_Type_get_IsByRefLike:
             {
@@ -5225,6 +5312,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             else if (strcmp(methodName, "GetTypeFromHandle") == 0)
             {
                 result = NI_System_Type_GetTypeFromHandle;
+            }
+        }
+        else if (strcmp(className, "Nullable`1") == 0)
+        {
+            if (strcmp(methodName, "Equals") == 0)
+            {
+                result = NI_System_Nullable_Equals;
             }
         }
         else if (strcmp(className, "String") == 0)

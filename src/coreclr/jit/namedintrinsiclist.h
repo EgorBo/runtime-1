@@ -72,6 +72,8 @@ enum NamedIntrinsic : unsigned short
     NI_System_StubHelpers_GetStubContext,
     NI_System_StubHelpers_NextCallReturnAddress,
 
+    NI_System_Nullable_Equals,
+
     NI_Array_Address,
     NI_Array_Get,
     NI_Array_Set,

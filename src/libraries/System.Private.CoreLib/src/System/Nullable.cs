@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Runtime.Versioning;
+using System.Runtime.CompilerServices;
 
 #pragma warning disable CA1066 // Implement IEquatable when overriding Object.Equals
 
@@ -52,6 +53,7 @@ namespace System
         public readonly T GetValueOrDefault(T defaultValue) =>
             hasValue ? value : defaultValue;
 
+        [Intrinsic]
         public override bool Equals(object? other)
         {
             if (!hasValue) return other == null;
