@@ -52,27 +52,17 @@ namespace System.Collections.Generic
         }
     }
 
+    // Instantiated internally by VM
     internal sealed partial class NullableEnumComparer<T> : Comparer<T?> where T : struct, Enum
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int Compare(T? x, T? y)
         {
-            if (x.HasValue)
+            if (x != null)
             {
-                if (y.HasValue)
-                {
-                    return ComparerHelpers.EnumOnlyCompare(x.Value, y.Value);
-                }
-                return 1;
+                return y == null ? 1 : ComparerHelpers.EnumOnlyCompare(x.Value, y.Value);
             }
-            if (y.HasValue)
-            {
-                return -1;
-            }
-            return 0;
+            return y == null ? 0 : -1;
         }
-
-        public override bool Equals(object? obj) => obj != null && GetType() == obj.GetType();
-        public override int GetHashCode() => GetType().GetHashCode();
     }
 }

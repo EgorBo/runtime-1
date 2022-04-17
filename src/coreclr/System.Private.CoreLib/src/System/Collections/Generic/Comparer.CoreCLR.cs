@@ -21,6 +21,7 @@ namespace System.Collections.Generic
         }
     }
 
+    // Instantiated internally by VM
     internal sealed partial class NullableEnumComparer<T> : Comparer<T?> where T : struct, Enum
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -32,8 +33,5 @@ namespace System.Collections.Generic
             }
             return y == null ? 0 : -1;
         }
-
-        public override bool Equals(object? obj) => obj != null && GetType() == obj.GetType();
-        public override int GetHashCode() => GetType().GetHashCode();
     }
 }

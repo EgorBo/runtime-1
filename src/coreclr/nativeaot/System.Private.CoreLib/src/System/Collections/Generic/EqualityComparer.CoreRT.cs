@@ -51,4 +51,20 @@ namespace System.Collections.Generic
             return EqualityComparerHelpers.EnumOnlyEquals(x, y);
         }
     }
+
+    // Instantiated internally by VM
+    internal sealed class NullableEnumEqualityComparer<T> : EqualityComparer<T?> where T : struct, Enum
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(T? x, T? y)
+        {
+            if (x != null)
+            {
+                return y != null && EqualityComparerHelpers.EnumOnlyEquals(x.Value, y.Value);
+            }
+            return y == null;
+        }
+
+        public override int GetHashCode(T? obj) => obj.GetHashCode();
+    }
 }
