@@ -26,19 +26,11 @@ namespace System.Collections.Generic
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override int Compare(T? x, T? y)
         {
-            if (x.HasValue)
+            if (x != null)
             {
-                if (y.HasValue)
-                {
-                    return RuntimeHelpers.EnumCompareTo(x.Value, y.Value);
-                }
-                return 1;
+                return y == null ? 1 : RuntimeHelpers.EnumCompareTo(x.Value, y.Value);
             }
-            if (y.HasValue)
-            {
-                return -1;
-            }
-            return 0;
+            return y == null ? 0 : -1;
         }
 
         public override bool Equals(object? obj) => obj != null && GetType() == obj.GetType();

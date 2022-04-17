@@ -192,21 +192,16 @@ namespace System.Collections.Generic
     // Instantiated internally by VM
     internal sealed class NullableEnumEqualityComparer<T> : EqualityComparer<T?> where T : struct, Enum
     {
+        public NullableEnumEqualityComparer() { }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(T? x, T? y)
         {
-            if (x.HasValue)
+            if (x != null)
             {
-                if (y.HasValue)
-                {
-                    return RuntimeHelpers.EnumEquals(x.Value, y.Value);
-                }
+                return y != null && RuntimeHelpers.EnumEquals(x.Value, y.Value);
             }
-            if (y.HasValue)
-            {
-                return false;
-            }
-            return true;
+            return y == null;
         }
 
         public override int GetHashCode(T? obj) => obj.GetHashCode();
