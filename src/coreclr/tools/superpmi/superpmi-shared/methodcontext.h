@@ -738,9 +738,9 @@ public:
     void dmpCompareTypesForCast(DLDL key, DWORD value);
     TypeCompareState repCompareTypesForCast(CORINFO_CLASS_HANDLE fromClass, CORINFO_CLASS_HANDLE toClass);
 
-    void recCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, TypeCompareState result);
-    void dmpCompareTypesForEquality(DLDL key, DWORD value);
-    TypeCompareState repCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2);
+    void recCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, bool exact, TypeCompareState result);
+    void dmpCompareTypesForEquality(Agnostic_CompareTypesForEquality key, DWORD value);
+    TypeCompareState repCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, bool exact);
 
     void recFindNameOfToken(
         CORINFO_MODULE_HANDLE module, mdToken metaTOK, char* szFQName, size_t FQNameCapacity, size_t result);

@@ -1137,12 +1137,12 @@ namespace Internal.JitInterface
         }
 
         [UnmanagedCallersOnly]
-        static TypeCompareState _compareTypesForEquality(IntPtr thisHandle, IntPtr* ppException, CORINFO_CLASS_STRUCT_* cls1, CORINFO_CLASS_STRUCT_* cls2)
+        static TypeCompareState _compareTypesForEquality(IntPtr thisHandle, IntPtr* ppException, CORINFO_CLASS_STRUCT_* cls1, CORINFO_CLASS_STRUCT_* cls2, byte exact)
         {
             var _this = GetThis(thisHandle);
             try
             {
-                return _this.compareTypesForEquality(cls1, cls2);
+                return _this.compareTypesForEquality(cls1, cls2, exact != 0);
             }
             catch (Exception ex)
             {
@@ -2645,7 +2645,7 @@ namespace Internal.JitInterface
             callbacks[73] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte>)&_canCast;
             callbacks[74] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte>)&_areTypesEquivalent;
             callbacks[75] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, TypeCompareState>)&_compareTypesForCast;
-            callbacks[76] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, TypeCompareState>)&_compareTypesForEquality;
+            callbacks[76] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte, TypeCompareState>)&_compareTypesForEquality;
             callbacks[77] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*>)&_mergeClasses;
             callbacks[78] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*, byte>)&_isMoreSpecificType;
             callbacks[79] = (delegate* unmanaged<IntPtr, IntPtr*, CORINFO_CLASS_STRUCT_*, CORINFO_CLASS_STRUCT_*>)&_getParentType;

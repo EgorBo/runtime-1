@@ -2627,7 +2627,7 @@ namespace Internal.JitInterface
             return result;
         }
 
-        private TypeCompareState compareTypesForEquality(CORINFO_CLASS_STRUCT_* cls1, CORINFO_CLASS_STRUCT_* cls2)
+        private TypeCompareState compareTypesForEquality(CORINFO_CLASS_STRUCT_* cls1, CORINFO_CLASS_STRUCT_* cls2, bool exact)
         {
             TypeCompareState result = TypeCompareState.May;
 
@@ -2637,6 +2637,12 @@ namespace Internal.JitInterface
             // If neither type is a canonical subtype, type handle comparison suffices
             if (!type1.IsCanonicalSubtype(CanonicalFormKind.Any) && !type2.IsCanonicalSubtype(CanonicalFormKind.Any))
             {
+                if (!exact)
+                {
+                    // Compare with Enum's underlying primitive type
+                    type1 = type1.IsEnum ? type1.UnderlyingType : type1;
+                    type2 = type2.IsEnum ? type2.UnderlyingType : type2;
+                }
                 result = (type1 == type2 ? TypeCompareState.Must : TypeCompareState.MustNot);
             }
             // If either or both types are canonical subtypes, we can sometimes prove inequality.

@@ -4276,7 +4276,8 @@ TypeCompareState CEEInfo::compareTypesForCast(
 // equal, or the comparison needs to be resolved at runtime.
 TypeCompareState CEEInfo::compareTypesForEquality(
         CORINFO_CLASS_HANDLE        cls1,
-        CORINFO_CLASS_HANDLE        cls2)
+        CORINFO_CLASS_HANDLE        cls2,
+        bool                        exact)
 {
     CONTRACTL {
         THROWS;
@@ -4294,6 +4295,12 @@ TypeCompareState CEEInfo::compareTypesForEquality(
     // If neither type is a canonical subtype, type handle comparison suffices
     if (!hnd1.IsCanonicalSubtype() && !hnd2.IsCanonicalSubtype())
     {
+        if (!exact)
+        {
+            // Compare with Enum's underlying primitive type
+            hnd1 = hnd1.IsEnum() ? CoreLibBinder::GetElementType(hnd1.GetVerifierCorElementType()) : hnd1;
+            hnd2 = hnd2.IsEnum() ? CoreLibBinder::GetElementType(hnd2.GetVerifierCorElementType()) : hnd2;
+        }
         result = (hnd1 == hnd2 ? TypeCompareState::Must : TypeCompareState::MustNot);
     }
     // If either or both types are canonical subtypes, we can sometimes prove inequality.

@@ -753,10 +753,11 @@ TypeCompareState WrapICorJitInfo::compareTypesForCast(
 
 TypeCompareState WrapICorJitInfo::compareTypesForEquality(
           CORINFO_CLASS_HANDLE cls1,
-          CORINFO_CLASS_HANDLE cls2)
+          CORINFO_CLASS_HANDLE cls2,
+          bool exact)
 {
     API_ENTER(compareTypesForEquality);
-    TypeCompareState temp = wrapHnd->compareTypesForEquality(cls1, cls2);
+    TypeCompareState temp = wrapHnd->compareTypesForEquality(cls1, cls2, exact);
     API_LEAVE(compareTypesForEquality);
     return temp;
 }

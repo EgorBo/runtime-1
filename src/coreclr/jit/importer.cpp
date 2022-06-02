@@ -7455,7 +7455,7 @@ int Compiler::impBoxPatternMatch(CORINFO_RESOLVED_TOKEN* pResolvedToken,
 
                 // See if the resolved tokens describe types that are equal.
                 const TypeCompareState compare =
-                    info.compCompHnd->compareTypesForEquality(unboxResolvedToken.hClass, pResolvedToken->hClass);
+                    info.compCompHnd->compareTypesForEquality(unboxResolvedToken.hClass, pResolvedToken->hClass, false);
 
                 // If so, box/unbox.any is a nop.
                 if (compare == TypeCompareState::Must)

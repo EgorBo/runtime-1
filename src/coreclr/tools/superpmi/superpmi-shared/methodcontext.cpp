@@ -5980,32 +5980,35 @@ TypeCompareState MethodContext::repCompareTypesForCast(CORINFO_CLASS_HANDLE from
 
 void MethodContext::recCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1,
                                                CORINFO_CLASS_HANDLE cls2,
+                                               bool                 exact,
                                                TypeCompareState     result)
 {
     if (CompareTypesForEquality == nullptr)
-        CompareTypesForEquality = new LightWeightMap<DLDL, DWORD>();
+        CompareTypesForEquality = new LightWeightMap<Agnostic_CompareTypesForEquality, DWORD>();
 
-    DLDL key;
+    Agnostic_CompareTypesForEquality key;
     ZeroMemory(&key, sizeof(key)); // Zero key including any struct padding
-    key.A = CastHandle(cls1);
-    key.B = CastHandle(cls2);
+    key.cls1 = CastHandle(cls1);
+    key.cls2 = CastHandle(cls2);
+    key.exact = (DWORD)exact;
 
     DWORD value = (DWORD)result;
     CompareTypesForEquality->Add(key, value);
     DEBUG_REC(dmpCompareTypesForEquality(key, value));
 }
-void MethodContext::dmpCompareTypesForEquality(DLDL key, DWORD value)
+void MethodContext::dmpCompareTypesForEquality(Agnostic_CompareTypesForEquality key, DWORD value)
 {
-    printf("CompareTypesForEquality key cls1=%016llX, cls2=%016llx, result=%d", key.A, key.B, value);
+    printf("CompareTypesForEquality key cls1=%016llX, cls2=%016llx, exact=%d result=%d", key.cls1, key.cls2, key.exact, value);
 }
-TypeCompareState MethodContext::repCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2)
+TypeCompareState MethodContext::repCompareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, bool exact)
 {
-    DLDL key;
+    Agnostic_CompareTypesForEquality key;
     ZeroMemory(&key, sizeof(key)); // Zero key including any struct padding
-    key.A = CastHandle(cls1);
-    key.B = CastHandle(cls2);
+    key.cls1 = CastHandle(cls1);
+    key.cls2 = CastHandle(cls2);
+    key.exact = (DWORD)exact;
 
-    AssertMapAndKeyExist(CompareTypesForEquality, key, ": key %016llX %016llX", key.A, key.B);
+    AssertMapAndKeyExist(CompareTypesForEquality, key, ": key %016llX %016llX %d", key.cls1, key.cls2, key.exact);
 
     DWORD value = CompareTypesForEquality->Get(key);
     DEBUG_REP(dmpCompareTypesForEquality(key, value));

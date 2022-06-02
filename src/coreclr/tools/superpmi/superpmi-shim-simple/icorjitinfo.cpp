@@ -541,9 +541,10 @@ TypeCompareState interceptor_ICJI::compareTypesForCast(
 
 TypeCompareState interceptor_ICJI::compareTypesForEquality(
           CORINFO_CLASS_HANDLE cls1,
-          CORINFO_CLASS_HANDLE cls2)
+          CORINFO_CLASS_HANDLE cls2,
+          bool exact)
 {
-    return original_ICorJitInfo->compareTypesForEquality(cls1, cls2);
+    return original_ICorJitInfo->compareTypesForEquality(cls1, cls2, exact);
 }
 
 CORINFO_CLASS_HANDLE interceptor_ICJI::mergeClasses(

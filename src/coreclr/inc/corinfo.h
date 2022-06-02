@@ -2544,7 +2544,8 @@ public:
     // equal, or the comparison needs to be resolved at runtime.
     virtual TypeCompareState compareTypesForEquality(
             CORINFO_CLASS_HANDLE        cls1,
-            CORINFO_CLASS_HANDLE        cls2
+            CORINFO_CLASS_HANDLE        cls2,
+            bool                        exact = true
             ) = 0;
 
     // Returns the intersection of cls1 and cls2.

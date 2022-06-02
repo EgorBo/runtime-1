@@ -64,6 +64,13 @@ struct DLDL
     DWORDLONG B;
 };
 
+struct Agnostic_CompareTypesForEquality
+{
+    DWORDLONG cls1;
+    DWORDLONG cls2;
+    DWORD     exact;
+};
+
 struct Agnostic_CanInline
 {
     DWORD result;

@@ -763,10 +763,10 @@ TypeCompareState MyICJI::compareTypesForCast(CORINFO_CLASS_HANDLE fromClass, COR
 
 // See if types represented by cls1 and cls2 compare equal, not
 // equal, or the comparison needs to be resolved at runtime.
-TypeCompareState MyICJI::compareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2)
+TypeCompareState MyICJI::compareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, bool exact)
 {
     jitInstance->mc->cr->AddCall("compareTypesForEquality");
-    return jitInstance->mc->repCompareTypesForEquality(cls1, cls2);
+    return jitInstance->mc->repCompareTypesForEquality(cls1, cls2, exact);
 }
 
 // returns the intersection of cls1 and cls2.

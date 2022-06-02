@@ -322,7 +322,8 @@ TypeCompareState compareTypesForCast(
 
 TypeCompareState compareTypesForEquality(
           CORINFO_CLASS_HANDLE cls1,
-          CORINFO_CLASS_HANDLE cls2) override;
+          CORINFO_CLASS_HANDLE cls2,
+          bool exact) override;
 
 CORINFO_CLASS_HANDLE mergeClasses(
           CORINFO_CLASS_HANDLE cls1,

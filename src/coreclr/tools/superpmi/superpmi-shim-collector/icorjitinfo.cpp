@@ -897,11 +897,11 @@ TypeCompareState interceptor_ICJI::compareTypesForCast(CORINFO_CLASS_HANDLE from
 
 // See if types represented by cls1 and cls2 compare equal, not
 // equal, or the comparison needs to be resolved at runtime.
-TypeCompareState interceptor_ICJI::compareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2)
+TypeCompareState interceptor_ICJI::compareTypesForEquality(CORINFO_CLASS_HANDLE cls1, CORINFO_CLASS_HANDLE cls2, bool exact)
 {
     mc->cr->AddCall("compareTypesForEquality");
-    TypeCompareState temp = original_ICorJitInfo->compareTypesForEquality(cls1, cls2);
-    mc->recCompareTypesForEquality(cls1, cls2, temp);
+    TypeCompareState temp = original_ICorJitInfo->compareTypesForEquality(cls1, cls2, exact);
+    mc->recCompareTypesForEquality(cls1, cls2, exact, temp);
     return temp;
 }
 
