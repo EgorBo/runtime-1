@@ -1554,15 +1554,16 @@ namespace System
                 DateTime utc = UtcNow;
                 long offset = TimeZoneInfo.GetDateTimeNowUtcOffsetFromUtc(utc, out bool isAmbiguousLocalDst).Ticks;
                 long tick = utc.Ticks + offset;
+                ulong now;
                 if ((ulong)tick <= MaxTicks)
                 {
-                    if (!isAmbiguousLocalDst)
-                    {
-                        return new DateTime((ulong)tick | KindLocal);
-                    }
-                    return new DateTime((ulong)tick | KindLocalAmbiguousDst);
+                    now = (ulong)tick | (isAmbiguousLocalDst ? KindLocalAmbiguousDst : KindLocal);
                 }
-                return new DateTime(tick < 0 ? KindLocal : MaxTicks | KindLocal);
+                else
+                {
+                    now = tick < 0 ? KindLocal : MaxTicks | KindLocal;
+                }
+                return new DateTime(now);
             }
         }
 
@@ -1591,7 +1592,24 @@ namespace System
         // Returns the year part of this DateTime. The returned value is an
         // integer between 1 and 9999.
         //
-        public int Year => GetDatePart(DatePartYear);
+        public int Year
+        {
+            get
+            {
+                uint n = (uint)(UTicks / TicksPerDay);
+                uint y400 = n / DaysPer400Years;
+                n -= y400 * DaysPer400Years;
+                uint y100 = n / DaysPer100Years;
+                if (y100 == 4)
+                    y100 = 3;
+                n -= y100 * DaysPer100Years;
+                uint y4 = n / DaysPer4Years;
+                uint y1 = (n - y4 * DaysPer4Years) / DaysPerYear;
+                if (y1 == 4)
+                    y1 = 3;
+                return (int)(y400 * 400 + y100 * 100 + y4 * 4 + y1 + 1);
+            }
+        }
 
         // Checks whether a given year is a leap year. This method returns true if
         // year is a leap year, or false if not.
