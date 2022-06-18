@@ -282,7 +282,9 @@ void TieredCompilationManager::AsyncPromoteToTier1(
     if (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_TieredPGO) != 0)
     {
         PTR_ReadyToRunInfo r2rInfo = pMethodDesc->GetModule()->GetReadyToRunInfo();
-        if (r2rInfo != nullptr && r2rInfo->GetMethodDescForEntryPoint(tier0NativeCodeVersion.GetNativeCode()) == pMethodDesc)
+        if (r2rInfo != nullptr && tier0NativeCodeVersion.IsDefaultVersion() &&
+            !pMethodDesc->RequestedAggressiveOptimization() &&
+            r2rInfo->GetMethodDescForEntryPoint(tier0NativeCodeVersion.GetNativeCode()) == pMethodDesc)
         {
             nextTier = NativeCodeVersion::OptimizationTier0;
         }
