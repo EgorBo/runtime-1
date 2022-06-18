@@ -265,7 +265,30 @@ void TieredCompilationManager::AsyncPromoteToTier1(
     MethodDesc *pMethodDesc = tier0NativeCodeVersion.GetMethodDesc();
     ILCodeVersion ilCodeVersion = tier0NativeCodeVersion.GetILCodeVersion();
     _ASSERTE(!ilCodeVersion.HasAnyOptimizedNativeCodeVersion(tier0NativeCodeVersion));
-    hr = ilCodeVersion.AddNativeCodeVersion(pMethodDesc, NativeCodeVersion::OptimizationTier1, &t1NativeCodeVersion);
+
+    NativeCodeVersion::OptimizationTier nextTier = NativeCodeVersion::OptimizationTier1;
+
+    // If we re-jit from R2R and TieredPGO is enabled we compile to tier0 in order to instrument it
+    // Do we need to do it for R2R'd methods with Static PGO data?
+    //  Pros of doing so:
+    //   * Static PGO can be stale
+    //   * Static PGO can be the one we collect for BCL and is not 100% accurate for user
+    //   * Static PGO only works good in Composite R2R mode with cross-assembly types
+    //  Cons:
+    //   * Dynamic PGO doesn't yet support callsite-specific instrumentation so might bake a profile
+    //     which won't be relevant for all other callsites
+    //   * Tier0 overhead
+    //
+    if (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_TieredPGO) != 0)
+    {
+        PTR_ReadyToRunInfo r2rInfo = pMethodDesc->GetModule()->GetReadyToRunInfo();
+        if (r2rInfo != nullptr && r2rInfo->GetMethodDescForEntryPoint(tier0NativeCodeVersion.GetNativeCode()) == pMethodDesc)
+        {
+            nextTier = NativeCodeVersion::OptimizationTier0;
+        }
+    }
+
+    hr = ilCodeVersion.AddNativeCodeVersion(pMethodDesc, nextTier, &t1NativeCodeVersion);
     if (FAILED(hr))
     {
         ThrowHR(hr);
