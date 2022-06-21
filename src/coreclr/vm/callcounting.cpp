@@ -569,12 +569,39 @@ bool CallCountingManager::SetCodeEntryPoint(
     _ASSERTE(!wasMethodCalled || createTieringBackgroundWorkerRef != nullptr);
     _ASSERTE(createTieringBackgroundWorkerRef == nullptr || !*createTieringBackgroundWorkerRef);
 
+    if (methodDesc->HasPrecode() &&
+        activeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier::OptimizationTier0Instrumented)
+    {
+        //CallCountingManager* callCountingManager = methodDesc->GetLoaderAllocator()->GetCallCountingManager();
+        //CallCountingInfoByCodeVersionHash& callCountingInfoByCodeVersionHash =
+        //    callCountingManager->m_callCountingInfoByCodeVersionHash;
+
+        //CallCount callCountThreshold = g_pConfig->TieredCompilation_CallCountThreshold();
+        //_ASSERTE(callCountThreshold != 0);
+
+        //NewHolder<CallCountingInfo> callCountingInfoHolder = new CallCountingInfo(activeCodeVersion, callCountThreshold / 2);
+        //callCountingInfoByCodeVersionHash.Add(callCountingInfoHolder);
+        //auto callCountingInfo = callCountingInfoHolder.Extract();
+
+        //auto callCountingStub = callCountingManager->m_callCountingStubAllocator.AllocateStub(
+        //    callCountingInfo->GetRemainingCallCountCell(), codeEntryPoint);
+
+        //callCountingInfo->SetCallCountingStub(callCountingStub);
+
+        //// Now we need to update method's precode to point to our new callcounting stub
+        //Precode* precode = methodDesc->GetPrecode();
+        //_ASSERT(precode != nullptr);
+        //precode->SetTargetInterlocked(callCountingStub->GetEntryPoint(), false);
+        //callCountingInfo->SetStage(CallCountingInfo::Stage::StubMayBeActive);
+        //return true;
+    }
+
     if (!methodDesc->IsEligibleForTieredCompilation() ||
         (
             // For a default code version that is not tier 0, call counting will have been disabled by this time (checked
             // below). Avoid the redundant and not-insignificant expense of GetOptimizationTier() on a default code version.
             !activeCodeVersion.IsDefaultVersion() &&
-            activeCodeVersion.GetOptimizationTier() != NativeCodeVersion::OptimizationTier0
+            !activeCodeVersion.IsUnoptimizedTier()
         ) ||
         !g_pConfig->TieredCompilation_CallCounting())
     {
@@ -602,7 +629,7 @@ bool CallCountingManager::SetCodeEntryPoint(
                 return true;
             }
 
-            _ASSERTE(activeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0);
+            _ASSERTE(activeCodeVersion.IsUnoptimizedTier());
 
             // If the tiering delay is active, postpone further work
             if (GetAppDomain()
@@ -649,7 +676,7 @@ bool CallCountingManager::SetCodeEntryPoint(
         }
         else
         {
-            _ASSERTE(activeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0);
+            _ASSERTE(activeCodeVersion.IsUnoptimizedTier());
 
             // If the tiering delay is active, postpone further work
             if (GetAppDomain()
@@ -780,7 +807,7 @@ PCODE CallCountingManager::OnCallCountThresholdReached(TransitionBlock *transiti
     // used going forward under appropriate locking to synchronize further with deletion.
     GCX_PREEMP_THREAD_EXISTS(CURRENT_THREAD);
 
-    _ASSERTE(codeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0);
+    _ASSERTE(codeVersion.IsUnoptimizedTier());
 
     codeEntryPoint = codeVersion.GetNativeCode();
     do

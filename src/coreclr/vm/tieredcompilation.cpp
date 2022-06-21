@@ -251,7 +251,7 @@ void TieredCompilationManager::AsyncPromoteToTier1(
 
     _ASSERTE(CodeVersionManager::IsLockOwnedByCurrentThread());
     _ASSERTE(!tier0NativeCodeVersion.IsNull());
-    _ASSERTE(tier0NativeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0);
+    _ASSERTE(tier0NativeCodeVersion.IsUnoptimizedTier());
     _ASSERTE(createTieringBackgroundWorkerRef != nullptr);
 
     NativeCodeVersion t1NativeCodeVersion;
@@ -263,9 +263,19 @@ void TieredCompilationManager::AsyncPromoteToTier1(
     // occur between now and when jitting completes. If the IL does change in that
     // interval the new code entry won't be activated.
     MethodDesc *pMethodDesc = tier0NativeCodeVersion.GetMethodDesc();
+
+    NativeCodeVersion::OptimizationTier nextTier = NativeCodeVersion::OptimizationTier1;
+
+    if (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_TieredPGO) != 0 &&
+        tier0NativeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0)
+    {
+        _ASSERT(!pMethodDesc->RequestedAggressiveOptimization());
+        nextTier = NativeCodeVersion::OptimizationTier0Instrumented;
+    }
+
     ILCodeVersion ilCodeVersion = tier0NativeCodeVersion.GetILCodeVersion();
     _ASSERTE(!ilCodeVersion.HasAnyOptimizedNativeCodeVersion(tier0NativeCodeVersion));
-    hr = ilCodeVersion.AddNativeCodeVersion(pMethodDesc, NativeCodeVersion::OptimizationTier1, &t1NativeCodeVersion);
+    hr = ilCodeVersion.AddNativeCodeVersion(pMethodDesc, nextTier, &t1NativeCodeVersion);
     if (FAILED(hr))
     {
         ThrowHR(hr);
@@ -993,7 +1003,7 @@ CORJIT_FLAGS TieredCompilationManager::GetJitFlags(PrepareCodeConfig *config)
     _ASSERTE(config != nullptr);
     _ASSERTE(
         !config->WasTieringDisabledBeforeJitting() ||
-        config->GetCodeVersion().GetOptimizationTier() != NativeCodeVersion::OptimizationTier0);
+        !config->GetCodeVersion().IsUnoptimizedTier());
 
     CORJIT_FLAGS flags;
 
@@ -1041,6 +1051,10 @@ CORJIT_FLAGS TieredCompilationManager::GetJitFlags(PrepareCodeConfig *config)
 
     switch (nativeCodeVersion.GetOptimizationTier())
     {
+        case NativeCodeVersion::OptimizationTier0Instrumented:
+            flags.Set(CORJIT_FLAGS::CORJIT_FLAG_BBINSTR);
+            FALLTHROUGH;
+
         case NativeCodeVersion::OptimizationTier0:
             if (g_pConfig->TieredCompilation_QuickJit())
             {
