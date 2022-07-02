@@ -24,6 +24,8 @@ namespace ILCompiler
         private readonly bool _partialNGen;
         private readonly ReadyToRunCompilationModuleGroupBase _compilationGroup;
         private readonly CallChainProfile _callChainProfile;
+        private readonly Logger _logger;
+        private readonly MibcConfig _config;
 
         public ProfileDataManager(Logger logger,
                                   IEnumerable<ModuleDesc> possibleReferenceModules,
@@ -39,10 +41,12 @@ namespace ILCompiler
                                   bool embedPgoDataInR2RImage,
                                   Func<MethodDesc, bool> canBeIncludedInCurrentCompilation)
         {
+
             EmbedPgoDataInR2RImage = embedPgoDataInR2RImage;
             _ibcParser = new IBCProfileParser(logger, possibleReferenceModules);
             _compilationGroup = compilationGroup;
             _callChainProfile = callChainProfile;
+            _logger = logger;
             HashSet<ModuleDesc> versionBubble = new HashSet<ModuleDesc>(versionBubbleModules);
 
             {
@@ -118,6 +122,10 @@ namespace ILCompiler
                     }
                 }
             }
+
+            // Merge configs from multiple sources (if user provided multiple mibcs)
+            _config = MIbcProfileParser.MergeMibcConfigs(
+                _inputData.Select(i => i.Config), msg => _logger?.LogMessage(msg));
         }
 
         /// <summary>
@@ -141,6 +149,8 @@ namespace ILCompiler
 
             return Array.Empty<MethodDesc>();
         }
+
+        public MibcConfig MibcConfig => _config;
 
         public bool IsMethodInProfileData(MethodDesc method)
         {

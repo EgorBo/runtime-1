@@ -31,6 +31,7 @@ namespace Microsoft.Diagnostics.Tools.Pgo
         public bool GenerateCallGraph;
         public bool Spgo;
         public bool IncludeFullGraphs;
+        public bool GenericProfile;
         public int SpgoMinSamples = 50;
         public bool VerboseWarnings;
         public JitTraceOptions JitTraceOptions;
@@ -213,8 +214,8 @@ namespace Microsoft.Diagnostics.Tools.Pgo
 
                 syntax.DefineOption(name: "spgo", value: ref Spgo, help: "Base profile on samples in the input. Uses last branch records if available and otherwise raw IP samples.", requireValue: false);
                 syntax.DefineOption(name: "spgo-min-samples", value: ref SpgoMinSamples, help: $"The minimum number of total samples a function must have before generating profile data for it with SPGO. Default: {SpgoMinSamples}", requireValue: false);
-
                 syntax.DefineOption(name: "include-full-graphs", value: ref IncludeFullGraphs, help: "Include all blocks and edges in the written .mibc file, regardless of profile counts", requireValue: false);
+                syntax.DefineOption(name: "generic-profile", value: ref GenericProfile, help: "A mark that the current profile is not app/scenario specific.", requireValue: false);
 
                 HelpOption();
             }

@@ -253,6 +253,49 @@ namespace ILCompiler.IBC
             return new IBCProfileData(ParseMibcConfig(tsc, peReader), false, loadedMethodProfileData);
         }
 
+        internal static MibcConfig MergeMibcConfigs(IEnumerable<MibcConfig> configs, Action<string> logger = null)
+        {
+            MibcConfig firstCfg = null;
+            foreach (MibcConfig config in configs)
+            {
+                if (config == null)
+                {
+                    continue;
+                }
+
+                if (firstCfg == null)
+                {
+                    firstCfg = config;
+                }
+                else
+                {
+                    if (firstCfg.Runtime != config.Runtime)
+                    {
+                        logger?.Invoke(
+                            $"Warning: Attempting to merge MIBCs collected on different runtimes: {firstCfg.Runtime} != {config.Runtime}");
+                    }
+                    if (firstCfg.FormatVersion != config.FormatVersion)
+                    {
+                        logger?.Invoke(
+                            $"Warning: Attempting to merge MIBCs with different format versions: {firstCfg.FormatVersion} != {config.FormatVersion}");
+                    }
+                    if (firstCfg.Os != config.Os ||
+                        firstCfg.Arch != config.Arch)
+                    {
+                        logger?.Invoke(
+                            $"Warning: Attempting to merge MIBCs collected on different RIDs: {firstCfg.Os}-{firstCfg.Arch} != {config.Os}-{config.Arch}");
+                    }
+
+                    // If at least one MIBC is not generic we treat the whole thing as non-generic
+                    if (!config.IsGenericProfile)
+                    {
+                        firstCfg.IsGenericProfile = false;
+                    }
+                }
+            }
+            return firstCfg;
+        }
+
         public static MibcConfig ParseMibcConfig(TypeSystemContext tsc, PEReader pEReader)
         {
             EcmaModule mibcModule = EcmaModule.Create(tsc, pEReader, null);

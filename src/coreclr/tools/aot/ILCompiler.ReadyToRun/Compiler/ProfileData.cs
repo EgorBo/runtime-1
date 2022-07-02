@@ -132,7 +132,7 @@ namespace ILCompiler
         {
         }
 
-        public override MibcConfig Config { get; } = new ();
+        public override MibcConfig Config { get; }
 
         public override bool PartialNGen => false;
 

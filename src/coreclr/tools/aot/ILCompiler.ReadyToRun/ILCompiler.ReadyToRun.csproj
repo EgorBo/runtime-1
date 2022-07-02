@@ -7,6 +7,7 @@
     <DefineConstants>READYTORUN;$(DefineConstants)</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <Platforms>x64;x86;arm;arm64</Platforms>
+    <Optimize>false</Optimize>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 

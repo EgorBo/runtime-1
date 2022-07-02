@@ -354,39 +354,6 @@ namespace Microsoft.Diagnostics.Tools.Pgo
             return 0;
         }
 
-        static MibcConfig ParseMibcConfigsAndMerge(TypeSystemContext tsc, params PEReader[] pEReader)
-        {
-            MibcConfig firstCfg = null;
-            foreach (PEReader peReader in pEReader)
-            {
-                MibcConfig config = MIbcProfileParser.ParseMibcConfig(tsc, peReader);
-                if (firstCfg == null)
-                {
-                    firstCfg = config;
-                }
-                else
-                {
-                    if (firstCfg.Runtime != config.Runtime)
-                    {
-                        PrintMessage(
-                            $"Warning: Attempting to merge MIBCs collected on different runtimes: {firstCfg.Runtime} != {config.Runtime}");
-                    }
-                    if (firstCfg.FormatVersion != config.FormatVersion)
-                    {
-                        PrintMessage(
-                            $"Warning: Attempting to merge MIBCs with different format versions: {firstCfg.FormatVersion} != {config.FormatVersion}");
-                    }
-                    if (firstCfg.Os != config.Os ||
-                        firstCfg.Arch != config.Arch)
-                    {
-                        PrintMessage(
-                            $"Warning: Attempting to merge MIBCs collected on different RIDs: {firstCfg.Os}-{firstCfg.Arch} != {config.Os}-{config.Arch}");
-                    }
-                }
-            }
-            return firstCfg;
-        }
-
         static int InnerMergeMain(CommandLineOptions commandLineOptions)
         {
             if (commandLineOptions.InputFilesToMerge.Count == 0)
@@ -431,7 +398,9 @@ namespace Microsoft.Diagnostics.Tools.Pgo
                     ProfileData.MergeProfileData(ref partialNgen, mergedProfileData, MIbcProfileParser.ParseMIbcFile(tsc, peReader, assemblyNamesInBubble, onlyDefinedInAssembly: null));
                 }
 
-                MibcConfig mergedConfig = ParseMibcConfigsAndMerge(tsc, mibcReaders);
+                MibcConfig mergedConfig = MIbcProfileParser.MergeMibcConfigs(
+                    mibcReaders.Select(r => MIbcProfileParser.ParseMibcConfig(tsc, r)), msg => s_logger.PrintWarning(msg));
+
                 int result = MibcEmitter.GenerateMibcFile(mergedConfig, tsc, commandLineOptions.OutputFileName, mergedProfileData.Values, commandLineOptions.ValidateOutputFile, commandLineOptions.Uncompressed);
                 if (result == 0 && commandLineOptions.InheritTimestamp)
                 {
@@ -1775,6 +1744,8 @@ namespace Microsoft.Diagnostics.Tools.Pgo
                     // Look for Sku, e.g. "CoreClr"
                     TraceEvent runtimeStart = p.EventsInProcess.Filter(t => t.EventName == "Runtime/Start").FirstOrDefault();
                     config.Runtime = runtimeStart?.PayloadByName("Sku")?.ToString();
+
+                    config.IsGenericProfile = commandLineOptions.GenericProfile;
 
                     ILCompiler.MethodProfileData[] methodProfileData = new ILCompiler.MethodProfileData[methodsUsedInProcess.Count];
                     for (int i = 0; i < methodProfileData.Length; i++)

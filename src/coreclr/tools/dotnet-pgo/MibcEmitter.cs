@@ -234,7 +234,7 @@ namespace Microsoft.Diagnostics.Tools.Pgo
             {
                 Debug.Assert(!mibcCfgField.IsStatic && mibcCfgField.FieldType == typeof(string));
                 il.LoadString(emitter.GetUserStringHandle(mibcCfgField.Name));
-                il.LoadString(emitter.GetUserStringHandle((string)mibcCfgField.GetValue(config) ?? ""));
+                il.LoadString(emitter.GetUserStringHandle((mibcCfgField.GetValue(config) ?? "").ToString()));
                 il.OpCode(ILOpCode.Pop);
                 il.OpCode(ILOpCode.Pop);
             }

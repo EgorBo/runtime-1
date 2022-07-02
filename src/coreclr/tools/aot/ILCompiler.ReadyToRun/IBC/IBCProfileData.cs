@@ -14,15 +14,21 @@ namespace ILCompiler.IBC
         public string Os;
         public string Arch;
         public string Runtime;
+        public bool IsGenericProfile;
+
+        public MibcConfig()
+        {
+        }
 
         public override string ToString()
         {
             return
                 $"""
-                FormatVersion: {FormatVersion}
-                Runtime:       {Runtime}
-                Os:            {Os}
-                Arch:          {Arch}
+                FormatVersion:    {FormatVersion}
+                Runtime:          {Runtime}
+                Os:               {Os}
+                Arch:             {Arch}
+                IsGenericProfile: {IsGenericProfile}
 
                 """;
         }
@@ -38,6 +44,7 @@ namespace ILCompiler.IBC
                     case nameof(Os): config.Os = kvPair.Value; break;
                     case nameof(Arch): config.Arch = kvPair.Value; break;
                     case nameof(Runtime): config.Runtime = kvPair.Value; break;
+                    case nameof(IsGenericProfile): config.IsGenericProfile = bool.Parse(kvPair.Value); break;
                 }
             }
             return config;

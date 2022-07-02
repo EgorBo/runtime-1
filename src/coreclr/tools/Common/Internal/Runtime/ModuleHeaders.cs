@@ -68,6 +68,7 @@ namespace Internal.Runtime
         PgoInstrumentationData = 117, // Added in 5.2
         ManifestAssemblyMvids = 118, // Added in 5.3
         CrossModuleInlineInfo = 119, // Added in 6.3
+        PgoConfig = 120, // Added in 6.4
 
         //
         // NativeAOT ReadyToRun sections
