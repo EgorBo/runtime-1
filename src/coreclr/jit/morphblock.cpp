@@ -712,6 +712,12 @@ void MorphCopyBlockHelper::MorphStructCases()
         requiresCopyBlock = true;
     }
 
+    if (m_dstDoFldAsg && (m_dstVarDsc != nullptr) && (m_srcVarDsc != nullptr) &&
+        m_dstVarDsc->lvIsStructField != m_srcVarDsc->lvIsStructField)
+    {
+        requiresCopyBlock = true;
+    }
+
     // Can we use field by field assignment for the dest?
     if (m_dstDoFldAsg && m_dstVarDsc->lvCustomLayout && m_dstVarDsc->lvContainsHoles)
     {
