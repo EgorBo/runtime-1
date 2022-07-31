@@ -4257,7 +4257,8 @@ OBJECTREF MethodTable::GetManagedClassObject()
             size_t objSize = g_pRuntimeTypeClass->GetBaseSize();
             refClass = ObjectToOBJECTREF(foh->AllocateObject(g_pRuntimeTypeClass, objSize));
         }
-        else
+
+        if (refClass == NULL)
         {
             refClass = (REFLECTCLASSBASEREF)AllocateObject(g_pRuntimeTypeClass);
         }
