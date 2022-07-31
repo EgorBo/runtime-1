@@ -29,6 +29,7 @@
 #include "dbginterface.h"
 #include "comdelegate.h"
 #include "eventtrace.h"
+#include "frozenobjectheap.h"
 
 
 #include "eeprofinterfaces.h"
@@ -4247,9 +4248,19 @@ OBJECTREF MethodTable::GetManagedClassObject()
 
         REFLECTCLASSBASEREF  refClass = NULL;
         GCPROTECT_BEGIN(refClass);
-        refClass = (REFLECTCLASSBASEREF) AllocateObject(g_pRuntimeTypeClass);
 
-        LoaderAllocator *pLoaderAllocator = GetLoaderAllocator();
+        LoaderAllocator* pLoaderAllocator = GetLoaderAllocator();
+        if (!pLoaderAllocator->CanUnload())
+        {
+            // Allocate RuntimeType on a frozen segment
+            FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
+            size_t objSize = g_pRuntimeTypeClass->GetBaseSize();
+            refClass = ObjectToOBJECTREF(foh->AllocateObject(g_pRuntimeTypeClass, objSize));
+        }
+        else
+        {
+            refClass = (REFLECTCLASSBASEREF)AllocateObject(g_pRuntimeTypeClass);
+        }
 
         ((ReflectClassBaseObject*)OBJECTREFToObject(refClass))->SetType(TypeHandle(this));
         ((ReflectClassBaseObject*)OBJECTREFToObject(refClass))->SetKeepAlive(pLoaderAllocator->GetExposedObject());
