@@ -5957,7 +5957,7 @@ void* CEEInfo::getRuntimeTypePointer(CORINFO_CLASS_HANDLE clsHnd)
     GCX_COOP();
 
     TypeHandle typeHnd(clsHnd);
-    if (!typeHnd.IsNull() && typeHnd.IsTypeDesc() && typeHnd.IsFullyLoaded())
+    if (!typeHnd.IsNull() && !typeHnd.IsTypeDesc() && typeHnd.IsFullyLoaded())
     {
         MethodTable* pMT = typeHnd.AsMethodTable();
         if (!typeHnd.IsCanonicalSubtype())
