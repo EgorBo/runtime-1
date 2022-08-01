@@ -2308,6 +2308,12 @@ namespace Internal.JitInterface
             return type.IsNullable ? CorInfoHelpFunc.CORINFO_HELP_UNBOX_NULLABLE : CorInfoHelpFunc.CORINFO_HELP_UNBOX;
         }
 
+        
+        private void* getRuntimeTypePointer(CORINFO_CLASS_STRUCT_* cls)
+        {
+            return (void*)IntPtr.Zero;
+        }
+
         private byte* getHelperName(CorInfoHelpFunc helpFunc)
         {
             return (byte*)GetPin(StringToUTF8(helpFunc.ToString()));

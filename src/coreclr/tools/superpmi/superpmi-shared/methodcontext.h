@@ -309,6 +309,10 @@ public:
     void dmpGetUnBoxHelper(DWORDLONG key, DWORD value);
     CorInfoHelpFunc repGetUnBoxHelper(CORINFO_CLASS_HANDLE cls);
 
+    void recGetRuntimeTypePointer(CORINFO_CLASS_HANDLE cls, void* result);
+    void dmpGetRuntimeTypePointer(DWORDLONG key, DWORDLONG value);
+    void* repGetRuntimeTypePointer(CORINFO_CLASS_HANDLE cls);
+
     void recGetReadyToRunHelper(CORINFO_RESOLVED_TOKEN* pResolvedToken,
                                 CORINFO_LOOKUP_KIND*    pGenericLookupKind,
                                 CorInfoHelpFunc         id,
@@ -1118,6 +1122,7 @@ enum mcPackets
     Packet_IsIntrinsic = 192,
     Packet_UpdateEntryPointForTailCall = 193,
     Packet_GetLoongArch64PassStructInRegisterFlags = 194,
+    Packet_GetRuntimeTypePointer = 195,
 };
 
 void SetDebugDumpVariables();

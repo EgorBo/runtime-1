@@ -4255,7 +4255,7 @@ OBJECTREF MethodTable::GetManagedClassObject()
             // Allocate RuntimeType on a frozen segment
             FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
             size_t objSize = g_pRuntimeTypeClass->GetBaseSize();
-            refClass = ObjectToOBJECTREF(foh->AllocateObject(g_pRuntimeTypeClass, objSize));
+            refClass = (REFLECTCLASSBASEREF)ObjectToOBJECTREF(foh->AllocateObject(g_pRuntimeTypeClass, objSize));
         }
 
         if (refClass == NULL)
