@@ -1847,25 +1847,10 @@ namespace System
 
             ref char source = ref Unsafe.Add(ref _firstChar, (nint)(uint)startIndex /* force zero-extension */);
 
-            // jump-table over length
-            switch (length)
+            if (length == 1 && char.IsAsciiDigit(source))
             {
-                case 1:
-                    if (source == '0')
-                        return "0";
-                    if (source == '1')
-                        return "1";
-                    break;
-
-                case 4:
-                    if (new Span<char>(ref source, 4).SequenceEqual("true"))
-                        return "true";
-                    break;
-
-                case 5:
-                    if (new Span<char>(ref source, 5).SequenceEqual("false"))
-                        return "false";
-                    break;
+                // for '0'..'9' this is going to return cached strings
+                return Number.UInt32ToDecStr(source);
             }
 
             string result = FastAllocateString(length);
