@@ -1845,12 +1845,35 @@ namespace System
             Debug.Assert(startIndex >= 0 && startIndex <= this.Length, "StartIndex is out of range!");
             Debug.Assert(length >= 0 && startIndex <= this.Length - length, "length is out of range!");
 
+            ref char source = ref Unsafe.Add(ref _firstChar, (nint)(uint)startIndex /* force zero-extension */);
+
+            // jump-table over length
+            switch (length)
+            {
+                case 1:
+                    if (source == '0')
+                        return "0";
+                    if (source == '1')
+                        return "1";
+                    break;
+
+                case 4:
+                    if (new Span<char>(ref source, 4).SequenceEqual("true"))
+                        return "true";
+                    break;
+
+                case 5:
+                    if (new Span<char>(ref source, 5).SequenceEqual("false"))
+                        return "false";
+                    break;
+            }
+
             string result = FastAllocateString(length);
 
             Buffer.Memmove(
                 elementCount: (uint)result.Length, // derefing Length now allows JIT to prove 'result' not null below
                 destination: ref result._firstChar,
-                source: ref Unsafe.Add(ref _firstChar, (nint)(uint)startIndex /* force zero-extension */));
+                source: ref source);
 
             return result;
         }
