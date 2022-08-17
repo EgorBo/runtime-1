@@ -22222,6 +22222,12 @@ bool Compiler::impConsiderCallProbe(GenTreeCall* call, IL_OFFSET ilOffset)
         return false;
     }
 
+    // Don't probe calls inside OSR, we, likely, already collected data that we need in Tier0
+    if (opts.IsOSR() && opts.OptimizationEnabled())
+    {
+        return false;
+    }
+
     assert(opts.OptimizationDisabled() || opts.IsOSR());
     assert(!compIsForInlining());
 
