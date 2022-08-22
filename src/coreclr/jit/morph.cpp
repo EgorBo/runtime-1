@@ -5311,6 +5311,15 @@ GenTree* Compiler::fgMorphField(GenTree* tree, MorphAddrContext* mac)
         tree->SetOper(GT_IND);
         tree->AsOp()->gtOp1 = addr;
 
+        if (objRefType == TYP_BYREF)
+        {
+            CORINFO_CLASS_HANDLE cls = info.compCompHnd->getFieldClass(symHnd);
+            if ((cls != NO_CLASS_HANDLE) && (info.compCompHnd->getClassAttribs(cls) & CORINFO_FLG_BYREF_LIKE))
+            {
+                tree->gtFlags |= GTF_IND_TGT_NOT_HEAP;
+            }
+        }
+
         if (addExplicitNullCheck)
         {
             //
