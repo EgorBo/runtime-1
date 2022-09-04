@@ -868,7 +868,7 @@ OBJECTREF AppDomain::GetMissingObject()
 #ifndef DACCESS_COMPILE
 
 
-STRINGREF *BaseDomain::IsStringInterned(STRINGREF *pString)
+STRINGREF_HOLDER BaseDomain::IsStringInterned(STRINGREF *pString)
 {
     CONTRACTL
     {
@@ -883,7 +883,7 @@ STRINGREF *BaseDomain::IsStringInterned(STRINGREF *pString)
     return GetLoaderAllocator()->IsStringInterned(pString);
 }
 
-STRINGREF *BaseDomain::GetOrInternString(STRINGREF *pString)
+STRINGREF_HOLDER BaseDomain::GetOrInternString(STRINGREF *pString)
 {
     CONTRACTL
     {

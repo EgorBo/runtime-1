@@ -147,10 +147,15 @@ FCIMPL1(Object*, AppDomainNative::GetOrInternString, StringObject* pStringUNSAFE
     if (pString == NULL)
         COMPlusThrow(kArgumentNullException, W("ArgumentNull_String"));
 
-    STRINGREF* stringVal = GetAppDomain()->GetOrInternString(&pString);
-    if (stringVal != NULL)
+    STRINGREF_HOLDER stringVal = GetAppDomain()->GetOrInternString(&pString);
+
+    if (!stringVal.IsIndirect)
     {
-        refRetVal = *stringVal;
+        refRetVal = stringVal.StringRef;
+    }
+    else if (stringVal.pStringRef != NULL)
+    {
+        refRetVal = *stringVal.pStringRef;
     }
 
     HELPER_METHOD_FRAME_END();

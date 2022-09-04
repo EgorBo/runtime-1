@@ -42,10 +42,10 @@ public:
     }
 
     // Method to retrieve a string from the map.
-    STRINGREF *GetStringLiteral(EEStringData *pStringData, BOOL bAddIfNotFound, BOOL bIsCollectible, void** ppPinnedString = nullptr);
+    STRINGREF_HOLDER GetStringLiteral(EEStringData *pStringData, BOOL bAddIfNotFound, BOOL bIsCollectible, void** ppPinnedString = nullptr);
 
     // Method to explicitly intern a string object.
-    STRINGREF *GetInternedString(STRINGREF *pString, BOOL bAddIfNotFound, BOOL bIsCollectible);
+    STRINGREF_HOLDER GetInternedString(STRINGREF *pString, BOOL bAddIfNotFound, BOOL bIsCollectible);
 
 private:
     // Hash tables that maps a Unicode string to a COM+ string handle.
@@ -123,23 +123,30 @@ class StringLiteralEntryArray;
 // Ref counted entry representing a string literal.
 class StringLiteralEntry
 {
+private:
     #define SLE_IS_FROZEN      (1u << 31)
     #define SLE_IS_OVERFLOWED  (1u << 30)
     #define SLE_REFCOUNT_MASK  (SLE_IS_FROZEN | SLE_IS_OVERFLOWED)
 
-private:
-    StringLiteralEntry(EEStringData *pStringData, STRINGREF *pStringObj, bool isFrozen)
-    : m_pStringObj(pStringObj), m_dwRefCount(1)
+    StringLiteralEntry(EEStringData *pStringData, STRINGREF pFrozenStringObj)
+    : m_pFrozenStringObj(pFrozenStringObj), m_dwRefCount(1)
 #ifdef _DEBUG
       , m_bDeleted(FALSE)
 #endif
     {
-        if (isFrozen)
-        {
-            SetStringFrozen();
-        }
+        SetStringFrozen();
         LIMITED_METHOD_CONTRACT;
     }
+
+    StringLiteralEntry(EEStringData* pStringData, STRINGREF* pStringObj)
+        : m_pStringObj(pStringObj), m_dwRefCount(1)
+#ifdef _DEBUG
+        , m_bDeleted(FALSE)
+#endif
+    {
+        LIMITED_METHOD_CONTRACT;
+    }
+
 protected:
     ~StringLiteralEntry()
     {
@@ -243,16 +250,30 @@ public:
         return VolatileLoad(&m_dwRefCount) & ~SLE_REFCOUNT_MASK;
     }
 
-    STRINGREF* GetStringObject()
+    STRINGREF_HOLDER GetStringObject()
     {
         CONTRACTL
         {
             NOTHROW;
             if(GetThreadNULLOk()){GC_NOTRIGGER;}else{DISABLED(GC_TRIGGERS);};
             PRECONDITION(CheckPointer(this));
+            PRECONDITION(!IsStringFrozen());
         }
         CONTRACTL_END;
-        return m_pStringObj;
+        return IsStringFrozen() ? STRINGREF_HOLDER(m_pFrozenStringObj) : STRINGREF_HOLDER(m_pStringObj);
+    }
+
+    STRINGREF GetFrozenStringObject()
+    {
+        CONTRACTL
+        {
+            NOTHROW;
+            if(GetThreadNULLOk()){GC_NOTRIGGER;}else{DISABLED(GC_TRIGGERS);};
+            PRECONDITION(CheckPointer(this));
+            PRECONDITION(IsStringFrozen());
+        }
+        CONTRACTL_END;
+        return m_pFrozenStringObj;
     }
 
     void GetStringData(EEStringData *pStringData)
@@ -270,12 +291,18 @@ public:
         WCHAR *thisChars;
         int thisLength;
 
-        ObjectToSTRINGREF(*(StringObject**)m_pStringObj)->RefInterpretGetStringValuesDangerousForGC(&thisChars, &thisLength);
+        STRINGREF strRef = IsStringFrozen() ? GetFrozenStringObject() : ObjectToSTRINGREF(*(StringObject**)m_pStringObj);
+        strRef->RefInterpretGetStringValuesDangerousForGC(&thisChars, &thisLength);
         pStringData->SetCharCount (thisLength); // thisLength is in WCHARs and that's what EEStringData's char count wants
         pStringData->SetStringBuffer (thisChars);
     }
 
-    static StringLiteralEntry *AllocateEntry(EEStringData *pStringData, STRINGREF *pStringObj, bool isFrozen);
+private:
+    static void* AllocateEntryInternal();
+
+public:
+    static StringLiteralEntry *AllocateEntry(EEStringData *pStringData, STRINGREF* pStringObj);
+    static StringLiteralEntry* AllocateFrozenEntry(EEStringData* pStringData, STRINGREF pFrozenStringObj);
     static void DeleteEntry (StringLiteralEntry *pEntry);
 
     bool IsStringFrozen()
@@ -299,7 +326,11 @@ public:
     }
 
 private:
-    STRINGREF*                  m_pStringObj;
+    union
+    {
+        STRINGREF* m_pStringObj;
+        STRINGREF  m_pFrozenStringObj;
+    };
     union
     {
         DWORD                   m_dwRefCount;

@@ -138,7 +138,7 @@ public:
     void * GetRecordCodePointer()  { LIMITED_METHOD_CONTRACT; return m_recordCodePointer; }
 
     STRINGREF GetStringLiteral(mdToken metaTok);
-    STRINGREF * GetOrInternString(STRINGREF *pString);
+    STRINGREF_HOLDER GetOrInternString(STRINGREF *pString);
     void AddToUsedIndCellList(BYTE * indcell);
 #ifdef FEATURE_PGO
     PgoManager* volatile* GetDynamicPgoManagerPointer() { return &m_pgoManager; }

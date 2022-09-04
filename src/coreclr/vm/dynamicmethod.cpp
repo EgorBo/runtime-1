@@ -1209,7 +1209,9 @@ LCGMethodResolver::ConstructStringLiteral(mdToken metaTok)
         // Instead of storing the string literal in the appdomain specific string literal map,
         // we store it in the dynamic method specific string liternal list
         // This way we can release it when the dynamic method is collected.
-        string = (OBJECTHANDLE)GetOrInternString(&strRef);
+        STRINGREF_HOLDER holder = GetOrInternString(&strRef);
+        _ASSERT(holder.IsIndirect); // we don't support direct references in dynamic context
+        string = (OBJECTHANDLE)holder.pStringRef;
     }
 
     GCPROTECT_END();

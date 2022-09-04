@@ -1740,7 +1740,7 @@ void AssemblyLoaderAllocator::RegisterBinder(CustomAssemblyBinder* binderToRelea
     m_binderToRelease = binderToRelease;
 }
 
-STRINGREF *LoaderAllocator::GetStringObjRefPtrFromUnicodeString(EEStringData *pStringData, void** ppPinnedString)
+STRINGREF_HOLDER LoaderAllocator::GetStringObjRefPtrFromUnicodeString(EEStringData *pStringData, void** ppPinnedString)
 {
     CONTRACTL
     {
@@ -1798,7 +1798,7 @@ void LoaderAllocator::CleanupStringLiteralMap()
     }
 }
 
-STRINGREF *LoaderAllocator::IsStringInterned(STRINGREF *pString)
+STRINGREF_HOLDER LoaderAllocator::IsStringInterned(STRINGREF *pString)
 {
     CONTRACTL
     {
@@ -1817,7 +1817,7 @@ STRINGREF *LoaderAllocator::IsStringInterned(STRINGREF *pString)
     return m_pStringLiteralMap->GetInternedString(pString, FALSE, CanUnload());
 }
 
-STRINGREF *LoaderAllocator::GetOrInternString(STRINGREF *pString)
+STRINGREF_HOLDER LoaderAllocator::GetOrInternString(STRINGREF *pString)
 {
     CONTRACTL
     {

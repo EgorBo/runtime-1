@@ -978,8 +978,8 @@ public:
         return &m_NativeTypeLoadLock;
     }
 
-    STRINGREF *IsStringInterned(STRINGREF *pString);
-    STRINGREF *GetOrInternString(STRINGREF *pString);
+    STRINGREF_HOLDER IsStringInterned(STRINGREF *pString);
+    STRINGREF_HOLDER GetOrInternString(STRINGREF *pString);
 
     // Returns an array of OBJECTREF* that can be used to store domain specific data.
     // Statics and reflection info (Types, MemberInfo,..) are stored this way

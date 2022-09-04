@@ -2648,4 +2648,32 @@ typedef REF<ExceptionObject> EXCEPTIONREF;
 typedef PTR_ExceptionObject EXCEPTIONREF;
 #endif // USE_CHECKED_OBJECTREFS
 
+struct STRINGREF_HOLDER
+{
+    union
+	{
+		STRINGREF* pStringRef;
+        STRINGREF  StringRef;
+	};
+    bool IsIndirect;
+
+    STRINGREF_HOLDER() : pStringRef(nullptr), IsIndirect(false)
+    {
+    }
+
+    STRINGREF_HOLDER(STRINGREF* strRef) : IsIndirect(false)
+    {
+        pStringRef = strRef;
+    }
+
+    STRINGREF_HOLDER(STRINGREF strRef) : IsIndirect(true)
+    {
+        StringRef = strRef;
+    }
+
+    STRINGREF_HOLDER(const STRINGREF_HOLDER& holder) : pStringRef(holder.pStringRef), IsIndirect(holder.IsIndirect)
+    {
+    }
+};
+
 #endif // _OBJECT_H_
