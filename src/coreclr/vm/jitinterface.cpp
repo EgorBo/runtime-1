@@ -5999,7 +5999,8 @@ void* CEEInfo::getRuntimeTypePointer(CORINFO_CLASS_HANDLE clsHnd)
     GCX_COOP();
 
     TypeHandle typeHnd(clsHnd);
-    if (!typeHnd.IsNull() && !typeHnd.IsTypeDesc())
+    _ASSERT(!typeHnd.IsNull());
+    if (!typeHnd.IsTypeDesc())
     {
        MethodTable* pMT = typeHnd.AsMethodTable();
        if (!typeHnd.IsCanonicalSubtype())
@@ -6016,6 +6017,36 @@ void* CEEInfo::getRuntimeTypePointer(CORINFO_CLASS_HANDLE clsHnd)
            }
        }
     }
+    else 
+    {
+        OBJECTREF pinnedRef = NULL;
+        switch (typeHnd.AsTypeDesc()->GetInternalCorElementType())
+        {
+            case ELEMENT_TYPE_BYREF:
+            case ELEMENT_TYPE_PTR:
+            {
+                ParamTypeDesc* paramType = dac_cast<PTR_ParamTypeDesc>(typeHnd.AsTypeDesc());
+                if (paramType->GetManagedClassObject() != NULL)
+                {
+                    pinnedRef = paramType->GetPinnedManagedClassObjectIfExists();
+                }
+                break;
+            }
+
+            case ELEMENT_TYPE_VAR:
+            case ELEMENT_TYPE_MVAR:
+            {
+                TypeVarTypeDesc* varType = dac_cast<PTR_TypeVarTypeDesc>(typeHnd.AsTypeDesc());
+                if (varType->GetManagedClassObject() != NULL)
+                {
+                    pinnedRef = varType->GetPinnedManagedClassObjectIfExists();
+                }
+                break;
+            }
+        }
+        pointer = (void*)OBJECTREFToObject(pinnedRef);
+    }
+
     EE_TO_JIT_TRANSITION();
 
     return pointer;

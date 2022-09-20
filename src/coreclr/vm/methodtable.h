@@ -2719,8 +2719,8 @@ public:
 
     // Shared static helpers to allocate/cache RuntimeType objects
     static void AllocateRuntimeTypeObject(LoaderAllocator* allocator, RUNTIMETYPEHANDLE* pDest, TypeHandle type);
-    static OBJECTREF GetRuntimeTypeObjectFromHandleFast(RUNTIMETYPEHANDLE handle);
-    static OBJECTREF GetRuntimeTypeObjectFromHandle(LoaderAllocator* allocator, RUNTIMETYPEHANDLE handle);
+    static OBJECTREF GetPinnedRuntimeTypeObjectFromHandleIfExists(RUNTIMETYPEHANDLE handle);
+    static OBJECTREF GetRuntimeTypeObjectFromHandleIfExists(LoaderAllocator* allocator, RUNTIMETYPEHANDLE handle);
 
     // ------------------------------------------------------------------
     // Private part of MethodTable

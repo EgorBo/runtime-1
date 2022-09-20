@@ -251,13 +251,13 @@ public:
             MODE_COOPERATIVE;
         }
         CONTRACTL_END;
-        return MethodTable::GetRuntimeTypeObjectFromHandle(GetLoaderAllocator(), m_hExposedClassObject);
+        return MethodTable::GetRuntimeTypeObjectFromHandleIfExists(GetLoaderAllocator(), m_hExposedClassObject);
     }
 
-    OBJECTREF GetManagedClassObjectFast()
+    OBJECTREF GetPinnedManagedClassObjectIfExists()
     {
         LIMITED_METHOD_CONTRACT;
-        return MethodTable::GetRuntimeTypeObjectFromHandleFast(m_hExposedClassObject);
+        return MethodTable::GetPinnedRuntimeTypeObjectFromHandleIfExists(m_hExposedClassObject);
     }
 
     TypeHandle GetModifiedType()
@@ -368,13 +368,13 @@ public:
             MODE_COOPERATIVE;
         }
         CONTRACTL_END;
-        return MethodTable::GetRuntimeTypeObjectFromHandle(GetLoaderAllocator(), m_hExposedClassObject);
+        return MethodTable::GetRuntimeTypeObjectFromHandleIfExists(GetLoaderAllocator(), m_hExposedClassObject);
     }
 
-    OBJECTREF GetManagedClassObjectFast()
+    OBJECTREF GetPinnedManagedClassObjectIfExists()
     {
         LIMITED_METHOD_CONTRACT;
-        return MethodTable::GetRuntimeTypeObjectFromHandleFast(m_hExposedClassObject);
+        return MethodTable::GetPinnedRuntimeTypeObjectFromHandleIfExists(m_hExposedClassObject);
     }
 
     // Load the owning type. Note that the result is not guaranteed to be full loaded

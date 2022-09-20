@@ -255,12 +255,12 @@ FORCEINLINE OBJECTREF TypeHandle::GetManagedClassObjectFast() const
         {
         case ELEMENT_TYPE_BYREF:
         case ELEMENT_TYPE_PTR:
-            o = dac_cast<PTR_ParamTypeDesc>(AsTypeDesc())->GetManagedClassObjectFast();
+            o = dac_cast<PTR_ParamTypeDesc>(AsTypeDesc())->GetPinnedManagedClassObjectIfExists();
             break;
 
         case ELEMENT_TYPE_VAR:
         case ELEMENT_TYPE_MVAR:
-            o = dac_cast<PTR_TypeVarTypeDesc>(AsTypeDesc())->GetManagedClassObjectFast();
+            o = dac_cast<PTR_TypeVarTypeDesc>(AsTypeDesc())->GetPinnedManagedClassObjectIfExists();
             break;
 
         case ELEMENT_TYPE_FNPTR:

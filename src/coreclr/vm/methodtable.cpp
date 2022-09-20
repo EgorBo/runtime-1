@@ -4274,7 +4274,7 @@ void MethodTable::AllocateRuntimeTypeObject(LoaderAllocator* allocator, RUNTIMET
     }
 }
 
-OBJECTREF MethodTable::GetRuntimeTypeObjectFromHandleFast(RUNTIMETYPEHANDLE handle)
+OBJECTREF MethodTable::GetPinnedRuntimeTypeObjectFromHandleIfExists(RUNTIMETYPEHANDLE handle)
 {
     LIMITED_METHOD_CONTRACT;
 
@@ -4288,7 +4288,7 @@ OBJECTREF MethodTable::GetRuntimeTypeObjectFromHandleFast(RUNTIMETYPEHANDLE hand
     return NULL;
 }
 
-OBJECTREF MethodTable::GetRuntimeTypeObjectFromHandle(LoaderAllocator* allocator, RUNTIMETYPEHANDLE handle)
+OBJECTREF MethodTable::GetRuntimeTypeObjectFromHandleIfExists(LoaderAllocator* allocator, RUNTIMETYPEHANDLE handle)
 {
     LIMITED_METHOD_CONTRACT;
 
