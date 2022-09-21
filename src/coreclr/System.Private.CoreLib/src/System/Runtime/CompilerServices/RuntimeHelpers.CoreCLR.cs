@@ -496,7 +496,11 @@ namespace System.Runtime.CompilerServices
 
         // Additional conditional fields (see methodtable.h).
         // m_pLoaderModule
-        // m_pWriteableData
+
+        [FieldOffset(ParentMethodTableOffset)]
+        public MethodTableWriteableData* WriteableData;
+
+        // Additional conditional fields (see methodtable.h).
         // union {
         //   m_pEEClass (pointer to the EE class)
         //   m_pCanonMT (pointer to the canonical method table)
@@ -542,6 +546,8 @@ namespace System.Runtime.CompilerServices
             ;
 
         private const int ParentMethodTableOffset = 0x10 + DebugClassNamePtr;
+
+        private const int WriteableData = 0x20 + DebugClassNamePtr;
 
 #if TARGET_64BIT
         private const int ElementTypeOffset = 0x30 + DebugClassNamePtr;
@@ -632,6 +638,12 @@ namespace System.Runtime.CompilerServices
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         public extern uint GetNumInstanceFieldBytes();
+    }
+
+    public struct MethodTableWriteableData
+    {
+        public int Flags;
+        public nuint ExposedClassObject;
     }
 
     /// <summary>

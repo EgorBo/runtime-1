@@ -628,5 +628,22 @@ namespace System.Runtime.CompilerServices
 
             throw new ArrayTypeMismatchException();
         }
+
+        [DebuggerHidden]
+        [StackTraceHidden]
+        [DebuggerStepThrough]
+        private static unsafe object JIT_GetRuntimeType(TypeHandle handle)
+        {
+            if (!handle->IsTypeDesc())
+            {
+                MethodTable* methodTable = handle.AsMethodTable();
+                if ((methodTable->WriteableData->ExposedClassObject & 1) == 1) // lowest bit is set - it's a pinned reference
+                {
+                    nuint objUnmanagedPtr = (methodTable->WriteableData->ExposedClassObject) - 1;
+                    return Unsafe.As<nuint, object>(ref objUnmanagedPtr);
+                }
+            }
+            return null;
+        }
     }
 }
