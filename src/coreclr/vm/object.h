@@ -528,6 +528,7 @@ class ArrayBase : public Object
     friend class JIT_TrialAlloc;
     friend class CheckAsmOffsets;
     friend struct _DacGlobals;
+    friend class FrozenObjectHeapManager;
 
 private:
     // This MUST be the first field, so that it directly follows Object.  This is because

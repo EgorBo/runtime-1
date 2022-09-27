@@ -6,13 +6,19 @@
 
 // Size to reserve for a frozen segment
 #define FOH_SEGMENT_SIZE (4 * 1024 * 1024)
+
 // Size to commit on demand in that reserved space
 #define FOH_COMMIT_SIZE (64 * 1024)
 
+// Number of elements in object[] registry
+#define FOH_REGISTRY_ELEM_COUNT 1024
+
 FrozenObjectHeapManager::FrozenObjectHeapManager():
-    m_Crst(CrstFrozenObjectHeap, CRST_UNSAFE_COOPGC),
+    m_Crst(CrstFrozenObjectHeap),
     m_CurrentSegment(nullptr),
-    m_Enabled(CLRConfig::GetConfigValue(CLRConfig::INTERNAL_UseFrozenObjectHeap) != 0)
+    m_Enabled(CLRConfig::GetConfigValue(CLRConfig::INTERNAL_UseFrozenObjectHeap) != 0),
+    m_CurrentRegistry(nullptr),
+    m_CurrentRegistryIndex(0)
 {
 }
 
@@ -35,21 +41,11 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
     return nullptr;
 #else // FEATURE_BASICFREEZE
 
-    CrstHolder ch(&m_Crst);
-
     if (!m_Enabled)
     {
         // Disabled via DOTNET_UseFrozenObjectHeap=0
         return nullptr;
     }
-
-    _ASSERT(type != nullptr);
-    _ASSERT(FOH_COMMIT_SIZE >= MIN_OBJECT_SIZE);
-    _ASSERT(FOH_SEGMENT_SIZE > FOH_COMMIT_SIZE);
-    _ASSERT(FOH_SEGMENT_SIZE % FOH_COMMIT_SIZE == 0);
-
-    // NOTE: objectSize is expected be the full size including header
-    _ASSERT(objectSize >= MIN_OBJECT_SIZE);
 
     if (objectSize > FOH_COMMIT_SIZE)
     {
@@ -57,6 +53,46 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
         // since FrozenObjectHeap is just an optimization, let's not fill it with huge objects.
         return nullptr;
     }
+
+    CrstHolder ch(&m_Crst);
+
+    if (objectSize > FOH_COMMIT_SIZE)
+    {
+        // The current design doesn't allow objects larger than FOH_COMMIT_SIZE and
+        // since FrozenObjectHeap is just an optimization, let's not fill it with huge objects.
+        return nullptr;
+    }
+
+    Object* obj = AllocateObject(type, objectSize);
+    _ASSERT(obj != nullptr);
+
+    // Allocate an object[] on FOH that will be holding references to all FOH objects.
+    // The array will be rooted via GetLoaderAllocator()->AllocateHandle() thus all FOH objects
+    // will always be kept alive for GC. Once we run out of space in current object[] we allocate a new one
+    // and forget about the previous one (it will be still alive) since we don't need to re-use slots
+    if (m_CurrentRegistryIndex == FOH_REGISTRY_ELEM_COUNT || m_CurrentRegistry == nullptr)
+    {
+        PTR_MethodTable pMT = g_pPredefinedArrayTypes[ELEMENT_TYPE_OBJECT].AsMethodTable();
+        m_CurrentRegistry = (PtrArray*)AllocateObject(pMT, pMT->GetBaseSize() + FOH_REGISTRY_ELEM_COUNT * OBJECT_SIZE);
+        m_CurrentRegistry->m_NumComponents = FOH_REGISTRY_ELEM_COUNT;
+
+        AppDomain::GetCurrentDomain()->GetLoaderAllocator()->AllocateHandle(ObjectToOBJECTREF(m_CurrentRegistry));
+    }
+    m_CurrentRegistry->SetAt(m_CurrentRegistryIndex++, ObjectToOBJECTREF(obj));
+
+    return obj;
+#endif // !FEATURE_BASICFREEZE
+}
+
+Object* FrozenObjectHeapManager::AllocateObject(PTR_MethodTable type, size_t objectSize)
+{
+    _ASSERT(type != nullptr);
+    _ASSERT(FOH_COMMIT_SIZE >= MIN_OBJECT_SIZE);
+    _ASSERT(FOH_SEGMENT_SIZE > FOH_COMMIT_SIZE);
+    _ASSERT(FOH_SEGMENT_SIZE % FOH_COMMIT_SIZE == 0);
+
+    // NOTE: objectSize is expected be the full size including header
+    _ASSERT(objectSize >= MIN_OBJECT_SIZE);
 
     if (m_CurrentSegment == nullptr)
     {
@@ -82,9 +118,7 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
         _ASSERT(obj != nullptr);
     }
     return obj;
-#endif // !FEATURE_BASICFREEZE
 }
-
 
 FrozenObjectSegment::FrozenObjectSegment():
     m_pStart(nullptr),

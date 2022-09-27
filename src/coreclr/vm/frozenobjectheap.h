@@ -30,10 +30,13 @@ public:
     Object* TryAllocateObject(PTR_MethodTable type, size_t objectSize);
 
 private:
+    Object* AllocateObject(PTR_MethodTable type, size_t objectSize);
     Crst m_Crst;
     SArray<FrozenObjectSegment*> m_FrozenSegments;
     FrozenObjectSegment* m_CurrentSegment;
     bool m_Enabled;
+    PtrArray* m_CurrentRegistry;
+    int m_CurrentRegistryIndex;
 };
 
 class FrozenObjectSegment
