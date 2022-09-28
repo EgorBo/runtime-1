@@ -72,6 +72,7 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
     // and forget about the previous one (it will be still alive) since we don't need to re-use slots
     if (m_CurrentRegistryIndex == FOH_REGISTRY_ELEM_COUNT || m_CurrentRegistry == nullptr)
     {
+        m_CurrentRegistryIndex = 0;
         PTR_MethodTable pMT = g_pPredefinedArrayTypes[ELEMENT_TYPE_OBJECT].AsMethodTable();
         m_CurrentRegistry = (PtrArray*)AllocateObject(pMT, pMT->GetBaseSize() + FOH_REGISTRY_ELEM_COUNT * OBJECT_SIZE);
         m_CurrentRegistry->m_NumComponents = FOH_REGISTRY_ELEM_COUNT;
