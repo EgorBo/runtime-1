@@ -6133,6 +6133,18 @@ Compiler::fgWalkResult Compiler::optVNConstantPropCurStmt(BasicBlock* block, Sta
         case GT_INTRINSIC:
             break;
 
+        case GT_IND:
+            if ((tree->gtFlags & GTF_IND_ASG_LHS) != 0 || !vnStore->IsVNInt32Constant(tree->gtVNPair.GetConservative()))
+            {
+                return WALK_CONTINUE;
+            }
+            if (tree->gtVNPair.GetConservative() == tree->gtVNPair.GetLiberal() &&
+                vnStore->VNNormalValue(tree->gtVNPair.GetConservative()) == tree->gtVNPair.GetConservative())
+            {
+                break;
+            }
+            return WALK_CONTINUE;
+
         case GT_JTRUE:
             break;
 

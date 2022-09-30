@@ -8636,6 +8636,41 @@ void Compiler::fgValueNumberTree(GenTree* tree)
             ValueNumPair addrXvnp;
             vnStore->VNPUnpackExc(addr->gtVNPair, &addrNvnp, &addrXvnp);
 
+            if (!opts.IsReadyToRun() && ((tree->gtFlags & GTF_IND_ASG_LHS) == 0) && (oper == GT_IND) &&
+                (genTypeSize(tree) == sizeof(UINT16)) && addr->OperIs(GT_ADD) && addr->gtGetOp2()->IsCnsIntOrI())
+            {
+                VNFuncApp  funcApp;
+                ValueNum   srcVN        = addr->gtGetOp1()->gtVNPair.GetLiberal();
+                const bool addrIsVNFunc = vnStore->GetVNFunc(srcVN, &funcApp);
+                if (funcApp.m_func == (VNFunc)GT_ADD && vnStore->TypeOfVN(srcVN) == TYP_BYREF &&
+                    vnStore->IsVNConstant(funcApp.m_args[0]) && vnStore->IsVNConstant(funcApp.m_args[1]))
+                {
+                    size_t gcHandle   = vnStore->CoercedConstantValue<size_t>(funcApp.m_args[0]);
+                    size_t dataOffset = vnStore->CoercedConstantValue<size_t>(funcApp.m_args[1]);
+
+                    // Just in case if offset was re-ordered with gcHandle
+                    if (dataOffset > gcHandle)
+                        std::swap(gcHandle, dataOffset);
+
+                    // TODO: introduce JIT-EE API to get the content, the current impl is correct
+                    // but only for JIT, SPMI and NativeAOT are unhappy
+                    if (gcHandle != 0 && *(CORINFO_CLASS_HANDLE*)gcHandle == impGetStringClass())
+                    {
+                        if (dataOffset == TARGET_POINTER_SIZE + sizeof(int))
+                        {
+                            int    len       = *((int*)(gcHandle + TARGET_POINTER_SIZE));
+                            size_t byteIndex = (size_t)addr->gtGetOp2()->AsIntCon()->IconValue();
+                            if (byteIndex >= 0 && (byteIndex / 2) < len)
+                            {
+                                uint16_t result = ((uint16_t*)(gcHandle + dataOffset))[byteIndex / 2];
+                                tree->gtVNPair.SetBoth(vnStore->VNForIntCon(result));
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
             // Is the dereference immutable?  If so, model it as referencing the read-only heap.
             if (tree->gtFlags & GTF_IND_INVARIANT)
             {
