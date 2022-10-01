@@ -835,6 +835,12 @@ CorInfoArrayIntrinsic MyICJI::getArrayIntrinsicID(CORINFO_METHOD_HANDLE hMethod)
     return jitInstance->mc->repGetArrayIntrinsicID(hMethod);
 }
 
+unsigned MyICJI::getILSize(CORINFO_METHOD_HANDLE hMethod)
+{
+    jitInstance->mc->cr->AddCall("getILSize");
+    return jitInstance->mc->repGetILSize(hMethod);
+}
+
 // Get static field data for an array
 void* MyICJI::getArrayInitializationData(CORINFO_FIELD_HANDLE field, uint32_t size)
 {

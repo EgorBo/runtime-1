@@ -3197,6 +3197,10 @@ void Compiler::fgDebugCheckFlagsHelper(GenTree* tree, GenTreeFlags actualFlags, 
         // We can't/don't consider these flags (GTF_GLOB_REF or GTF_ORDER_SIDEEFF) as being "extra" flags
         //
         GenTreeFlags flagsToCheck = ~GTF_GLOB_REF & ~GTF_ORDER_SIDEEFF;
+        if (!opts.OptimizationEnabled())
+        {
+            flagsToCheck &= ~GTF_CALL;
+        }
 
         if ((actualFlags & ~expectedFlags & flagsToCheck) != 0)
         {

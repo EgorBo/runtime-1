@@ -485,6 +485,9 @@ CONFIG_INTEGER(JitExtDefaultPolicyMaxIL, W("JitExtDefaultPolicyMaxIL"), 0x80)
 CONFIG_INTEGER(JitExtDefaultPolicyMaxILProf, W("JitExtDefaultPolicyMaxILProf"), 0x400)
 CONFIG_INTEGER(JitExtDefaultPolicyMaxBB, W("JitExtDefaultPolicyMaxBB"), 7)
 
+// Allow inlining for small methods (<= 8 bytes of IL) without control flow in Tier0
+CONFIG_INTEGER(JitInlineTier0, W("JitInlineTier0"), 1)
+
 // Inliner uses the following formula for PGO-driven decisions:
 //
 //    BM = BM * ((1.0 - ProfTrust) + ProfWeight * ProfScale)

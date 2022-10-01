@@ -490,7 +490,7 @@ bool Compiler::fgCanSwitchToOptimized()
     if (result)
     {
         // Ensure that it would be safe to change the opt level
-        assert(opts.compFlags == CLFLG_MINOPT);
+        assert((opts.compFlags & ~CLFLG_INLINING) == CLFLG_MINOPT);
         assert(!opts.IsMinOptsSet());
     }
 

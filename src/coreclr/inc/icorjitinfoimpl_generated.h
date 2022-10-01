@@ -355,6 +355,9 @@ unsigned getArrayRank(
 CorInfoArrayIntrinsic getArrayIntrinsicID(
           CORINFO_METHOD_HANDLE ftn) override;
 
+unsigned getILSize(
+          CORINFO_METHOD_HANDLE ftn) override;
+
 void* getArrayInitializationData(
           CORINFO_FIELD_HANDLE field,
           uint32_t size) override;

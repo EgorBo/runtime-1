@@ -43,6 +43,20 @@ NativeImageIndexTraits::count_t NativeImageIndexTraits::Hash(LPCUTF8 a)
     return SString(SString::Utf8Literal, a).HashCaseInsensitive();
 }
 
+BOOL MethodSizeTraits::Equals(CORINFO_METHOD_HANDLE a, CORINFO_METHOD_HANDLE b)
+{
+    WRAPPER_NO_CONTRACT;
+
+    return a == b;
+}
+
+MethodSizeTraits::count_t MethodSizeTraits::Hash(CORINFO_METHOD_HANDLE a)
+{
+    WRAPPER_NO_CONTRACT;
+
+    return (MethodSizeTraits::count_t)(((int)((int64_t)a)) ^ (int)((int64_t)a >> 32));
+}
+
 NativeImage::NativeImage(AssemblyBinder *pAssemblyBinder, PEImageLayout *pImageLayout, LPCUTF8 imageFileName)
     : m_eagerFixupsLock(CrstNativeImageEagerFixups)
 {

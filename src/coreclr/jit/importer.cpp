@@ -12012,11 +12012,6 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
     if (enablePatchpoints)
     {
-        // We don't inline at Tier0, if we do, we may need rethink our approach.
-        // Could probably support inlines that don't introduce flow.
-        //
-        assert(!compIsForInlining());
-
         // OSR is not yet supported for methods with explicit tail calls.
         //
         // But we also do not have to switch these methods to be optimized, as we should be
@@ -18974,12 +18969,26 @@ void Compiler::impMakeDiscretionaryInlineObservations(InlineInfo* pInlineInfo, I
 void Compiler::impCanInlineIL(CORINFO_METHOD_HANDLE fncHandle,
                               CORINFO_METHOD_INFO*  methInfo,
                               bool                  forceInline,
+                              bool                  isTier0,
                               InlineResult*         inlineResult)
 {
     unsigned codeSize = methInfo->ILCodeSize;
 
     // We shouldn't have made up our minds yet...
     assert(!inlineResult->IsDecided());
+
+    // Note force inline state
+
+    inlineResult->NoteBool(InlineObservation::CALLEE_IS_FORCE_INLINE, forceInline);
+
+    // Note IL code size
+
+    inlineResult->NoteInt(InlineObservation::CALLEE_IL_CODE_SIZE, codeSize);
+
+    if (inlineResult->IsFailure())
+    {
+        return;
+    }
 
     if (methInfo->EHcount)
     {
@@ -19007,7 +19016,9 @@ void Compiler::impCanInlineIL(CORINFO_METHOD_HANDLE fncHandle,
 
     inlineResult->NoteInt(InlineObservation::CALLEE_NUMBER_OF_LOCALS, methInfo->locals.numArgs);
 
-    if (methInfo->locals.numArgs > MAX_INL_LCLS)
+    unsigned maxLocals = isTier0 ? 0 : MAX_INL_LCLS;
+
+    if (methInfo->locals.numArgs > maxLocals)
     {
         inlineResult->NoteFatal(InlineObservation::CALLEE_TOO_MANY_LOCALS);
         return;
@@ -19022,19 +19033,6 @@ void Compiler::impCanInlineIL(CORINFO_METHOD_HANDLE fncHandle,
     if (methInfo->args.numArgs > MAX_INL_ARGS)
     {
         inlineResult->NoteFatal(InlineObservation::CALLEE_TOO_MANY_ARGUMENTS);
-        return;
-    }
-
-    // Note force inline state
-
-    inlineResult->NoteBool(InlineObservation::CALLEE_IS_FORCE_INLINE, forceInline);
-
-    // Note IL code size
-
-    inlineResult->NoteInt(InlineObservation::CALLEE_IL_CODE_SIZE, codeSize);
-
-    if (inlineResult->IsFailure())
-    {
         return;
     }
 
@@ -19097,6 +19095,13 @@ void Compiler::impCheckCanInline(GenTreeCall*           call,
             }
 #endif
 
+            if (pParam->pThis->opts.IsTier0WithQuickOpts() &&
+                pParam->pThis->info.compCompHnd->getILSize(pParam->fncHandle) > 7)
+            {
+                pParam->result->NoteFatal(InlineObservation::CALLEE_IS_JIT_NOINLINE);
+                goto _exit;
+            }
+
             /* Try to get the code address/size for the method */
 
             CORINFO_METHOD_INFO methInfo;
@@ -19113,7 +19118,8 @@ void Compiler::impCheckCanInline(GenTreeCall*           call,
             bool forceInline;
             forceInline = !!(pParam->methAttr & CORINFO_FLG_FORCEINLINE);
 
-            pParam->pThis->impCanInlineIL(pParam->fncHandle, &methInfo, forceInline, pParam->result);
+            pParam->pThis->impCanInlineIL(pParam->fncHandle, &methInfo, forceInline,
+                pParam->pThis->opts.jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0), pParam->result);
 
             if (pParam->result->IsFailure())
             {
@@ -20226,6 +20232,11 @@ void Compiler::impMarkInlineCandidateHelper(GenTreeCall*           call,
         assert(!compIsForInlining());
         return;
     }
+
+    /*if (compHasBackwardJump && opts.jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0))
+    {
+        return;
+    }*/
 
     if (compIsForImportOnly())
     {

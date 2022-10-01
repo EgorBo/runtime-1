@@ -424,6 +424,11 @@ private:
     //    an optimization that will just fail again.
     void LateDevirtualization(GenTree** pTree, GenTree* parent)
     {
+        if (!m_compiler->opts.OptimizationEnabled())
+        {
+            return;
+        }
+
         GenTree* tree = *pTree;
         // In some (rare) cases the parent node of tree will be smashed to a NOP during
         // the preorder by AttachStructToInlineeArg.

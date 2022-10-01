@@ -4558,6 +4558,40 @@ unsigned CEEInfo::getArrayRank(CORINFO_CLASS_HANDLE  cls)
     return result;
 }
 
+unsigned CEEInfo::getILSize(CORINFO_METHOD_HANDLE ftnHnd)
+{
+    CONTRACTL{
+      THROWS;
+      GC_TRIGGERS;
+      MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    unsigned result = 0;
+
+    JIT_TO_EE_TRANSITION();
+#ifndef DACCESS_COMPILE
+    auto x = AppDomain::GetCurrentDomain()->GetILSize(ftnHnd);
+    if (x > 0)
+    {
+        result = x;
+    }
+    else
+    {
+        MethodDesc* ftn = GetMethod(ftnHnd);
+        if (ftn->IsIL() && !ftn->IsDynamicMethod())
+        {
+            COR_ILMETHOD_DECODER header(ftn->GetILHeader(TRUE), ftn->GetMDImport(), NULL);
+            result = header.CodeSize;
+            AppDomain::GetCurrentDomain()->SetILSize(ftnHnd, result);
+        }
+    }
+#endif
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
 /*********************************************************************/
 // Get the index of runtime provided array method
 CorInfoArrayIntrinsic CEEInfo::getArrayIntrinsicID(CORINFO_METHOD_HANDLE ftn)
@@ -7612,6 +7646,9 @@ CEEInfo::getMethodInfo(
         else
         {
             COR_ILMETHOD_DECODER header(ftn->GetILHeader(TRUE), ftn->GetMDImport(), NULL);
+#ifndef DACCESS_COMPILE
+            AppDomain::GetCurrentDomain()->SetILSize(ftnHnd, header.CodeSize);
+#endif
 
             getMethodInfoHelper(ftn, ftnHnd, &header, methInfo);
         }

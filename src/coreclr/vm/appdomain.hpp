@@ -1532,6 +1532,10 @@ public:
 #ifndef DACCESS_COMPILE
     PTR_NativeImage GetNativeImage(LPCUTF8 compositeFileName);
     PTR_NativeImage SetNativeImage(LPCUTF8 compositeFileName, PTR_NativeImage pNativeImage);
+
+    unsigned GetILSize(CORINFO_METHOD_HANDLE mth);
+    unsigned SetILSize(CORINFO_METHOD_HANDLE mth, unsigned value);
+
 #endif // DACCESS_COMPILE
 
     //****************************************************************************************
@@ -2193,7 +2197,12 @@ private:
 
     // Map of loaded composite native images indexed by base load addresses
     CrstExplicitInit m_nativeImageLoadCrst;
+    CrstExplicitInit m_nativeImageLoadCrst2;
     MapSHash<LPCUTF8, PTR_NativeImage, NativeImageIndexTraits> m_nativeImageMap;
+
+public:
+    MapSHash<CORINFO_METHOD_HANDLE, unsigned, MethodSizeTraits> m_methodSizeMap;
+private:
 
 #ifdef FEATURE_COMINTEROP
     // this cache stores the RCWs in this domain

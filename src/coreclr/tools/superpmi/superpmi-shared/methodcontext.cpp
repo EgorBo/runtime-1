@@ -6851,6 +6851,30 @@ CorInfoArrayIntrinsic MethodContext::repGetArrayIntrinsicID(CORINFO_METHOD_HANDL
     return result;
 }
 
+void MethodContext::recGetILSize(CORINFO_METHOD_HANDLE hMethod, unsigned result)
+{
+    if (GetILSize == nullptr)
+        GetILSize = new LightWeightMap<DWORDLONG, DWORD>();
+
+    DWORDLONG key = CastHandle(hMethod);
+    DWORD value = (DWORD)result;
+    GetILSize->Add(key, value);
+    DEBUG_REC(dmpGetILSize(key, value));
+}
+void MethodContext::dmpGetILSize(DWORDLONG key, DWORD value)
+{
+    printf("GetILSize key %016llX, value %u", key, value);
+}
+unsigned MethodContext::repGetILSize(CORINFO_METHOD_HANDLE hMethod)
+{
+    DWORDLONG key = CastHandle(hMethod);
+    AssertMapAndKeyExist(GetILSize, key, ": key %016llX", key);
+    DWORD value = GetILSize->Get(key);
+    DEBUG_REP(dmpGetILSize(key, value));
+    unsigned result = (unsigned)value;
+    return result;
+}
+
 void MethodContext::recIsFieldStatic(CORINFO_FIELD_HANDLE fhld, bool result)
 {
     if (IsFieldStatic == nullptr)

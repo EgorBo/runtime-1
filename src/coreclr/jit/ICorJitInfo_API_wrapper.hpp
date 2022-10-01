@@ -845,6 +845,15 @@ CorInfoArrayIntrinsic WrapICorJitInfo::getArrayIntrinsicID(
     return temp;
 }
 
+unsigned WrapICorJitInfo::getILSize(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    API_ENTER(getILSize);
+    unsigned temp = wrapHnd->getILSize(ftn);
+    API_LEAVE(getILSize);
+    return temp;
+}
+
 void* WrapICorJitInfo::getArrayInitializationData(
           CORINFO_FIELD_HANDLE field,
           uint32_t size)

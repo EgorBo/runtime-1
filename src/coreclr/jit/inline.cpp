@@ -886,7 +886,6 @@ InlineStrategy::InlineStrategy(Compiler* compiler)
     {
         m_MaxInlineDepth = IMPLEMENTATION_MAX_INLINE_DEPTH;
     }
-
 #endif // DEBUG
 }
 

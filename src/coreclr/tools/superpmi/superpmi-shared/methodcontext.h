@@ -848,6 +848,10 @@ public:
     void dmpGetArrayIntrinsicID(DWORDLONG key, DWORD value);
     CorInfoArrayIntrinsic repGetArrayIntrinsicID(CORINFO_METHOD_HANDLE hMethod);
 
+    void recGetILSize(CORINFO_METHOD_HANDLE hMethod, unsigned result);
+    void dmpGetILSize(DWORDLONG key, DWORD value);
+    unsigned repGetILSize(CORINFO_METHOD_HANDLE hMethod);
+
     void recIsFieldStatic(CORINFO_FIELD_HANDLE fhld, bool result);
     void dmpIsFieldStatic(DWORDLONG key, DWORD value);
     bool repIsFieldStatic(CORINFO_FIELD_HANDLE fhld);
@@ -1129,6 +1133,7 @@ enum mcPackets
     Packet_UpdateEntryPointForTailCall = 193,
     Packet_GetLoongArch64PassStructInRegisterFlags = 194,
     Packet_GetExactClasses = 195,
+    Packet_GetILSize = 196,
 };
 
 void SetDebugDumpVariables();

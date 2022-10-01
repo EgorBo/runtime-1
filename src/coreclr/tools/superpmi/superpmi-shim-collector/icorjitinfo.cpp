@@ -989,6 +989,14 @@ CorInfoArrayIntrinsic interceptor_ICJI::getArrayIntrinsicID(CORINFO_METHOD_HANDL
     return result;
 }
 
+unsigned interceptor_ICJI::getILSize(CORINFO_METHOD_HANDLE ftn)
+{
+    mc->cr->AddCall("getILSize");
+    unsigned result = original_ICorJitInfo->getILSize(ftn);
+    mc->recGetILSize(ftn, result);
+    return result;
+}
+
 // Get static field data for an array
 void* interceptor_ICJI::getArrayInitializationData(CORINFO_FIELD_HANDLE field, uint32_t size)
 {

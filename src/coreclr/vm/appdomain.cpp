@@ -1977,6 +1977,7 @@ void AppDomain::Init()
 #endif
 
     m_nativeImageLoadCrst.Init(CrstNativeImageLoad);
+    m_nativeImageLoadCrst2.Init(CrstNativeImageLoad2);
 } // AppDomain::Init
 
 void AppDomain::Stop()
@@ -5224,4 +5225,27 @@ PTR_NativeImage AppDomain::SetNativeImage(LPCUTF8 simpleFileName, PTR_NativeImag
     m_nativeImageMap.Add(simpleFileName, pNativeImage);
     return nullptr;
 }
+
+
+unsigned AppDomain::GetILSize(CORINFO_METHOD_HANDLE mth)
+{
+    CrstHolder ch(&m_nativeImageLoadCrst2);
+    unsigned size;
+    if (m_methodSizeMap.Lookup(mth, &size))
+        return size;
+    return 0;
+}
+
+unsigned AppDomain::SetILSize(CORINFO_METHOD_HANDLE mth, unsigned value)
+{
+    CrstHolder ch(&m_nativeImageLoadCrst2);
+    unsigned pExistingImage;
+    if (m_methodSizeMap.Lookup(mth, &pExistingImage))
+    {
+        return pExistingImage;
+    }
+    m_methodSizeMap.Add(mth, value);
+    return value;
+}
+
 #endif//DACCESS_COMPILE

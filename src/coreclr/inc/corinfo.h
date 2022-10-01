@@ -2615,6 +2615,10 @@ public:
             CORINFO_METHOD_HANDLE        ftn
             ) = 0;
 
+    virtual unsigned getILSize(
+            CORINFO_METHOD_HANDLE        ftn
+            ) = 0;
+
     // Get static field data for an array
     virtual void * getArrayInitializationData(
             CORINFO_FIELD_HANDLE        field,

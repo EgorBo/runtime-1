@@ -603,7 +603,11 @@ void DefaultPolicy::NoteInt(InlineObservation obs, int value)
         {
             m_CallsiteDepth = static_cast<unsigned>(value);
 
-            if (m_CallsiteDepth > m_RootCompiler->m_inlineStrategy->GetMaxInlineDepth())
+            if (m_RootCompiler->opts.IsTier0WithQuickOpts() && m_CallsiteDepth > 1)
+            {
+                SetFailure(InlineObservation::CALLSITE_IS_TOO_DEEP);
+            }
+            else if (m_CallsiteDepth > m_RootCompiler->m_inlineStrategy->GetMaxInlineDepth())
             {
                 SetFailure(InlineObservation::CALLSITE_IS_TOO_DEEP);
             }
@@ -1307,6 +1311,14 @@ void ExtendedDefaultPolicy::NoteBool(InlineObservation obs, bool value)
 
         case InlineObservation::CALLEE_HAS_SWITCH:
             m_Switch++;
+            FALLTHROUGH;
+        case InlineObservation::CALLEE_HAS_BRANCH:
+            // Give up on callees with control flow in Tier0 - such methods won't
+            // work nicely with OSR/Instrumentation currently, it might change in future.
+            if (m_RootCompiler->opts.jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0))
+            {
+                SetNever(InlineObservation::CALLEE_TOO_MUCH_IL);
+            }
             break;
 
         case InlineObservation::CALLSITE_DIV_BY_CNS:
@@ -1351,12 +1363,22 @@ void ExtendedDefaultPolicy::NoteInt(InlineObservation obs, int value)
                 maxCodeSize = static_cast<unsigned>(JitConfig.JitExtDefaultPolicyMaxILProf());
             }
 
-            if (m_IsForceInline)
+            const bool isTier0 = m_RootCompiler->opts.jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0);
+            unsigned alwaysInlineThreshold = InlineStrategy::ALWAYS_INLINE_SIZE;
+
+            if (isTier0)
             {
-                // Candidate based on force inline
+                // Lower limits for Tier0, mostly for auto-properties, etc.
+                alwaysInlineThreshold = 7;
+                maxCodeSize = alwaysInlineThreshold;
+            }
+
+            if (m_IsForceInline && !isTier0)
+            {
+                // Candidate based on force inline, ignore in tier0
                 SetCandidate(InlineObservation::CALLEE_IS_FORCE_INLINE);
             }
-            else if (m_CodeSize <= InlineStrategy::ALWAYS_INLINE_SIZE)
+            else if (m_CodeSize <= alwaysInlineThreshold)
             {
                 // Candidate based on small size
                 SetCandidate(InlineObservation::CALLEE_BELOW_ALWAYS_INLINE_SIZE);

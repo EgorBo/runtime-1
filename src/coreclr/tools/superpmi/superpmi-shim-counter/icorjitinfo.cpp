@@ -690,6 +690,13 @@ CorInfoArrayIntrinsic interceptor_ICJI::getArrayIntrinsicID(
     return original_ICorJitInfo->getArrayIntrinsicID(ftn);
 }
 
+unsigned interceptor_ICJI::getILSize(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    mcs->AddCall("getILSize");
+    return original_ICorJitInfo->getILSize(ftn);
+}
+
 void* interceptor_ICJI::getArrayInitializationData(
           CORINFO_FIELD_HANDLE field,
           uint32_t size)

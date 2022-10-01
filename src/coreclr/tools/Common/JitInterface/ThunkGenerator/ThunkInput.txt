@@ -241,6 +241,7 @@ FUNCTIONS
     bool isSDArray(CORINFO_CLASS_HANDLE cls)
     unsigned getArrayRank(CORINFO_CLASS_HANDLE cls)
     CorInfoArrayIntrinsic getArrayIntrinsicID(CORINFO_METHOD_HANDLE ftn)
+    unsigned getILSize(CORINFO_METHOD_HANDLE ftn)
     void* getArrayInitializationData(CORINFO_FIELD_HANDLE field, uint32_t size)
     CorInfoIsAccessAllowedResult canAccessClass(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORINFO_METHOD_HANDLE callerHandle, CORINFO_HELPER_DESC* pAccessHelper)
     const char* getFieldName(CORINFO_FIELD_HANDLE ftn, const char** moduleName)
