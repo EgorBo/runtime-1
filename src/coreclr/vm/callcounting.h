@@ -94,7 +94,7 @@ public:
 #elif defined(TARGET_X86)
     static const int CodeSize = 24;
 #elif defined(TARGET_ARM64)
-    static const int CodeSize = 40;
+    static const int CodeSize = 48;
 #elif defined(TARGET_ARM)
     static const int CodeSize = 32;
 #elif defined(TARGET_LOONGARCH64)

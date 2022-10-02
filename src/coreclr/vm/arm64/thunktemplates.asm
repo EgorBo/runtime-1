@@ -22,11 +22,14 @@
     LEAF_END_MARKED FixupPrecodeCode
 
     LEAF_ENTRY CallCountingStubCode
+        mrs  x11, cntvct_el0
+        tbz  w11, #2, CallTarget
         ldr  x9, DATA_SLOT(CallCountingStub, RemainingCallCountCell)
         ldrh w10, [x9]
         subs w10, w10, #1
         strh w10, [x9]
         beq CountReachedZero
+CallTarget
         ldr  x9, DATA_SLOT(CallCountingStub, TargetForMethod)
         br   x9
 CountReachedZero        

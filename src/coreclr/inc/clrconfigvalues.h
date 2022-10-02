@@ -572,8 +572,15 @@ RETAIL_CONFIG_DWORD_INFO(INTERNAL_HillClimbing_GainExponent,                    
 #define TC_DelaySingleProcMultiplier (2)
 #else // !_DEBUG
 #define TC_BackgroundWorkerTimeoutMs (4000)
+#ifdef TARGET_ARM64
+// We can afford bigger threshold and lower delay on ARM64 where CallCountingStubs are
+// slightly less "contentive", see arm64/thunktemplates.asm/.S
+#define TC_CallCountThreshold (40)
+#define TC_CallCountingDelayMs (80)
+#else
 #define TC_CallCountThreshold (30)
 #define TC_CallCountingDelayMs (100)
+#endif
 #define TC_DelaySingleProcMultiplier (10)
 #endif // _DEBUG
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_TieredCompilation, W("TieredCompilation"), 1, "Enables tiered compilation")

@@ -24,11 +24,14 @@
 
     LEAF_ENTRY CallCountingStubCode\PAGE_SIZE
 LOCAL_LABEL(StubStart\PAGE_SIZE):
+        mrs  x11, cntvct_el0
+        tbz  w11, #2, LOCAL_LABEL(CallTarget\PAGE_SIZE)
         ldr  x9, DATA_SLOT(CallCountingStub, RemainingCallCountCell)
         ldrh w10, [x9]
         subs w10, w10, #1
         strh w10, [x9]
         beq LOCAL_LABEL(CountReachedZero\PAGE_SIZE)
+LOCAL_LABEL(CallTarget\PAGE_SIZE):
         ldr  x9, DATA_SLOT(CallCountingStub, TargetForMethod)
         br   x9
 LOCAL_LABEL(CountReachedZero\PAGE_SIZE):
