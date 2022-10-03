@@ -4765,6 +4765,10 @@ public:
     ValueNumStore* vnStore;
 
 public:
+
+    typedef JitHashTable<size_t, JitLargePrimitiveKeyFuncs<size_t>, int> StaticReadonlyArrayLengths;
+    StaticReadonlyArrayLengths* compStaticReadonlyArrayLengthsMap;
+
     ValueNumStore* GetValueNumStore()
     {
         return vnStore;

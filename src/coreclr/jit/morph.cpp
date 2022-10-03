@@ -5453,9 +5453,26 @@ GenTree* Compiler::fgMorphField(GenTree* tree, MorphAddrContext* mac)
             if (tree->TypeIs(TYP_REF) && !isBoxedStatic)
             {
                 bool pIsSpeculative = true;
-                if (info.compCompHnd->getStaticFieldCurrentClass(symHnd, &pIsSpeculative) != NO_CLASS_HANDLE)
+
+                CORINFO_CLASS_HANDLE fldCls = info.compCompHnd->getStaticFieldCurrentClass(symHnd, &pIsSpeculative);
+                if (fldCls != NO_CLASS_HANDLE)
                 {
                     isStaticReadOnlyInited = !pIsSpeculative;
+
+                    // If this field is an array or string - save its Length (const) to a cache just in case
+                    if (isStaticReadOnlyInited && (info.compCompHnd->isSDArray(fldCls) || (fldCls == impGetStringClass())))
+                    {
+                        if (compStaticReadonlyArrayLengthsMap == nullptr)
+                        {
+                            compStaticReadonlyArrayLengthsMap = new (getAllocator()) StaticReadonlyArrayLengths(getAllocator());
+                        }
+                        int existingLen;
+                        if (!compStaticReadonlyArrayLengthsMap->Lookup((size_t)fldAddr, &existingLen))
+                        {
+                            //int actualLen = 10;
+                            //compStaticReadonlyArrayLengthsMap->Set((size_t)fldAddr, actualLen);
+                        }
+                    }
                 }
             }
 #endif // TARGET_64BIT
