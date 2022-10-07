@@ -23,6 +23,7 @@
 #include "corprof.h"
 #include "eeprofinterfaces.h"
 #include "dynamicinterfacecastable.h"
+#include "frozenobjectheap.h"
 
 #ifndef TARGET_UNIX
 // Included for referencing __report_gsfailure
@@ -2645,6 +2646,96 @@ HCIMPL3(Object*, JIT_NewMDArr, CORINFO_CLASS_HANDLE classHnd, unsigned dwNumArgs
 
     HELPER_METHOD_FRAME_END();
     return OBJECTREFToObject(ret);
+}
+HCIMPLEND
+
+
+/*************************************************************/
+HCIMPL2(Object*, JIT_NewArr1Frozen, CORINFO_CLASS_HANDLE arrayMT, INT_PTR size)
+{
+    FCALL_CONTRACT;
+
+    OBJECTREF newArray = NULL;
+
+    HELPER_METHOD_FRAME_BEGIN_RET_0();    // Set up a frame
+
+    MethodTable *pArrayMT = (MethodTable *)arrayMT;
+
+    _ASSERTE(pArrayMT->IsFullyLoaded());
+    _ASSERTE(pArrayMT->IsArray());
+    _ASSERTE(!pArrayMT->IsMultiDimArray());
+
+    if (size < 0)
+        COMPlusThrow(kOverflowException);
+
+#ifdef HOST_64BIT
+    // Even though ECMA allows using a native int as the argument to newarr instruction
+    // (therefore size is INT_PTR), ArrayBase::m_NumComponents is 32-bit, so even on 64-bit
+    // platforms we can't create an array whose size exceeds 32 bits.
+    if (size > INT_MAX)
+        EX_THROW(EEMessageException, (kOverflowException, IDS_EE_ARRAY_DIMENSIONS_EXCEEDED));
+#endif
+
+#ifdef _DEBUG
+    if (g_pConfig->FastGCStressLevel()) {
+        GetThread()->DisableStressHeap();
+    }
+#endif // _DEBUG
+
+#ifndef FEATURE_64BIT_ALIGNMENT
+    FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
+    TypeHandle elementHandle = pArrayMT->GetArrayElementTypeHandle();
+    if (!pArrayMT->Collectible() && !elementHandle.IsTypeDesc() && !elementHandle.IsCanonicalSubtype() && !elementHandle.AsMethodTable()->Collectible())
+    {
+        if ((size == 0) || (!pArrayMT->ContainsPointers() && !elementHandle.AsMethodTable()->ContainsPointers()))
+        {
+            SetTypeHandleOnThreadForAlloc(TypeHandle(pArrayMT));
+
+            _ASSERTE(pArrayMT->CheckInstanceActivated());
+            _ASSERTE(pArrayMT->GetInternalCorElementType() == ELEMENT_TYPE_SZARRAY);
+
+            CorElementType elemType = pArrayMT->GetArrayElementType();
+
+            // Disallow the creation of void[] (an array of System.Void)
+            if (elemType == ELEMENT_TYPE_VOID)
+                COMPlusThrow(kArgumentException);
+
+            if (size < 0)
+                COMPlusThrow(kOverflowException);
+
+            if (size > 0X7FFFFFC7)
+                ThrowOutOfMemoryDimensionsExceeded();
+
+            // Allocate the space from the GC heap
+            SIZE_T componentSize = pArrayMT->GetComponentSize();
+#ifdef TARGET_64BIT
+            // POSITIVE_INT32 * UINT16 + SMALL_CONST
+            // this cannot overflow on 64bit
+            size_t totalSize = size * componentSize + pArrayMT->GetBaseSize();
+#else
+            S_SIZE_T safeTotalSize = S_SIZE_T((DWORD)size) * S_SIZE_T((DWORD)componentSize) + S_SIZE_T((DWORD)pArrayMT->GetBaseSize());
+            if (safeTotalSize.IsOverflow())
+                ThrowOutOfMemoryDimensionsExceeded();
+
+            size_t totalSize = safeTotalSize.Value();
+#endif
+            Object* frozenObj = foh->TryAllocateObject(pArrayMT, totalSize);
+            if (frozenObj != nullptr)
+            {
+                newArray = ObjectToOBJECTREF(frozenObj);
+            }
+        }
+    }
+#endif
+
+    if (newArray == NULL)
+    {
+        newArray = AllocateSzArray(pArrayMT, (INT32)size);
+    }
+
+    HELPER_METHOD_FRAME_END();
+
+    return(OBJECTREFToObject(newArray));
 }
 HCIMPLEND
 

@@ -748,6 +748,10 @@ size_t CEEInfo::printObjectDescription (
     {
         ((ReflectClassBaseObject*)obj)->GetType().GetName(stackStr);
     }
+    else if (obj->GetMethodTable()->IsArray())
+    {
+        obj->GetMethodTable()->_GetFullyQualifiedNameForClass(stackStr);
+    }
     else
     {
         _ASSERTE(!"Unexpected object type");
@@ -6038,20 +6042,23 @@ bool CEEInfo::isObjectImmutable(void* objPtr)
         MODE_PREEMPTIVE;
     } CONTRACTL_END;
 
-#ifdef DEBUG
-    JIT_TO_EE_TRANSITION();
+    bool isImmutable = true;
 
+    JIT_TO_EE_TRANSITION();
     GCX_COOP();
     Object* obj = (Object*)objPtr;
     MethodTable* type = obj->GetMethodTable();
+    _ASSERTE(type->IsString() || type == g_pRuntimeTypeClass || type->IsArray());
 
-    _ASSERTE(type->IsString() || type == g_pRuntimeTypeClass);
+    if (type->IsArray() && ((ArrayBase*)obj)->GetNumComponents() > 0)
+    {
+        isImmutable = false;
+    }
 
     EE_TO_JIT_TRANSITION();
-#endif
 
      // All currently allocated frozen objects can be treated as immutable
-    return true;
+    return isImmutable;
 }
 
 /***********************************************************************/
