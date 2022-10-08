@@ -5450,16 +5450,35 @@ GenTree* Compiler::fgMorphField(GenTree* tree, MorphAddrContext* mac)
 
             // TODO-CQ: enable this optimization for 32 bit targets.
             bool isStaticReadOnlyInited = false;
-#ifdef TARGET_64BIT
-            if (tree->TypeIs(TYP_REF) && !isBoxedStatic)
+            if (opts.OptimizationEnabled() && tree->TypeIs(TYP_REF) && !isBoxedStatic)
             {
-                bool pIsSpeculative = true;
-                if (info.compCompHnd->getStaticFieldCurrentClass(symHnd, &pIsSpeculative) != NO_CLASS_HANDLE)
+                bool                 pIsSpeculative = true;
+                CORINFO_CLASS_HANDLE fldCls         = info.compCompHnd->getStaticFieldCurrentClass(symHnd, &pIsSpeculative);
+                if (fldCls != NO_CLASS_HANDLE)
                 {
+#ifdef TARGET_64BIT
                     isStaticReadOnlyInited = !pIsSpeculative;
+                    if (isStaticReadOnlyInited && (info.compCompHnd->isSDArray(fldCls) || (fldCls == impGetStringClass())))
+                    {
+                        if (compStaticReadonlyArrayLengthsMap == nullptr)
+                        {
+                            compStaticReadonlyArrayLengthsMap = new (getAllocator()) StaticReadonlyArrayLengths(getAllocator());
+                        }
+                        int existingLen;
+                        if (!compStaticReadonlyArrayLengthsMap->Lookup((size_t)fldAddr, &existingLen))
+                        {
+                            int actualLen = 0;
+                            if (info.compCompHnd->getReadonlyStaticFieldValue(symHnd, (uint8_t*)&actualLen,
+                                sizeof(int), CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength))
+                            {
+                                compStaticReadonlyArrayLengthsMap->Set((size_t)fldAddr, actualLen);
+                            }
+                        }
+                    }
+#endif // TARGET_64BIT
                 }
             }
-#endif // TARGET_64BIT
+
 
             GenTreeFlags handleKind = GTF_EMPTY;
             if (isBoxedStatic)

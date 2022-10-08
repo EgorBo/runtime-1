@@ -615,7 +615,8 @@ void* getFieldAddress(
 bool getReadonlyStaticFieldValue(
           CORINFO_FIELD_HANDLE field,
           uint8_t* buffer,
-          int bufferSize) override;
+          int bufferSize,
+          CorInfoObjectValueKind kind) override;
 
 CORINFO_CLASS_HANDLE getStaticFieldCurrentClass(
           CORINFO_FIELD_HANDLE field,

@@ -1967,6 +1967,7 @@ void Compiler::compInit(ArenaAllocator*       pAlloc,
 #endif // FEATURE_SIMD
 
     compUsesThrowHelper = false;
+    compStaticReadonlyArrayLengthsMap = nullptr;
 }
 
 /*****************************************************************************

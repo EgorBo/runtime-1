@@ -2204,11 +2204,17 @@ namespace Internal.JitInterface
             return index;
         }
 
-        private bool getReadonlyStaticFieldValue(CORINFO_FIELD_STRUCT_* fieldHandle, byte* buffer, int bufferSize)
+        private bool getReadonlyStaticFieldValue(CORINFO_FIELD_STRUCT_* fieldHandle, byte* buffer, int bufferSize, CorInfoObjectValueKind kind)
         {
             Debug.Assert(fieldHandle != null);
             Debug.Assert(buffer != null);
             Debug.Assert(bufferSize > 0);
+
+            if (kind != CorInfoObjectValueKind.CORINFO_OBJ_VALUE_KIND_Value)
+            {
+                // TODO: implement as part of this PR
+                return false;
+            }
 
             FieldDesc field = HandleToObject(fieldHandle);
             Debug.Assert(field.IsStatic);

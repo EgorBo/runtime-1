@@ -5864,6 +5864,18 @@ int ValueNumStore::GetNewArrSize(ValueNum vn)
             return ConstantValue<int>(arg1VN);
         }
     }
+
+    if (TypeOfVN(vn) == TYP_REF && GetVNFunc(vn, &funcApp) &&
+        funcApp.m_func == VNF_InvariantNonNullLoad && IsVNConstant(funcApp.m_args[0]) &&
+        TypeOfVN(funcApp.m_args[0]) == TYP_I_IMPL)
+    {
+        size_t staticFld = ConstantValue<size_t>(funcApp.m_args[0]);
+        int arrayLen;
+        if (m_pComp->compStaticReadonlyArrayLengthsMap->Lookup(staticFld, &arrayLen))
+        {
+            return arrayLen;
+        }
+    }
     return 0;
 }
 
@@ -8611,6 +8623,23 @@ void Compiler::fgValueNumberTree(GenTree* tree)
     }
     else if (GenTree::OperIsSimple(oper))
     {
+        if ((oper == GT_ARR_LENGTH))
+        {
+            VNFuncApp funcApp;
+            if (vnStore->GetVNFunc(tree->gtGetOp1()->gtVNPair.GetLiberal(), &funcApp) &&
+                funcApp.m_func == VNF_InvariantNonNullLoad && vnStore->IsVNConstant(funcApp.m_args[0]) &&
+                vnStore->TypeOfVN(funcApp.m_args[0]) == TYP_I_IMPL)
+            {
+                size_t staticFld = vnStore->ConstantValue<size_t>(funcApp.m_args[0]);
+                int arrayLen;
+                if (compStaticReadonlyArrayLengthsMap->Lookup(staticFld, &arrayLen))
+                {
+                    tree->gtVNPair.SetBoth(vnStore->VNForIntCon(arrayLen));
+                    return;
+                }
+            }
+        }
+
         // Allow assignments for all enregisterable types to be value numbered (SIMD types)
         if ((oper == GT_ASG) && varTypeIsEnregisterable(tree))
         {

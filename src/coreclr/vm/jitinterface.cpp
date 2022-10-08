@@ -11873,7 +11873,7 @@ void* CEEJitInfo::getFieldAddress(CORINFO_FIELD_HANDLE fieldHnd,
     return result;
 }
 
-bool CEEInfo::getReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE fieldHnd, uint8_t* buffer, int bufferSize)
+bool CEEInfo::getReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE fieldHnd, uint8_t* buffer, int bufferSize, CorInfoObjectValueKind kind)
 {
     CONTRACTL {
         THROWS;
@@ -11891,7 +11891,16 @@ bool CEEInfo::getReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE fieldHnd, uint8_t
 
     FieldDesc* field = (FieldDesc*)fieldHnd;
     _ASSERTE(field->IsStatic());
-    _ASSERTE((unsigned)bufferSize == field->GetSize());
+
+    if (kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength)
+    {
+        _ASSERTE((unsigned)bufferSize == sizeof(int));
+    }
+    else
+    {
+        _ASSERTE(kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_Value);
+        _ASSERTE((unsigned)bufferSize == field->GetSize());
+    }
 
     MethodTable* pEnclosingMT = field->GetEnclosingMethodTable();
     _ASSERTE(!pEnclosingMT->IsSharedByGenericInstantiations());
@@ -11911,8 +11920,29 @@ bool CEEInfo::getReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE fieldHnd, uint8_t
             if (fieldObj != NULL)
             {
                 Object* obj = OBJECTREFToObject(fieldObj);
-                if (GCHeapUtilities::GetGCHeap()->IsInFrozenSegment(obj))
+
+                if (kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength)
                 {
+                    if (obj->GetMethodTable()->IsArray())
+                    {
+                        DWORD size = ((ArrayBase*)obj)->GetNumComponents();
+                        memcpy(buffer, &size, sizeof(DWORD));
+                        result = true;
+                    }
+                    else if (obj->GetMethodTable()->IsString())
+                    {
+                        DWORD size = ((StringObject*)obj)->GetStringLength();
+                        memcpy(buffer, &size, sizeof(DWORD));
+                        result = true;
+                    }
+                    else
+                    {
+                        result = false;
+                    }
+                }
+                else if (GCHeapUtilities::GetGCHeap()->IsInFrozenSegment(obj))
+                {
+                    _ASSERT(kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_Value);
                     intptr_t ptr = (intptr_t)obj;
                     memcpy(buffer, &ptr, sizeof(intptr_t));
                     result = true;
@@ -11920,12 +11950,21 @@ bool CEEInfo::getReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE fieldHnd, uint8_t
             }
             else
             {
-                memset(buffer, 0, sizeof(intptr_t));
-                result = true;
+                if (kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength)
+                {
+                    // ignore nulls for CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength
+                    result = false;
+                }
+                else
+                {
+                    memset(buffer, 0, sizeof(intptr_t));
+                    result = true;
+                }
             }
         }
         else
         {
+            _ASSERT(kind == CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_Value);
             void* fldAddr = field->GetCurrentStaticAddress();
             _ASSERTE(fldAddr != nullptr);
             memcpy(buffer, fldAddr, bufferSize);

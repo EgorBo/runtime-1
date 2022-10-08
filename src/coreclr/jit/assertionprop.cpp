@@ -6132,6 +6132,18 @@ Compiler::fgWalkResult Compiler::optVNConstantPropCurStmt(BasicBlock* block, Sta
         case GT_JTRUE:
             break;
 
+        case GT_ARR_LENGTH:
+            if (!vnStore->IsVNInt32Constant(tree->gtVNPair.GetConservative()))
+            {
+                return WALK_CONTINUE;
+            }
+            if (tree->gtVNPair.GetConservative() == tree->gtVNPair.GetLiberal() &&
+                vnStore->VNNormalValue(tree->gtVNPair.GetConservative()) == tree->gtVNPair.GetConservative())
+            {
+                break;
+            }
+            return WALK_CONTINUE;
+
         case GT_MUL:
             // Don't transform long multiplies.
             if (tree->gtFlags & GTF_MUL_64RSLT)

@@ -3625,15 +3625,16 @@ void* MethodContext::repGetFieldAddress(CORINFO_FIELD_HANDLE field, void** ppInd
     return (void*)value.fieldAddress;
 }
 
-void MethodContext::recGetReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE field, uint8_t* buffer, int bufferSize, bool result)
+void MethodContext::recGetReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE field, uint8_t* buffer, int bufferSize, CorInfoObjectValueKind kind, bool result)
 {
     if (GetReadonlyStaticFieldValue == nullptr)
-        GetReadonlyStaticFieldValue = new LightWeightMap<DLD, DD>();
+        GetReadonlyStaticFieldValue = new LightWeightMap<Agnostic_GetReadonlyStaticFieldValueKey, DD>();
 
-    DLD key;
+    Agnostic_GetReadonlyStaticFieldValueKey key;
     ZeroMemory(&key, sizeof(key));
-    key.A = CastHandle(field);
-    key.B = (DWORD)bufferSize;
+    key.field = CastHandle(field);
+    key.bufferSize = (DWORD)bufferSize;
+    key.kind = (DWORD)kind;
 
     DWORD tmpBuf = (DWORD)-1;
     if (buffer != nullptr && result)
@@ -3646,19 +3647,20 @@ void MethodContext::recGetReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE field, u
     GetReadonlyStaticFieldValue->Add(key, value);
     DEBUG_REC(dmpGetReadonlyStaticFieldValue(key, value));
 }
-void MethodContext::dmpGetReadonlyStaticFieldValue(DLD key, DD value)
+void MethodContext::dmpGetReadonlyStaticFieldValue(Agnostic_GetReadonlyStaticFieldValueKey key, DD value)
 {
-    printf("GetReadonlyStaticFieldValue key fld-%016llX bufSize-%u, result-%u", key.A, key.B, value.A);
+    printf("GetReadonlyStaticFieldValue key fld-%016llX bufSize-%u, kind-%u, result-%u", key.field, key.bufferSize, key.kind, value.A);
     GetReadonlyStaticFieldValue->Unlock();
 }
-bool MethodContext::repGetReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE field, uint8_t* buffer, int bufferSize)
+bool MethodContext::repGetReadonlyStaticFieldValue(CORINFO_FIELD_HANDLE field, uint8_t* buffer, int bufferSize, CorInfoObjectValueKind kind)
 {
-    DLD key;
+    Agnostic_GetReadonlyStaticFieldValueKey key;
     ZeroMemory(&key, sizeof(key));
-    key.A = CastHandle(field);
-    key.B = (DWORD)bufferSize;
+    key.field = CastHandle(field);
+    key.bufferSize = (DWORD)bufferSize;
+    key.kind = (DWORD)kind;
 
-    AssertMapAndKeyExist(GetReadonlyStaticFieldValue, key, ": key %016llX", key.A);
+    AssertMapAndKeyExist(GetReadonlyStaticFieldValue, key, ": key %016llX", key.field);
 
     DD value = GetReadonlyStaticFieldValue->Get(key);
     DEBUG_REP(dmpGetReadonlyStaticFieldValue(key, value));

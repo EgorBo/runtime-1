@@ -996,6 +996,12 @@ enum CorInfoTailCall
     TAILCALL_FAIL           = -1,   // Couldn't do a tail call
 };
 
+enum class CorInfoObjectValueKind
+{
+    CORINFO_OBJ_VALUE_KIND_Value = 0,
+    CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength = 1,
+};
+
 enum CorInfoInitClassResult
 {
     CORINFO_INITCLASS_NOT_REQUIRED  = 0x00, // No class initialization required, but the class is not actually initialized yet
@@ -3204,6 +3210,7 @@ public:
     //    field      - field handle
     //    buffer     - buffer field's value will be stored to
     //    bufferSize - size of buffer
+    //    kind       - which part of object's value to return
     //
     // Return Value:
     //    Returns true if field's constant value was available and successfully copied to buffer
@@ -3211,7 +3218,8 @@ public:
     virtual bool getReadonlyStaticFieldValue(
                     CORINFO_FIELD_HANDLE    field,
                     uint8_t                *buffer,
-                    int                     bufferSize
+                    int                     bufferSize,
+                    CorInfoObjectValueKind  kind = CorInfoObjectValueKind::CORINFO_OBJ_VALUE_KIND_Value
                     ) = 0;
 
     // If pIsSpeculative is NULL, return the class handle for the value of ref-class typed

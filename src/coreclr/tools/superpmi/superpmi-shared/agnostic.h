@@ -77,6 +77,13 @@ struct Agnostic_GetClassGClayout
     DWORD valCount;
 };
 
+struct Agnostic_GetReadonlyStaticFieldValueKey
+{
+    DWORDLONG field;
+    DWORD bufferSize;
+    DWORD kind;
+};
+
 struct DLD
 {
     DWORDLONG A;

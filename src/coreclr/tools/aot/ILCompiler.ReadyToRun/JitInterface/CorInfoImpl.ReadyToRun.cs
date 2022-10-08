@@ -2993,7 +2993,7 @@ namespace Internal.JitInterface
             return 0;
         }
 
-        private bool getReadonlyStaticFieldValue(CORINFO_FIELD_STRUCT_* fieldHandle, byte* buffer, int bufferSize)
+        private bool getReadonlyStaticFieldValue(CORINFO_FIELD_STRUCT_* fieldHandle, byte* buffer, int bufferSize, CorInfoObjectValueKind kind)
         {
             return false;
         }

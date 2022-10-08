@@ -513,6 +513,12 @@ namespace Internal.JitInterface
         TAILCALL_FAIL = -1,   // Couldn't do a tail call
     }
 
+    public enum CorInfoObjectValueKind
+    {
+        CORINFO_OBJ_VALUE_KIND_Value = 0,
+        CORINFO_OBJ_VALUE_KIND_ArrayOrStringLength = 1,
+    };
+
     public enum CorInfoCanSkipVerificationResult
     {
         CORINFO_VERIFICATION_CANNOT_SKIP = 0,    // Cannot skip verification during jit time.
