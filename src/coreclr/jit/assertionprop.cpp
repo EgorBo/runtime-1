@@ -3319,7 +3319,7 @@ bool Compiler::optIsProfitableToSubstitute(GenTreeLclVarCommon* lcl, BasicBlock*
                 const weight_t defBlockWeight = defBlock->getBBWeight(this);
                 const weight_t lclblockWeight = lclBlock->getBBWeight(this);
 
-                if ((defBlockWeight > 0) && ((lclblockWeight / defBlockWeight) >= BB_LOOP_WEIGHT_SCALE))
+                if ((defBlockWeight > 0) && ((lclblockWeight / defBlockWeight) >= (BB_LOOP_WEIGHT_SCALE / 2)))
                 {
                     JITDUMP("Constant propagation inside loop " FMT_BB " is not profitable\n", lclBlock->bbNum);
                     return false;
