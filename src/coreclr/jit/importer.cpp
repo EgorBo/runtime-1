@@ -3176,6 +3176,7 @@ GenTree* Compiler::impInitializeArrayIntrinsic(CORINFO_SIG_INFO* sig)
     bool isMDArray = false;
 
     if (newArrayCall->AsCall()->gtCallMethHnd != eeFindHelper(CORINFO_HELP_NEWARR_1_DIRECT) &&
+        newArrayCall->AsCall()->gtCallMethHnd != eeFindHelper(CORINFO_HELP_NEWARR_1_DIRECT_FROZEN) &&
         newArrayCall->AsCall()->gtCallMethHnd != eeFindHelper(CORINFO_HELP_NEWARR_1_OBJ) &&
         newArrayCall->AsCall()->gtCallMethHnd != eeFindHelper(CORINFO_HELP_NEWARR_1_VC) &&
         newArrayCall->AsCall()->gtCallMethHnd != eeFindHelper(CORINFO_HELP_NEWARR_1_ALIGN8)
@@ -15402,6 +15403,25 @@ void Compiler::impImportBlockCode(BasicBlock* block)
             case CEE_STFLD:
             case CEE_STSFLD:
             {
+                // TODO: proper impl, this one is just for a quick test
+                //if (!opts.IsReadyToRun() && opts.jitFlags->IsSet(JitFlags::JIT_FLAG_FROZEN_ALLOC_ALLOWED) &&
+                //    (opcode == CEE_STSFLD) && ((info.compFlags & FLG_CCTOR) == FLG_CCTOR))
+                //{
+                //    GenTree* op = impStackTop().val;
+                //    if (op->IsHelperCall() && ((OPCODE)impGetNonPrefixOpcode(codeAddr + sz, codeEndp) == CEE_RET))
+                //    {
+                //        GenTreeCall*    call   = op->AsCall();
+                //        CorInfoHelpFunc helper = eeGetHelperNum(call->gtCallMethHnd);
+                //        if ((helper == CORINFO_HELP_NEWARR_1_VC))
+                //        {
+                //            call->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_DIRECT_FROZEN);
+                //        }
+                //        if (helper == CORINFO_HELP_NEWSFAST)
+                //        {
+                //            call->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWSFAST_FROZEN);
+                //        }
+                //    }
+                //}
 
                 bool isStoreStatic = (opcode == CEE_STSFLD);
 

@@ -8169,6 +8169,23 @@ Statement* Compiler::fgAssignRecursiveCallArgToCallerParam(GenTree*         arg,
 
 GenTree* Compiler::fgMorphCall(GenTreeCall* call)
 {
+    if (!opts.IsReadyToRun() && opts.jitFlags->IsSet(JitFlags::JIT_FLAG_FROZEN_ALLOC_ALLOWED) &&
+        ((info.compFlags & FLG_CCTOR) == FLG_CCTOR))
+    {
+        if (call->IsHelperCall())
+        {
+            CorInfoHelpFunc helper = eeGetHelperNum(call->gtCallMethHnd);
+            if ((helper == CORINFO_HELP_NEWARR_1_VC))
+            {
+                call->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_DIRECT_FROZEN);
+            }
+            if (helper == CORINFO_HELP_NEWSFAST)
+            {
+                call->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWSFAST_FROZEN);
+            }
+        }
+    }
+
     if (call->CanTailCall())
     {
         GenTree* newNode = fgMorphPotentialTailCall(call);

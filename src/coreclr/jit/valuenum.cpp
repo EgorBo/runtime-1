@@ -10161,6 +10161,7 @@ VNFunc Compiler::fgValueNumberJitHelperMethodVNFunc(CorInfoHelpFunc helpFunc)
         // something about array length...
         case CORINFO_HELP_NEWFAST:
         case CORINFO_HELP_NEWSFAST:
+        case CORINFO_HELP_NEWSFAST_FROZEN:
         case CORINFO_HELP_NEWSFAST_FINALIZE:
         case CORINFO_HELP_NEWSFAST_ALIGN8:
         case CORINFO_HELP_NEWSFAST_ALIGN8_VC:
@@ -10173,6 +10174,7 @@ VNFunc Compiler::fgValueNumberJitHelperMethodVNFunc(CorInfoHelpFunc helpFunc)
             break;
 
         case CORINFO_HELP_NEWARR_1_DIRECT:
+        case CORINFO_HELP_NEWARR_1_DIRECT_FROZEN:
         case CORINFO_HELP_NEWARR_1_OBJ:
         case CORINFO_HELP_NEWARR_1_VC:
         case CORINFO_HELP_NEWARR_1_ALIGN8:

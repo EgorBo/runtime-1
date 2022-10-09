@@ -488,6 +488,54 @@ OBJECTREF AllocateSzArray(MethodTable* pArrayMT, INT32 cElements, GC_ALLOC_FLAGS
     return ObjectToOBJECTREF((Object*)orArray);
 }
 
+OBJECTREF AllocateFrozenSzArray(MethodTable* pArrayMT, INT32 cElements)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_COOPERATIVE; // returns an objref without pinning it => cooperative
+    } CONTRACTL_END;
+
+    SetTypeHandleOnThreadForAlloc(TypeHandle(pArrayMT));
+
+    _ASSERTE(pArrayMT->CheckInstanceActivated());
+    _ASSERTE(pArrayMT->GetInternalCorElementType() == ELEMENT_TYPE_SZARRAY);
+
+    CorElementType elemType = pArrayMT->GetArrayElementType();
+
+    // Disallow the creation of void[] (an array of System.Void)
+    if (elemType == ELEMENT_TYPE_VOID)
+        COMPlusThrow(kArgumentException);
+
+    if (cElements < 0)
+        COMPlusThrow(kOverflowException);
+
+    if ((SIZE_T)cElements > MaxArrayLength())
+        ThrowOutOfMemoryDimensionsExceeded();
+
+    // Allocate the space from the GC heap
+    SIZE_T componentSize = pArrayMT->GetComponentSize();
+#ifdef TARGET_64BIT
+    // POSITIVE_INT32 * UINT16 + SMALL_CONST
+    // this cannot overflow on 64bit
+    size_t totalSize = cElements * componentSize + pArrayMT->GetBaseSize();
+
+#else
+    S_SIZE_T safeTotalSize = S_SIZE_T((DWORD)cElements) * S_SIZE_T((DWORD)componentSize) + S_SIZE_T((DWORD)pArrayMT->GetBaseSize());
+    if (safeTotalSize.IsOverflow())
+        ThrowOutOfMemoryDimensionsExceeded();
+
+    size_t totalSize = safeTotalSize.Value();
+#endif
+
+
+    FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
+    ArrayBase* orArray = static_cast<ArrayBase*>(foh->TryAllocateObject(pArrayMT, totalSize));
+    orArray->m_NumComponents = cElements;
+
+    return ObjectToOBJECTREF((Object*)orArray);
+}
+
 void ThrowOutOfMemoryDimensionsExceeded()
 {
     CONTRACTL {
@@ -1027,6 +1075,21 @@ OBJECTREF AllocateObject(MethodTable *pMT
     }
 
     return UNCHECKED_OBJECTREF_TO_OBJECTREF(oref);
+}
+
+OBJECTREF AllocateFrozenObject(MethodTable* pMT)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_COOPERATIVE; // returns an objref without pinning it => cooperative
+        PRECONDITION(CheckPointer(pMT));
+        PRECONDITION(pMT->CheckInstanceActivated());
+    } CONTRACTL_END;
+
+    FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
+    Object* orObject = foh->TryAllocateObject(pMT, pMT->GetBaseSize());
+    return ObjectToOBJECTREF(orObject);
 }
 
 //========================================================================

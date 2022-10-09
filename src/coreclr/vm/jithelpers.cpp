@@ -41,6 +41,7 @@
 #include "debuginfostore.h"
 #include "safemath.h"
 #include "threadstatics.h"
+#include "frozenobjectheap.h"
 
 #ifdef HAVE_GCCOVER
 #include "gccover.h"
@@ -2316,6 +2317,44 @@ HCIMPLEND
 
 
 
+/*************************************************************/
+HCIMPL1(Object*, JIT_NewFrozen, CORINFO_CLASS_HANDLE typeHnd_)
+{
+    FCALL_CONTRACT;
+
+    OBJECTREF newobj = NULL;
+    HELPER_METHOD_FRAME_BEGIN_RET_0();    // Set up a frame
+
+    TypeHandle typeHnd(typeHnd_);
+
+    _ASSERTE(!typeHnd.IsTypeDesc());  // heap objects must have method tables
+    MethodTable* pMT = typeHnd.AsMethodTable();
+    _ASSERTE(pMT->IsRestored_NoLogging());
+
+#ifdef _DEBUG
+    if (g_pConfig->FastGCStressLevel()) {
+        GetThread()->DisableStressHeap();
+    }
+#endif // _DEBUG
+
+    // TODO: enable for non-empty objects with gc pointers
+    if (!pMT->Collectible() && (pMT->GetNumInstanceFields() == 0))
+    {
+        newobj = AllocateFrozenObject (pMT);
+    }
+
+    if (newobj == NULL)
+    {
+        newobj = AllocateObject(pMT);
+    }
+
+    HELPER_METHOD_FRAME_END();
+    return(OBJECTREFToObject(newobj));
+}
+HCIMPLEND
+
+
+
 //========================================================================
 //
 //      STRING HELPERS
@@ -2623,6 +2662,60 @@ HCIMPL2(Object*, JIT_NewArr1, CORINFO_CLASS_HANDLE arrayMT, INT_PTR size)
 #endif // _DEBUG
 
     newArray = AllocateSzArray(pArrayMT, (INT32)size);
+    HELPER_METHOD_FRAME_END();
+
+    return(OBJECTREFToObject(newArray));
+}
+HCIMPLEND
+
+/*************************************************************/
+HCIMPL2(Object*, JIT_NewArr1Frozen, CORINFO_CLASS_HANDLE arrayMT, INT_PTR size)
+{
+    FCALL_CONTRACT;
+
+    OBJECTREF newArray = NULL;
+
+    HELPER_METHOD_FRAME_BEGIN_RET_0();    // Set up a frame
+
+    MethodTable* pArrayMT = (MethodTable*)arrayMT;
+
+    _ASSERTE(pArrayMT->IsFullyLoaded());
+    _ASSERTE(pArrayMT->IsArray());
+    _ASSERTE(!pArrayMT->IsMultiDimArray());
+
+    if (size < 0)
+        COMPlusThrow(kOverflowException);
+
+#ifdef HOST_64BIT
+    // Even though ECMA allows using a native int as the argument to newarr instruction
+    // (therefore size is INT_PTR), ArrayBase::m_NumComponents is 32-bit, so even on 64-bit
+    // platforms we can't create an array whose size exceeds 32 bits.
+    if (size > INT_MAX)
+        EX_THROW(EEMessageException, (kOverflowException, IDS_EE_ARRAY_DIMENSIONS_EXCEEDED));
+#endif
+
+#ifdef _DEBUG
+    if (g_pConfig->FastGCStressLevel()) {
+        GetThread()->DisableStressHeap();
+    }
+#endif // _DEBUG
+
+    if (!pArrayMT->Collectible())
+    {
+        TypeHandle elementHandle = pArrayMT->GetArrayElementTypeHandle();
+        if (!elementHandle.IsTypeDesc() && !elementHandle.AsMethodTable()->Collectible())
+        {
+            if ((size == 0) || (!pArrayMT->ContainsPointers() && !elementHandle.AsMethodTable()->ContainsPointers()))
+            {
+                newArray = AllocateFrozenSzArray(pArrayMT, (INT32)size);
+            }
+        }
+    }
+
+    if (newArray == NULL)
+    {
+        newArray = AllocateSzArray(pArrayMT, (INT32)size);
+    }
     HELPER_METHOD_FRAME_END();
 
     return(OBJECTREFToObject(newArray));

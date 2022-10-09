@@ -58,6 +58,9 @@ namespace Internal.JitInterface
         CORINFO_HELP_NEWARR_1_VC,       // optimized 1-D value class arrays
         CORINFO_HELP_NEWARR_1_ALIGN8,   // like VC, but aligns the array start
 
+        CORINFO_HELP_NEWSFAST_FROZEN,
+        CORINFO_HELP_NEWARR_1_DIRECT_FROZEN,
+
         CORINFO_HELP_STRCNS,            // create a new string literal
         CORINFO_HELP_STRCNS_CURRENT_MODULE, // create a new string literal from the current module (used by NGen code)
         /* Object model */

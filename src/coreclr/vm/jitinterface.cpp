@@ -750,7 +750,7 @@ size_t CEEInfo::printObjectDescription (
     }
     else
     {
-        _ASSERTE(!"Unexpected object type");
+        obj->GetMethodTable()->_GetFullyQualifiedNameForClass(stackStr);
     }
 
     const UTF8* utf8data = stackStr.GetUTF8();
@@ -6038,20 +6038,30 @@ bool CEEInfo::isObjectImmutable(void* objPtr)
         MODE_PREEMPTIVE;
     } CONTRACTL_END;
 
-#ifdef DEBUG
-    JIT_TO_EE_TRANSITION();
+    bool isImmutable = false;
 
+    JIT_TO_EE_TRANSITION();
     GCX_COOP();
     Object* obj = (Object*)objPtr;
     MethodTable* type = obj->GetMethodTable();
 
-    _ASSERTE(type->IsString() || type == g_pRuntimeTypeClass);
+    if (type->IsArray() && ((ArrayBase*)obj)->GetNumComponents() == 0)
+    {
+        isImmutable = true;
+    }
+    else if (type->IsString() || type == g_pRuntimeTypeClass)
+    {
+        isImmutable = true;
+    }
+    else if (type->GetNumInstanceFields() == 0)
+    {
+        isImmutable = true;
+    }
 
     EE_TO_JIT_TRANSITION();
-#endif
 
      // All currently allocated frozen objects can be treated as immutable
-    return true;
+    return isImmutable;
 }
 
 /***********************************************************************/
@@ -12779,6 +12789,12 @@ CORJIT_FLAGS GetCompileFlags(MethodDesc * ftn, CORJIT_FLAGS flags, CORINFO_METHO
     if (CORProfilerTrackTransitions())
         flags.Set(CORJIT_FLAGS::CORJIT_FLAG_PROF_NO_PINVOKE_INLINE);
 #endif // PROFILING_SUPPORTED
+
+    // Don't allow allocations on FOH from collectible contexts to avoid memory leaks
+    if (!ftn->GetLoaderAllocator()->CanUnload())
+    {
+        flags.Set(CORJIT_FLAGS::CORJIT_FLAG_FROZEN_ALLOC_ALLOWED);
+    }
 
     // Set optimization flags
     if (!flags.IsSet(CORJIT_FLAGS::CORJIT_FLAG_MIN_OPT))

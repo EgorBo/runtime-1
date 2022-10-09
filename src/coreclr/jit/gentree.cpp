@@ -1946,6 +1946,7 @@ GenTree* Compiler::getArrayLengthFromAllocation(GenTree* tree DEBUGARG(BasicBloc
             switch (eeGetHelperNum(call->gtCallMethHnd))
             {
                 case CORINFO_HELP_NEWARR_1_DIRECT:
+                case CORINFO_HELP_NEWARR_1_DIRECT_FROZEN:
                 case CORINFO_HELP_NEWARR_1_OBJ:
                 case CORINFO_HELP_NEWARR_1_VC:
                 case CORINFO_HELP_NEWARR_1_ALIGN8:
@@ -17846,6 +17847,7 @@ CORINFO_CLASS_HANDLE Compiler::gtGetHelperCallClassHandle(GenTreeCall* call, boo
         }
 
         case CORINFO_HELP_NEWARR_1_DIRECT:
+        case CORINFO_HELP_NEWARR_1_DIRECT_FROZEN:
         case CORINFO_HELP_NEWARR_1_OBJ:
         case CORINFO_HELP_NEWARR_1_VC:
         case CORINFO_HELP_NEWARR_1_ALIGN8:
