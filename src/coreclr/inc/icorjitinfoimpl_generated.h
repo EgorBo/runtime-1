@@ -27,6 +27,9 @@ bool isIntrinsic(
 uint32_t getMethodAttribs(
           CORINFO_METHOD_HANDLE ftn) override;
 
+uint32_t getILSize(
+          CORINFO_METHOD_HANDLE ftn) override;
+
 void setMethodAttribs(
           CORINFO_METHOD_HANDLE ftn,
           CorInfoMethodRuntimeFlags attribs) override;

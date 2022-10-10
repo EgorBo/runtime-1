@@ -828,6 +828,32 @@ DWORD MethodContext::repGetMethodAttribs(CORINFO_METHOD_HANDLE methodHandle)
     return value;
 }
 
+void MethodContext::recGetILSize(CORINFO_METHOD_HANDLE methodHandle, DWORD size)
+{
+    if (GetILSize == nullptr)
+        GetILSize = new LightWeightMap<DWORDLONG, DWORD>();
+
+    DWORDLONG key = CastHandle(methodHandle);
+    GetILSize->Add(key, size);
+    DEBUG_REC(dmpGetILSize(key, size));
+}
+void MethodContext::dmpGetILSize(DWORDLONG key, DWORD value)
+{
+    printf("GetILSize key %016llX, value %08X (%s)", key, value, SpmiDumpHelper::DumpCorInfoFlag((CorInfoFlag)value).c_str());
+}
+DWORD MethodContext::repGetILSize(CORINFO_METHOD_HANDLE methodHandle)
+{
+    DWORDLONG key = CastHandle(methodHandle);
+    AssertMapAndKeyExist(GetILSize, key, ": key %016llX", key);
+
+    DWORD value = GetILSize->Get(key);
+    DEBUG_REP(dmpGetILSize(key, value));
+
+    if (cr->repSetMethodAttribs(methodHandle) == CORINFO_FLG_BAD_INLINEE)
+        value ^= CORINFO_FLG_DONT_INLINE;
+    return value;
+}
+
 void MethodContext::recGetClassModule(CORINFO_CLASS_HANDLE cls, CORINFO_MODULE_HANDLE mod)
 {
     if (GetClassModule == nullptr)

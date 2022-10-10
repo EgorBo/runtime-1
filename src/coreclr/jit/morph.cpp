@@ -9623,6 +9623,11 @@ GenTreeOp* Compiler::fgMorphCommutative(GenTreeOp* tree)
     assert(varTypeIsIntegralOrI(tree->TypeGet()));
     assert(tree->OperIs(GT_ADD, GT_MUL, GT_OR, GT_AND, GT_XOR));
 
+    if (opts.OptimizationEnabled())
+    {
+        return nullptr;
+    }
+
     // op1 can be GT_COMMA, in this case we're going to fold
     // "(op (COMMA(... (op X C1))) C2)" to "(COMMA(... (op X C3)))"
     GenTree*   op1  = tree->gtGetOp1()->gtEffectiveVal(true);
@@ -12773,6 +12778,11 @@ GenTree* Compiler::fgOptimizeRelationalComparisonWithCasts(GenTreeOp* cmp)
 {
     assert(cmp->OperIs(GT_LE, GT_LT, GT_GE, GT_GT));
     assert(!optValnumCSE_phase);
+
+    if (opts.OptimizationEnabled())
+    {
+        return cmp;
+    }
 
     GenTree* op1 = cmp->gtGetOp1();
     GenTree* op2 = cmp->gtGetOp2();

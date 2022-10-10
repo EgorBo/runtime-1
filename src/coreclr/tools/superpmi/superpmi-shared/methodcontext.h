@@ -140,6 +140,10 @@ public:
     void dmpGetMethodAttribs(DWORDLONG key, DWORD value);
     DWORD repGetMethodAttribs(CORINFO_METHOD_HANDLE methodHandle);
 
+    void recGetILSize(CORINFO_METHOD_HANDLE methodHandle, DWORD size);
+    void dmpGetILSize(DWORDLONG key, DWORD value);
+    DWORD repGetILSize(CORINFO_METHOD_HANDLE methodHandle);
+
     void recGetClassModule(CORINFO_CLASS_HANDLE cls, CORINFO_MODULE_HANDLE mod);
     void dmpGetClassModule(DWORDLONG key, DWORDLONG value);
     CORINFO_MODULE_HANDLE repGetClassModule(CORINFO_CLASS_HANDLE cls);
@@ -1140,6 +1144,7 @@ enum mcPackets
     Packet_GetExactClasses = 195,
     Packet_GetRuntimeTypePointer = 196,
     Packet_PrintObjectDescription = 197,
+    Packet_GetILSize = 198,
 };
 
 void SetDebugDumpVariables();

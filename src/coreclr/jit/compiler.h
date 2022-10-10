@@ -4132,6 +4132,7 @@ private:
     void impCanInlineIL(CORINFO_METHOD_HANDLE fncHandle,
                         CORINFO_METHOD_INFO*  methInfo,
                         bool                  forceInline,
+                        bool                  isTier0,
                         InlineResult*         inlineResult);
 
     void impCheckCanInline(GenTreeCall*           call,
@@ -5431,6 +5432,7 @@ protected:
 
     bool fgMayExplicitTailCall();
 
+    void fgQuickPrescan(const BYTE* codeAddr, IL_OFFSET codeSize);
     void fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, FixedBitVect* jumpTarget);
 
     void fgMarkBackwardJump(BasicBlock* startBlock, BasicBlock* endBlock);
@@ -9189,6 +9191,18 @@ public:
             return false;
         }
 #endif
+
+        bool IsTier0()
+        {
+            return jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0);
+        }
+
+        bool IsTier0WithQuickOpts()
+        {
+            return jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0) &&
+                !jitFlags->IsSet(JitFlags::JIT_FLAG_DEBUG_CODE) &&
+                !jitFlags->IsSet(JitFlags::JIT_FLAG_MIN_OPT);
+        }
 
         // true if we should use the PINVOKE_{BEGIN,END} helpers instead of generating
         // PInvoke transitions inline. Normally used by R2R, but also used when generating a reverse pinvoke frame, as

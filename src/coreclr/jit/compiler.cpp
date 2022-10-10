@@ -3618,7 +3618,7 @@ void Compiler::compSetOptimizationLevel()
 
     theMinOptsValue = false;
 
-    if (opts.compFlags == CLFLG_MINOPT)
+    if ((opts.compFlags & ~CLFLG_INLINING) == CLFLG_MINOPT)
     {
         JITLOG((LL_INFO100, "CLFLG_MINOPT set for method %s\n", info.compFullName));
         theMinOptsValue = true;
@@ -3850,6 +3850,13 @@ _SetMinOpts:
     {
         opts.compFlags &= ~CLFLG_MAXOPT;
         opts.compFlags |= CLFLG_MINOPT;
+    }
+
+    if (opts.IsTier0WithQuickOpts() &&
+        JitConfig.JitExtDefaultPolicy() == 1 &&
+        JitConfig.JitInlineTier0MaxIL() > 0)
+    {
+        opts.compFlags |= CLFLG_INLINING;
     }
 
     if (!compIsForInlining())
@@ -6419,7 +6426,7 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         prejitResult.NoteBool(InlineObservation::CALLSITE_HAS_PROFILE, fgHaveSufficientProfileData());
 
         // Do the initial inline screen.
-        impCanInlineIL(methodHnd, methodInfo, forceInline, &prejitResult);
+        impCanInlineIL(methodHnd, methodInfo, forceInline, opts.jitFlags->IsSet(JitFlags::JIT_FLAG_TIER0), &prejitResult);
 
         // Temporarily install the prejitResult as the
         // compInlineResult so it's available to fgFindJumpTargets

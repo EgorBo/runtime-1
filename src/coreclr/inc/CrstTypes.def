@@ -221,6 +221,10 @@ Crst MethodTableExposedObject
     Unordered
 End
 
+Crst MethodSizeCache
+    Unordered
+End
+
 Crst RetThunkCache
     AcquiredBefore LoaderHeap
 End

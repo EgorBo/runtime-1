@@ -496,6 +496,12 @@ CONFIG_INTEGER(JitExtDefaultPolicyMaxBB, W("JitExtDefaultPolicyMaxBB"), 7)
 CONFIG_INTEGER(JitExtDefaultPolicyProfTrust, W("JitExtDefaultPolicyProfTrust"), 0x7)
 CONFIG_INTEGER(JitExtDefaultPolicyProfScale, W("JitExtDefaultPolicyProfScale"), 0x2A)
 
+// Allow inlining for small methods in Tier0, value is the max IL size (bytes), e.g.:
+//  0 - never inline in Tier0
+//  7 - enough for auto-properties (optimal value)
+// 16 - max size for Tier0
+CONFIG_INTEGER(JitInlineTier0MaxIL, W("JitInlineTier0MaxIL"), 0)
+
 CONFIG_INTEGER(JitInlinePolicyModel, W("JitInlinePolicyModel"), 0)
 CONFIG_INTEGER(JitInlinePolicyProfile, W("JitInlinePolicyProfile"), 0)
 CONFIG_INTEGER(JitInlinePolicyProfileThreshold, W("JitInlinePolicyProfileThreshold"), 40)

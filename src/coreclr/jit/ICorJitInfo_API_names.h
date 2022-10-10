@@ -6,6 +6,7 @@
 // and follow the instructions in docs/project/updating-jitinterface.md
 DEF_CLR_API(isIntrinsic)
 DEF_CLR_API(getMethodAttribs)
+DEF_CLR_API(getILSize)
 DEF_CLR_API(setMethodAttribs)
 DEF_CLR_API(getMethodSig)
 DEF_CLR_API(getMethodInfo)

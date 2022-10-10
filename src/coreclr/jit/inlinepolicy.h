@@ -231,6 +231,12 @@ public:
         return true;
     }
 
+    bool PropagateNeverToRuntime() const override
+    {
+        // Don't propagate Tier0's decisions
+        return DefaultPolicy::PropagateNeverToRuntime() && !m_RootCompiler->opts.IsTier0();
+    }
+
 #if defined(DEBUG) || defined(INLINE_DATA)
     void OnDumpXml(FILE* file, unsigned indent = 0) const override;
 

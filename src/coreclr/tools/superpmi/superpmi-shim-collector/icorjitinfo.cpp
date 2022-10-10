@@ -37,6 +37,14 @@ uint32_t interceptor_ICJI::getMethodAttribs(CORINFO_METHOD_HANDLE ftn /* IN */)
     return temp;
 }
 
+uint32_t interceptor_ICJI::getILSize(CORINFO_METHOD_HANDLE ftn /* IN */)
+{
+    mc->cr->AddCall("getILSize");
+    DWORD temp = original_ICorJitInfo->getILSize(ftn);
+    mc->recGetILSize(ftn, temp);
+    return temp;
+}
+
 // sets private JIT flags, which can be, retrieved using getAttrib.
 void interceptor_ICJI::setMethodAttribs(CORINFO_METHOD_HANDLE     ftn, /* IN */
                                         CorInfoMethodRuntimeFlags attribs /* IN */)

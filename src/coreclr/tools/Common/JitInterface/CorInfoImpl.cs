@@ -2787,6 +2787,13 @@ namespace Internal.JitInterface
             return kind;
         }
 
+        #pragma warning disable CA1822 // Mark members as static
+        private uint getILSize(CORINFO_METHOD_STRUCT_* ftn)
+#pragma warning restore CA1822 // Mark members as static
+        {
+            return 20;
+        }
+
         private void* getArrayInitializationData(CORINFO_FIELD_STRUCT_* field, uint size)
         {
             var fd = HandleToObject(field);

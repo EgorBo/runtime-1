@@ -165,13 +165,13 @@ private:
     uint64_t _flags[FlagsFieldCount] = { };
 
 
-    static uint32_t GetFlagsFieldIndex(CORINFO_InstructionSet instructionSet)
+    static inline uint32_t GetFlagsFieldIndex(CORINFO_InstructionSet instructionSet)
     {
         uint32_t bitIndex = (uint32_t)instructionSet;
         return (uint32_t)(bitIndex / (uint32_t)BitsPerFlagsField);
     }
 
-    static uint64_t GetRelativeBitMask(CORINFO_InstructionSet instructionSet)
+    static inline uint64_t GetRelativeBitMask(CORINFO_InstructionSet instructionSet)
     {
         return ((uint64_t)1) << (instructionSet & 0x3F);
     }
@@ -196,7 +196,7 @@ public:
         _flags[index] &= ~bitIndex;
     }
 
-    bool HasInstructionSet(CORINFO_InstructionSet instructionSet) const
+    inline bool HasInstructionSet(CORINFO_InstructionSet instructionSet) const
     {
         uint32_t index = GetFlagsFieldIndex(instructionSet);
         uint64_t bitIndex = GetRelativeBitMask(instructionSet);

@@ -2003,6 +2003,10 @@ public:
             CORINFO_METHOD_HANDLE       ftn         /* IN */
             ) = 0;
 
+    virtual uint32_t getILSize (
+            CORINFO_METHOD_HANDLE       ftn         /* IN */
+            ) = 0;
+
     // sets private JIT flags, which can be, retrieved using getAttrib.
     virtual void setMethodAttribs (
             CORINFO_METHOD_HANDLE       ftn,        /* IN */

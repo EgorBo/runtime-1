@@ -6389,6 +6389,42 @@ uint32_t CEEInfo::getMethodAttribs (CORINFO_METHOD_HANDLE ftn)
 }
 
 /*********************************************************************/
+uint32_t CEEInfo::getILSize (CORINFO_METHOD_HANDLE ftnHnd)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    DWORD result = 0;
+
+    JIT_TO_EE_TRANSITION();
+
+#ifndef DACCESS_COMPILE
+    auto x = AppDomain::GetCurrentDomain()->GetILSize(ftnHnd);
+    if (x > 0)
+    {
+        result = x;
+    }
+    else
+    {
+        MethodDesc* ftn = GetMethod(ftnHnd);
+        if (ftn->IsIL() && !ftn->IsDynamicMethod())
+        {
+            COR_ILMETHOD_DECODER header(ftn->GetILHeader(TRUE), ftn->GetMDImport(), NULL);
+            result = header.CodeSize;
+            AppDomain::GetCurrentDomain()->SetILSize(ftnHnd, result);
+        }
+    }
+#endif
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
+/*********************************************************************/
 DWORD CEEInfo::getMethodAttribsInternal (CORINFO_METHOD_HANDLE ftn)
 {
     STANDARD_VM_CONTRACT;
@@ -7695,7 +7731,9 @@ CEEInfo::getMethodInfo(
         else
         {
             COR_ILMETHOD_DECODER header(ftn->GetILHeader(TRUE), ftn->GetMDImport(), NULL);
-
+#ifndef DACCESS_COMPILE
+            AppDomain::GetCurrentDomain()->SetILSize(ftnHnd, header.CodeSize);
+#endif
             getMethodInfoHelper(ftn, ftnHnd, &header, methInfo);
         }
 

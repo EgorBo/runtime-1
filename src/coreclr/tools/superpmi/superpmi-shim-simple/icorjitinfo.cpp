@@ -24,6 +24,12 @@ uint32_t interceptor_ICJI::getMethodAttribs(
     return original_ICorJitInfo->getMethodAttribs(ftn);
 }
 
+uint32_t interceptor_ICJI::getILSize(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    return original_ICorJitInfo->getILSize(ftn);
+}
+
 void interceptor_ICJI::setMethodAttribs(
           CORINFO_METHOD_HANDLE ftn,
           CorInfoMethodRuntimeFlags attribs)

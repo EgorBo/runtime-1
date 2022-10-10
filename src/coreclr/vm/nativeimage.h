@@ -56,6 +56,23 @@ public:
     static bool IsDeleted(const KeyValuePair<LPCUTF8, PTR_NativeImage>& e) { return e.Key() == nullptr; }
 };
 
+class MethodSizeTraits : public NoRemoveSHashTraits<MapSHashTraits<CORINFO_METHOD_HANDLE, unsigned>>
+{
+public:
+    // Similar to BaseAssemblySpec::CompareStrings, we're using temporary SStrings that throw
+    // for case-insensitive UTF8 assembly name comparisons.
+    static const bool s_NoThrow = false;
+
+    static CORINFO_METHOD_HANDLE GetKey(const KeyValuePair<CORINFO_METHOD_HANDLE, unsigned>& e) { return e.Key(); }
+    static BOOL Equals(CORINFO_METHOD_HANDLE a, CORINFO_METHOD_HANDLE b);
+    static count_t Hash(CORINFO_METHOD_HANDLE a);
+
+    static KeyValuePair<CORINFO_METHOD_HANDLE, unsigned> Null() { LIMITED_METHOD_CONTRACT; return KeyValuePair<CORINFO_METHOD_HANDLE, unsigned>(0, unsigned(0)); }
+    static KeyValuePair<CORINFO_METHOD_HANDLE, unsigned> Deleted() { LIMITED_METHOD_CONTRACT; return KeyValuePair<CORINFO_METHOD_HANDLE, unsigned>(0, unsigned(0)); }
+    static bool IsNull(const KeyValuePair<CORINFO_METHOD_HANDLE, unsigned>& e) { LIMITED_METHOD_CONTRACT; return e.Key() == 0; }
+    static bool IsDeleted(const KeyValuePair<CORINFO_METHOD_HANDLE, unsigned>& e) { return e.Key() == 0; }
+};
+
 class ReadyToRunInfo;
 class PEAssembly;
 class PEImage;

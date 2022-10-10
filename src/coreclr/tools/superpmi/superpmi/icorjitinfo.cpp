@@ -38,6 +38,12 @@ uint32_t MyICJI::getMethodAttribs(CORINFO_METHOD_HANDLE ftn /* IN */)
     return jitInstance->mc->repGetMethodAttribs(ftn);
 }
 
+uint32_t MyICJI::getILSize(CORINFO_METHOD_HANDLE ftn /* IN */)
+{
+    jitInstance->mc->cr->AddCall("getILSize");
+    return jitInstance->mc->repGetILSize(ftn);
+}
+
 // sets private JIT flags, which can be, retrieved using getAttrib.
 void MyICJI::setMethodAttribs(CORINFO_METHOD_HANDLE     ftn, /* IN */
                               CorInfoMethodRuntimeFlags attribs /* IN */)

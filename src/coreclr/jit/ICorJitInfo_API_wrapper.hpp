@@ -30,6 +30,15 @@ uint32_t WrapICorJitInfo::getMethodAttribs(
     return temp;
 }
 
+uint32_t WrapICorJitInfo::getILSize(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    API_ENTER(getILSize);
+    uint32_t temp = wrapHnd->getILSize(ftn);
+    API_LEAVE(getILSize);
+    return temp;
+}
+
 void WrapICorJitInfo::setMethodAttribs(
           CORINFO_METHOD_HANDLE ftn,
           CorInfoMethodRuntimeFlags attribs)

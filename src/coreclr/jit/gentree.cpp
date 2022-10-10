@@ -6606,13 +6606,14 @@ ExceptionSetFlags GenTree::OperExceptions(Compiler* comp)
 //
 bool GenTree::OperMayThrow(Compiler* comp)
 {
-    if (OperIs(GT_CALL))
+    if (IsHelperCall())
     {
-        CorInfoHelpFunc helper;
-        helper = comp->eeGetHelperNum(this->AsCall()->gtCallMethHnd);
-        return ((helper == CORINFO_HELP_UNDEF) || !comp->s_helperCallProperties.NoThrow(helper));
+        return !comp->s_helperCallProperties.NoThrow(comp->eeGetHelperNum(this->AsCall()->gtCallMethHnd));
     }
-
+    else if (OperIs(GT_CALL))
+    {
+        return true;
+    }
     return OperExceptions(comp) != ExceptionSetFlags::None;
 }
 

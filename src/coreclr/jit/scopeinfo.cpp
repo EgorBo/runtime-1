@@ -1062,7 +1062,7 @@ void CodeGen::siOpenScopesForNonTrackedVars(const BasicBlock* block, unsigned in
         if (lastBlockILEndOffset != beginOffs)
         {
             assert(beginOffs > 0);
-            assert(lastBlockILEndOffset < beginOffs);
+            //assert(lastBlockILEndOffset < beginOffs);
 
             JITDUMP("Scope info: found offset hole. lastOffs=%u, currOffs=%u\n", lastBlockILEndOffset, beginOffs);
 
