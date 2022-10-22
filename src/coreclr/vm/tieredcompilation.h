@@ -64,7 +64,8 @@ private:
 
 private:
     bool IsTieringDelayActive();
-    bool TryDeactivateTieringDelay();
+    bool TryDeactivateTieringDelay(bool highPriorityOnly);
+    void InstallCallCountingStubs(SArray<MethodDesc*>* methodsPendingCounting);
 
 public:
     void AsyncCompleteCallCounting();
@@ -125,7 +126,9 @@ private:
     SList<SListElem<NativeCodeVersion>> m_methodsToOptimize;
     UINT32 m_countOfMethodsToOptimize;
     UINT32 m_countOfNewMethodsCalledDuringDelay;
-    SArray<MethodDesc*>* m_methodsPendingCountingForTier1;
+    SArray<MethodDesc*>* m_methodsPendingCountingForTier1LowPriority;
+    SArray<MethodDesc*>* m_methodsPendingCountingForTier1HighPriority;
+    bool m_methodsPendingCountingExist;
     bool m_tier1CallCountingCandidateMethodRecentlyRecorded;
     bool m_isPendingCallCountingCompletion;
     bool m_recentlyRequestedCallCountingCompletion;

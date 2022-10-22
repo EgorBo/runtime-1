@@ -63,7 +63,8 @@ bool TieredCompilationManager::s_isBackgroundWorkerProcessingWork = false;
 TieredCompilationManager::TieredCompilationManager() :
     m_countOfMethodsToOptimize(0),
     m_countOfNewMethodsCalledDuringDelay(0),
-    m_methodsPendingCountingForTier1(nullptr),
+    m_methodsPendingCountingForTier1LowPriority(nullptr),
+    m_methodsPendingCountingForTier1HighPriority(nullptr),
     m_tier1CallCountingCandidateMethodRecentlyRecorded(false),
     m_isPendingCallCountingCompletion(false),
     m_recentlyRequestedCallCountingCompletion(false)
@@ -133,6 +134,9 @@ void TieredCompilationManager::HandleCallCountingForFirstCall(MethodDesc* pMetho
     _ASSERTE(pMethodDesc->IsEligibleForTieredCompilation());
     _ASSERTE(g_pConfig->TieredCompilation_CallCountingDelayMs() != 0);
 
+    const PCODE code = pMethodDesc->GetNativeCode();
+    const bool hasR2R = code != NULL && ExecutionManager::IsReadyToRunCode(code);
+
     // An exception here (OOM) would mean that the method's calls would not be counted and it would not be promoted. A
     // consideration is that an attempt can be made to reset the code entry point on exception (which can also OOM). Doesn't
     // seem worth it, the exception is propagated and there are other cases where a method may not be promoted due to OOM.
@@ -140,7 +144,19 @@ void TieredCompilationManager::HandleCallCountingForFirstCall(MethodDesc* pMetho
     {
         LockHolder tieredCompilationLockHolder;
 
-        SArray<MethodDesc *> *methodsPendingCounting = m_methodsPendingCountingForTier1;
+        SArray<MethodDesc*>* methodsPendingCounting = nullptr;
+        if (VolatileLoad(&m_methodsPendingCountingExist))
+        {
+            if (hasR2R)
+            {
+                methodsPendingCounting = m_methodsPendingCountingForTier1LowPriority;
+            }
+            else
+            {
+                methodsPendingCounting = m_methodsPendingCountingForTier1HighPriority;
+            }
+        }
+
         _ASSERTE((methodsPendingCounting != nullptr) == IsTieringDelayActive());
         if (methodsPendingCounting != nullptr)
         {
@@ -155,13 +171,27 @@ void TieredCompilationManager::HandleCallCountingForFirstCall(MethodDesc* pMetho
             return;
         }
 
-        NewHolder<SArray<MethodDesc *>> methodsPendingCountingHolder = new SArray<MethodDesc *>();
-        methodsPendingCountingHolder->Preallocate(64);
+        NewHolder<SArray<MethodDesc *>> methodsPendingCountingLowPriorityHolder = new SArray<MethodDesc *>();
+        NewHolder<SArray<MethodDesc *>> methodsPendingCountingHighPriorityHolder = new SArray<MethodDesc*>();
 
-        methodsPendingCountingHolder->Append(pMethodDesc);
+        methodsPendingCountingLowPriorityHolder->Preallocate(512);
+        methodsPendingCountingHighPriorityHolder->Preallocate(512);
+
         ++m_countOfNewMethodsCalledDuringDelay;
 
-        m_methodsPendingCountingForTier1 = methodsPendingCountingHolder.Extract();
+        if (hasR2R)
+        {
+            methodsPendingCountingLowPriorityHolder->Append(pMethodDesc);
+        }
+        else
+        {
+            methodsPendingCountingHighPriorityHolder->Append(pMethodDesc);
+        }
+
+        m_methodsPendingCountingForTier1LowPriority = methodsPendingCountingLowPriorityHolder.Extract();
+        m_methodsPendingCountingForTier1HighPriority = methodsPendingCountingHighPriorityHolder.Extract();
+        VolatileStore(&m_methodsPendingCountingExist, true);
+
         _ASSERTE(!m_tier1CallCountingCandidateMethodRecentlyRecorded);
         _ASSERTE(IsTieringDelayActive());
 
@@ -191,9 +221,17 @@ void TieredCompilationManager::HandleCallCountingForFirstCall(MethodDesc* pMetho
 
                 _ASSERTE(IsTieringDelayActive());
                 m_tier1CallCountingCandidateMethodRecentlyRecorded = false;
-                _ASSERTE(m_methodsPendingCountingForTier1 != nullptr);
-                delete m_methodsPendingCountingForTier1;
-                m_methodsPendingCountingForTier1 = nullptr;
+
+                _ASSERT(m_methodsPendingCountingForTier1LowPriority != nullptr);
+                _ASSERT(m_methodsPendingCountingForTier1HighPriority != nullptr);
+
+                delete m_methodsPendingCountingForTier1LowPriority;
+                delete m_methodsPendingCountingForTier1HighPriority;
+
+                m_methodsPendingCountingForTier1LowPriority = nullptr;
+                m_methodsPendingCountingForTier1HighPriority = nullptr;
+
+                VolatileStore(&m_methodsPendingCountingExist, false);
                 _ASSERTE(!IsTieringDelayActive());
             }
 
@@ -231,8 +269,17 @@ bool TieredCompilationManager::TrySetCodeEntryPointAndRecordMethodForCallCountin
     // expire and enable call counting for the method before the entry point is set here, in which case calls to the method
     // would not be counted anymore.
     pMethodDesc->SetCodeEntryPoint(codeEntryPoint);
-    _ASSERTE(m_methodsPendingCountingForTier1 != nullptr);
-    m_methodsPendingCountingForTier1->Append(pMethodDesc);
+
+    _ASSERTE(m_methodsPendingCountingForTier1LowPriority != nullptr);
+    _ASSERTE(m_methodsPendingCountingForTier1HighPriority != nullptr);
+    if (ExecutionManager::IsReadyToRunCode(codeEntryPoint))
+    {
+        m_methodsPendingCountingForTier1LowPriority->Append(pMethodDesc);
+    }
+    else
+    {
+        m_methodsPendingCountingForTier1HighPriority->Append(pMethodDesc);
+    }
     return true;
 }
 
@@ -462,10 +509,18 @@ void TieredCompilationManager::BackgroundWorkerStart()
 
         if (IsTieringDelayActive())
         {
+            bool deactivated = false;
+            bool highPriorityOnly = false;
             do
             {
                 ClrSleepEx(delayMs, false);
-            } while (!TryDeactivateTieringDelay());
+                highPriorityOnly = !highPriorityOnly;
+                deactivated = TryDeactivateTieringDelay(highPriorityOnly);
+                if (highPriorityOnly)
+                {
+                    _ASSERT(!deactivated);
+                }
+            } while (!deactivated);
         }
 
         // Don't want to perform background work as soon as it is scheduled if there is possibly more important work that could
@@ -526,10 +581,10 @@ void TieredCompilationManager::BackgroundWorkerStart()
 bool TieredCompilationManager::IsTieringDelayActive()
 {
     LIMITED_METHOD_CONTRACT;
-    return m_methodsPendingCountingForTier1 != nullptr;
+    return VolatileLoad(&m_methodsPendingCountingExist);
 }
 
-bool TieredCompilationManager::TryDeactivateTieringDelay()
+void TieredCompilationManager::InstallCallCountingStubs(SArray<MethodDesc*>* methodsPendingCounting)
 {
     CONTRACTL
     {
@@ -541,7 +596,58 @@ bool TieredCompilationManager::TryDeactivateTieringDelay()
 
     _ASSERTE(GetThread() == s_backgroundWorkerThread);
 
-    SArray<MethodDesc *> *methodsPendingCounting = nullptr;
+    CodeVersionManager* codeVersionManager = GetAppDomain()->GetCodeVersionManager();
+
+    MethodDescBackpatchInfoTracker::ConditionalLockHolder slotBackpatchLockHolder;
+    CodeVersionManager::LockHolder codeVersioningLockHolder;
+
+    MethodDesc** methods = methodsPendingCounting->GetElements();
+    COUNT_T count = methodsPendingCounting->GetCount();
+
+    for (COUNT_T i = 0; i < count; ++i)
+    {
+        MethodDesc* methodDesc = methods[i];
+        _ASSERTE(codeVersionManager == methodDesc->GetCodeVersionManager());
+        NativeCodeVersion activeCodeVersion =
+            codeVersionManager->GetActiveILCodeVersion(methodDesc).GetActiveNativeCodeVersion(methodDesc);
+        if (activeCodeVersion.IsNull())
+        {
+            continue;
+        }
+
+        EX_TRY
+        {
+            bool wasSet =
+                CallCountingManager::SetCodeEntryPoint(activeCodeVersion, activeCodeVersion.GetNativeCode(), false, nullptr);
+            _ASSERTE(wasSet);
+        }
+            EX_CATCH
+        {
+            STRESS_LOG1(LF_TIEREDCOMPILATION, LL_WARNING, "TieredCompilationManager::DeactivateTieringDelay: "
+                "Exception in CallCountingManager::SetCodeEntryPoint, hr=0x%x\n",
+                GET_EXCEPTION()->GetHR());
+        }
+        EX_END_CATCH(RethrowTerminalExceptions);
+    }
+}
+
+
+
+bool TieredCompilationManager::TryDeactivateTieringDelay(bool highPriorityOnly)
+{
+    CONTRACTL
+    {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    }
+    CONTRACTL_END;
+
+    _ASSERTE(GetThread() == s_backgroundWorkerThread);
+
+    SArray<MethodDesc*>* methodsPendingCountingHighPriority = nullptr;
+    SArray<MethodDesc*>* methodsPendingCountingLowPriority  = nullptr;
+
     UINT32 countOfNewMethodsCalledDuringDelay = 0;
     {
         // It's possible for the timer to tick before it is recorded that the delay is in effect. This lock guarantees that
@@ -557,14 +663,29 @@ bool TieredCompilationManager::TryDeactivateTieringDelay()
 
         // Exchange information into locals inside the lock
 
-        methodsPendingCounting = m_methodsPendingCountingForTier1;
-        _ASSERTE(methodsPendingCounting != nullptr);
-        m_methodsPendingCountingForTier1 = nullptr;
+        methodsPendingCountingHighPriority = m_methodsPendingCountingForTier1HighPriority;
+        methodsPendingCountingLowPriority = m_methodsPendingCountingForTier1LowPriority;
+
+        _ASSERTE(methodsPendingCountingHighPriority != nullptr);
+        _ASSERTE(methodsPendingCountingLowPriority != nullptr);
+
+        if (highPriorityOnly)
+        {
+            NewHolder<SArray<MethodDesc*>> methods = new SArray<MethodDesc*>();
+            methods->Preallocate(512);
+            m_methodsPendingCountingForTier1HighPriority = methods.Extract();
+        }
+        else
+        {
+            m_methodsPendingCountingForTier1HighPriority = nullptr;
+            m_methodsPendingCountingForTier1LowPriority = nullptr;
+            VolatileStore(&m_methodsPendingCountingExist, false);
+        }
 
         countOfNewMethodsCalledDuringDelay = m_countOfNewMethodsCalledDuringDelay;
         m_countOfNewMethodsCalledDuringDelay = 0;
 
-        _ASSERTE(!IsTieringDelayActive());
+        _ASSERTE(highPriorityOnly || !IsTieringDelayActive());
     }
 
     if (ETW::CompilationLog::TieredCompilation::Runtime::IsEnabled())
@@ -572,43 +693,17 @@ bool TieredCompilationManager::TryDeactivateTieringDelay()
         ETW::CompilationLog::TieredCompilation::Runtime::SendResume(countOfNewMethodsCalledDuringDelay);
     }
 
-    // Install call counters
+    if (highPriorityOnly)
     {
-        MethodDesc** methods = methodsPendingCounting->GetElements();
-        COUNT_T methodCount = methodsPendingCounting->GetCount();
-        CodeVersionManager *codeVersionManager = GetAppDomain()->GetCodeVersionManager();
-
-        MethodDescBackpatchInfoTracker::ConditionalLockHolder slotBackpatchLockHolder;
-        CodeVersionManager::LockHolder codeVersioningLockHolder;
-
-        for (COUNT_T i = 0; i < methodCount; ++i)
-        {
-            MethodDesc *methodDesc = methods[i];
-            _ASSERTE(codeVersionManager == methodDesc->GetCodeVersionManager());
-            NativeCodeVersion activeCodeVersion =
-                codeVersionManager->GetActiveILCodeVersion(methodDesc).GetActiveNativeCodeVersion(methodDesc);
-            if (activeCodeVersion.IsNull())
-            {
-                continue;
-            }
-
-            EX_TRY
-            {
-                bool wasSet =
-                    CallCountingManager::SetCodeEntryPoint(activeCodeVersion, activeCodeVersion.GetNativeCode(), false, nullptr);
-                _ASSERTE(wasSet);
-            }
-            EX_CATCH
-            {
-                STRESS_LOG1(LF_TIEREDCOMPILATION, LL_WARNING, "TieredCompilationManager::DeactivateTieringDelay: "
-                    "Exception in CallCountingManager::SetCodeEntryPoint, hr=0x%x\n",
-                    GET_EXCEPTION()->GetHR());
-            }
-            EX_END_CATCH(RethrowTerminalExceptions);
-        }
+        InstallCallCountingStubs(methodsPendingCountingHighPriority);
+        delete methodsPendingCountingHighPriority;
+        return false;
     }
 
-    delete methodsPendingCounting;
+    InstallCallCountingStubs(methodsPendingCountingHighPriority);
+    InstallCallCountingStubs(methodsPendingCountingLowPriority);
+    delete methodsPendingCountingHighPriority;
+    delete methodsPendingCountingLowPriority;
     return true;
 }
 

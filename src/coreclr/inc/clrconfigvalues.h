@@ -563,7 +563,7 @@ RETAIL_CONFIG_DWORD_INFO(INTERNAL_HillClimbing_GainExponent,                    
 #else // !_DEBUG
 #define TC_BackgroundWorkerTimeoutMs (4000)
 #define TC_CallCountThreshold (30)
-#define TC_CallCountingDelayMs (100)
+#define TC_CallCountingDelayMs (50)
 #define TC_DelaySingleProcMultiplier (10)
 #endif // _DEBUG
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_TieredCompilation, W("TieredCompilation"), 1, "Enables tiered compilation")
