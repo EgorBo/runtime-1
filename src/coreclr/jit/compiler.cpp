@@ -4572,9 +4572,15 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     //
     if (opts.OptimizationEnabled())
     {
+
+       // DoPhase(this, PHASE_TAIL_MERGE2, &Compiler::fgMergeConditions);
+
         // Tail merge
         //
         DoPhase(this, PHASE_TAIL_MERGE, &Compiler::fgTailMerge);
+
+
+        //DoPhase(this, PHASE_TAIL_MERGE2, &Compiler::fgMergeConditions);
 
         // Merge common throw blocks
         //
@@ -4680,6 +4686,8 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         // Second pass of tail merge
         //
         DoPhase(this, PHASE_TAIL_MERGE2, &Compiler::fgTailMerge);
+
+        //DoPhase(this, PHASE_TAIL_MERGE2, &Compiler::fgMergeConditions);
 
         // Compute reachability sets and dominators.
         //
@@ -4863,6 +4871,8 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 //
                 DoPhase(this, PHASE_OPTIMIZE_INDEX_CHECKS, &Compiler::rangeCheckPhase);
             }
+
+            DoPhase(this, PHASE_TAIL_MERGE2, &Compiler::fgMergeConditions);
 
             if (fgModified)
             {

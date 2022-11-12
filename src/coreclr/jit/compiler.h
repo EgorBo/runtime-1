@@ -5287,6 +5287,8 @@ public:
 
     PhaseStatus fgTailMerge();
 
+    PhaseStatus fgMergeConditions();
+
     enum FG_RELOCATE_TYPE
     {
         FG_RELOCATE_TRY,    // relocate the 'try' region

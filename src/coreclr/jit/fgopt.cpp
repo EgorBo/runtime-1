@@ -6579,6 +6579,137 @@ void Compiler::fgCompDominatedByExceptionalEntryBlocks()
     }
 }
 
+PhaseStatus Compiler::fgMergeConditions()
+{
+    if (!opts.OptimizationEnabled())
+    {
+        return PhaseStatus::MODIFIED_NOTHING;
+    }
+
+    auto isRootNodeComparison = [](BasicBlock* block, GenTreeOp** comparison, bool singleStmt) -> bool {
+        if (block->bbJumpKind == BBJ_COND && block->firstStmt() != nullptr)
+        {
+            // We might want to ignore NOPs
+            if (singleStmt && block->firstStmt() != block->lastStmt())
+            {
+                return false;
+            }
+
+            const GenTree* rootNode = block->firstStmt()->GetRootNode();
+            if (rootNode != nullptr && rootNode->OperIs(GT_JTRUE) && rootNode->gtGetOp1()->OperIsCmpCompare())
+            {
+                *comparison = rootNode->gtGetOp1()->AsOp();
+                return true;
+            }
+        }
+        return false;
+    };
+
+    bool modified = false;
+    for (BasicBlock* const block : Blocks())
+    {
+        if (block->bbJumpKind != BBJ_COND)
+            continue;
+
+        BasicBlock* nextBb = block->bbNext;
+
+        if (nextBb->bbJumpKind != BBJ_COND)
+            continue;
+
+        if (block->bbJumpDest != nextBb->bbJumpDest)
+            continue;
+
+        if (nextBb->bbNext == block->bbJumpDest)
+            continue;
+
+        if (!BasicBlock::sameEHRegion(block, nextBb))
+            continue;
+
+        if (nextBb->GetUniquePred(this) != block)
+            continue;
+
+        GenTreeOp* compare1;
+        GenTreeOp* compare2;
+        if (isRootNodeComparison(block, &compare1, true) && isRootNodeComparison(nextBb, &compare2, false))
+        {
+            ssize_t lowerBoundCns;
+            GenTree* upperBound;
+            GenTree* varOp;
+            // 0 > X
+            if (compare1->gtGetOp1()->IsCnsIntOrI() && compare1->gtGetOp2()->gtEffectiveVal()->OperIsNonPhiLocal() && compare1->OperIs(GT_GT, GT_GE))
+            {
+                varOp = compare1->gtGetOp2()->gtEffectiveVal();
+                lowerBoundCns = compare1->gtGetOp1()->AsIntCon()->IconValue();
+                lowerBoundCns += compare1->OperIs(GT_GE) ? 1 : 0;
+            }
+            // x < 0
+            else if (compare1->gtGetOp2()->IsCnsIntOrI() && compare1->gtGetOp1()->gtEffectiveVal()->OperIsNonPhiLocal() && compare1->OperIs(GT_LT, GT_LE))
+            {
+                varOp = compare1->gtGetOp1()->gtEffectiveVal();
+                lowerBoundCns = compare1->gtGetOp2()->AsIntCon()->IconValue();
+                lowerBoundCns += compare1->OperIs(GT_LE) ? 1 : 0;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (GenTree::Compare(varOp, compare2->gtGetOp2()->gtEffectiveVal()) &&
+                compare2->OperIs(GT_LT, GT_LE))
+            {
+                upperBound = compare2->gtGetOp1();
+            }
+            else if (GenTree::Compare(varOp, compare2->gtGetOp1()->gtEffectiveVal()) &&
+                compare2->OperIs(GT_GT, GT_GE))
+            {
+                upperBound = compare2->gtGetOp2();
+            }
+            else
+            {
+                continue;
+            }
+
+            // C1 </<= X </<= C2 to X u</<= C2 - C1
+            if (lowerBoundCns >= 0 && upperBound->IsIntegralConst())
+            {
+                const ssize_t upperBoundCns = upperBound->AsIntCon()->IconValue();
+                if (upperBoundCns > lowerBoundCns)
+                {
+                    upperBound->AsIntCon()->gtIconVal -= lowerBoundCns;
+                    // Update VN if needed (to make it phase-order independent)
+                    fgUpdateConstTreeValueNumber(upperBound);
+                    compare2->SetUnsigned();
+                }
+            }
+            else
+            {
+                continue;
+            }
+
+            fgRemoveRefPred(block->bbJumpDest, block);
+            GenTree* sideEffList = nullptr;
+            gtExtractSideEffList(block->firstStmt()->GetRootNode(), &sideEffList);
+            if (sideEffList != nullptr)
+            {
+                block->firstStmt()->SetRootNode(sideEffList);
+                if (fgStmtListThreaded)
+                {
+                    gtSetStmtInfo(block->firstStmt());
+                    fgSetStmtSeq(block->firstStmt());
+                }
+            }
+            else
+            {
+                fgRemoveStmt(block, block->firstStmt());
+            }
+            block->bbJumpDest = nullptr;
+            block->bbJumpKind = BBJ_NONE;
+            modified = true;
+        }
+    }
+    return modified ? PhaseStatus::MODIFIED_EVERYTHING : PhaseStatus::MODIFIED_NOTHING;
+}
+
 //------------------------------------------------------------------------
 // fgTailMerge: merge common sequences of statements in block predecessors
 //
