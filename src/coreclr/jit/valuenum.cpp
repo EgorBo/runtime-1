@@ -2106,14 +2106,18 @@ ValueNum ValueNumStore::VNForFunc(var_types typ, VNFunc func, ValueNum arg0VN)
                 if (IsVNHandle(fieldSeqVN) && (GetHandleFlags(fieldSeqVN) == GTF_ICON_FIELD_SEQ))
                 {
                     FieldSeq* fieldSeq = FieldSeqVNToFieldSeq(fieldSeqVN);
-                    if (fieldSeq != nullptr)
+                    if ((fieldSeq != nullptr) && (fieldSeq->GetFieldHandle() != nullptr))
                     {
-                        CORINFO_FIELD_HANDLE field = fieldSeq->GetFieldHandle();
-                        if (field != NULL)
+                        CORINFO_FIELD_HANDLE field                       = fieldSeq->GetFieldHandle();
+                        uint8_t              buffer[TARGET_POINTER_SIZE] = {0};
+                        if (m_pComp->info.compCompHnd->getReadonlyStaticFieldValue(field, buffer, TARGET_POINTER_SIZE,
+                                                                                   false))
                         {
-                            uint8_t buffer[TARGET_POINTER_SIZE] = {0};
-                            if (m_pComp->info.compCompHnd->getReadonlyStaticFieldValue(field, buffer,
-                                                                                       TARGET_POINTER_SIZE, false))
+                            // Now we need to make sure it's a real array or string under GT_ARR_LEN
+                            // it can be "((int[])obj).Length;" where "obj" is neither String nor Array.
+                            CORINFO_CLASS_HANDLE fldCls = m_pComp->info.compCompHnd->getStaticFieldCurrentClass(field);
+                            if ((m_pComp->info.compCompHnd->isSDArray(fldCls)) ||
+                                (fldCls == m_pComp->info.compCompHnd->getBuiltinClass(CorInfoClassId::CLASSID_STRING)))
                             {
                                 // In case of 64bit jit emitting 32bit codegen this handle will be 64bit
                                 // value holding 32bit handle with upper half zeroed (hence, "= NULL").
