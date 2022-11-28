@@ -1331,6 +1331,10 @@ void ExtendedDefaultPolicy::NoteBool(InlineObservation obs, bool value)
             m_HasProfileWeights = value;
             break;
 
+        case InlineObservation::CALLSITE_INLINE_HINT:
+            m_HasInlineHint = value;
+            break;
+
         case InlineObservation::CALLSITE_IN_NORETURN_REGION:
             m_IsCallsiteInNoReturnRegion = value;
             break;
@@ -1621,6 +1625,13 @@ double ExtendedDefaultPolicy::DetermineMultiplier()
         JITDUMP("\nInline has %d Div-by-constArg expressions.  Multiplier increased to %g.", m_DivByCns, multiplier);
     }
 
+    if (m_HasInlineHint)
+    {
+        // E.g. callee has `RuntimeHelpers.InlineIfConstant(arg)` where arg is a constant at the call site
+        multiplier += 50.0;
+        JITDUMP("\nInline has InlineIfConstant hint with constant arg.  Multiplier increased to %g.", m_DivByCns, multiplier);
+    }
+
     if (m_BinaryExprWithCns > 0)
     {
         // In some cases we're not able to detect potentially foldable expressions, e.g.:
@@ -1816,6 +1827,7 @@ void ExtendedDefaultPolicy::OnDumpXml(FILE* file, unsigned indent) const
     XATTR_B(m_IsCallsiteInNoReturnRegion)
     XATTR_B(m_HasProfileWeights)
     XATTR_B(m_InsideThrowBlock)
+    XATTR_B(m_HasInlineHint)
 }
 #endif
 

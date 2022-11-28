@@ -181,6 +181,7 @@ INLINE_OBSERVATION(FOLDABLE_EXPR_UN,          int,    "foldable unary expression
 INLINE_OBSERVATION(FOLDABLE_BRANCH,           int,    "foldable branch",                      INFORMATION, CALLSITE)
 INLINE_OBSERVATION(FOLDABLE_SWITCH,           int,    "foldable switch",                      INFORMATION, CALLSITE)
 INLINE_OBSERVATION(DIV_BY_CNS,                int,    "dividy by const",                      INFORMATION, CALLSITE)
+INLINE_OBSERVATION(INLINE_HINT,               bool,   "inline hint",                          INFORMATION, CALLSITE)
 INLINE_OBSERVATION(CONSTANT_ARG_FEEDS_TEST,   bool,   "constant argument feeds test",         INFORMATION, CALLSITE)
 INLINE_OBSERVATION(DEPTH,                     int,    "depth",                                INFORMATION, CALLSITE)
 INLINE_OBSERVATION(FREQUENCY,                 int,    "rough call site frequency",            INFORMATION, CALLSITE)

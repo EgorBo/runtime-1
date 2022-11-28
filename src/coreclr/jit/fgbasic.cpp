@@ -1138,6 +1138,16 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                                 break;
                             }
 
+                            case NI_System_Runtime_CompilerServices_RuntimeHelpers_InlineIfConstant:
+                            {
+                                if (FgStack::IsConstantOrConstArg(pushedStack.Top(), impInlineInfo))
+                                {
+                                    compInlineResult->NoteBool(InlineObservation::CALLSITE_INLINE_HINT, true);
+                                }
+                                pushedStack.Clear();
+                                break;
+                            }
+
                             case NI_System_Span_get_Item:
                             case NI_System_ReadOnlySpan_get_Item:
                             {

@@ -7506,6 +7506,10 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
             {
                 result = NI_System_Runtime_CompilerServices_RuntimeHelpers_IsKnownConstant;
             }
+            else if (strcmp(methodName, "InlineIfConstant") == 0)
+            {
+                result = NI_System_Runtime_CompilerServices_RuntimeHelpers_InlineIfConstant;
+            }
         }
     }
     else if (strncmp(namespaceName, "System.Runtime.Intrinsics", 25) == 0)
