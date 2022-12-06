@@ -9159,6 +9159,20 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                         newVN = vnStore->ExtendPtrVN(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
                     }
 
+                    if (tree->AsOp()->gtOp1->TypeIs(TYP_REF))
+                    {
+                        uint8_t buffer[8];
+                        if (info.compCompHnd->getReadonlyStaticFieldValue(fldSeq->GetFieldHandle(), buffer, 8))
+                        {
+                            ssize_t objHandle = NULL;
+                            memcpy(&objHandle, buffer, TARGET_POINTER_SIZE);
+                            tree->gtVNPair.SetBoth(vnStore->VNForHandle(objHandle, GTF_ICON_OBJ_HDL));
+                            tree->gtVNPair = vnStore->VNPWithExc(tree->gtVNPair, excSetPair);
+                            
+                        }
+                    }
+
+
                     if (newVN != ValueNumStore::NoVN)
                     {
                         // We don't care about differences between liberal and conservative for pointer values.
