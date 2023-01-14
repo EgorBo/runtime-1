@@ -1071,14 +1071,25 @@ namespace System
                 ThrowHelper.ThrowArgumentOutOfRange_BadYearMonthDay();
             }
 
-            ReadOnlySpan<uint> days = IsLeapYear(year) ? DaysToMonth366 : DaysToMonth365;
-            if ((uint)day > days[month] - days[month - 1])
+            uint prevMonth;
+            if (IsLeapYear(year))
             {
-                ThrowHelper.ThrowArgumentOutOfRange_BadYearMonthDay();
+                prevMonth = DaysToMonth366[month - 1];
+                if ((uint)day > DaysToMonth366[month] - prevMonth)
+                {
+                    ThrowHelper.ThrowArgumentOutOfRange_BadYearMonthDay();
+                }
+            }
+            else
+            {
+                prevMonth = DaysToMonth365[month - 1];
+                if ((uint)day > DaysToMonth365[month] - prevMonth)
+                {
+                    ThrowHelper.ThrowArgumentOutOfRange_BadYearMonthDay();
+                }
             }
 
-            uint n = DaysToYear((uint)year) + days[month - 1] + (uint)day - 1;
-            return n * (ulong)TicksPerDay;
+            return (DaysToYear((uint)year) + prevMonth + (uint)day - 1) * (ulong)TicksPerDay;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
