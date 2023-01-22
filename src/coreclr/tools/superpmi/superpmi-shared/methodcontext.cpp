@@ -4920,6 +4920,28 @@ bool MethodContext::repSatisfiesClassConstraints(CORINFO_CLASS_HANDLE cls)
     return value != 0;
 }
 
+void MethodContext::recGetTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls, int32_t* result)
+{
+    if (GetTypeIsInitedAddr == nullptr)
+        GetTypeIsInitedAddr = new LightWeightMap<DWORDLONG, DWORDLONG>();
+
+    DWORDLONG key = CastHandle(cls);
+    DWORDLONG value = (DWORDLONG)result;
+    GetTypeIsInitedAddr->Add(key, value);
+    DEBUG_REC(dmpGetTypeIsInitedAddr(key, value));
+}
+void MethodContext::dmpGetTypeIsInitedAddr(DWORDLONG key, DWORDLONG value)
+{
+    printf("GetTypeIsInitedAddr key cls-%016llX, value res-%016llX", key, value);
+}
+int32_t* MethodContext::repGetTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls)
+{
+    DWORDLONG key = CastHandle(cls);
+    DWORDLONG value = LookupByKeyOrMiss(GetTypeIsInitedAddr, key, ": key %016llX", key);
+    DEBUG_REP(dmpGetTypeIsInitedAddr(key, value));
+    return (int32_t*)value;
+}
+
 void MethodContext::recGetMethodHash(CORINFO_METHOD_HANDLE ftn, unsigned result)
 {
     if (GetMethodHash == nullptr)

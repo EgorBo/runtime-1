@@ -3051,5 +3051,11 @@ namespace Internal.JitInterface
         {
             return -1;
         }
+
+        private int* getTypeIsInitedAddr(CORINFO_CLASS_STRUCT_* cls)
+        {
+            // Less important for R2R so we leave this unimplemented
+            return null;
+        }
     }
 }

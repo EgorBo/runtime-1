@@ -702,6 +702,13 @@ bool interceptor_ICJI::satisfiesClassConstraints(
     return original_ICorJitInfo->satisfiesClassConstraints(cls);
 }
 
+int32_t* interceptor_ICJI::getTypeIsInitedAddr(
+          CORINFO_CLASS_HANDLE cls)
+{
+    mcs->AddCall("getTypeIsInitedAddr");
+    return original_ICorJitInfo->getTypeIsInitedAddr(cls);
+}
+
 bool interceptor_ICJI::isSDArray(
           CORINFO_CLASS_HANDLE cls)
 {

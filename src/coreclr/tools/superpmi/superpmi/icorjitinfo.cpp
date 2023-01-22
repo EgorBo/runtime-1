@@ -817,6 +817,12 @@ bool MyICJI::satisfiesClassConstraints(CORINFO_CLASS_HANDLE cls)
     return jitInstance->mc->repSatisfiesClassConstraints(cls);
 }
 
+int32_t* MyICJI::getTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls)
+{
+    jitInstance->mc->cr->AddCall("getTypeIsInitedAddr");
+    return jitInstance->mc->repGetTypeIsInitedAddr(cls);
+}
+
 // Check if this is a single dimensional array type
 bool MyICJI::isSDArray(CORINFO_CLASS_HANDLE cls)
 {

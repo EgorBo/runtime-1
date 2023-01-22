@@ -363,6 +363,9 @@ CorInfoType getChildType(
 bool satisfiesClassConstraints(
           CORINFO_CLASS_HANDLE cls) override;
 
+int32_t* getTypeIsInitedAddr(
+          CORINFO_CLASS_HANDLE cls) override;
+
 bool isSDArray(
           CORINFO_CLASS_HANDLE cls) override;
 

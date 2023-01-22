@@ -93,6 +93,7 @@ CompPhaseNameMacro(PHASE_VN_BASED_DEAD_STORE_REMOVAL,"VN-based dead store remova
 CompPhaseNameMacro(PHASE_OPT_UPDATE_FLOW_GRAPH,      "Update flow graph opt pass",     false, -1, false)
 CompPhaseNameMacro(PHASE_COMPUTE_EDGE_WEIGHTS2,      "Compute edge weights (2, false)",false, -1, false)
 CompPhaseNameMacro(PHASE_INSERT_GC_POLLS,            "Insert GC Polls",                false, -1, true)
+CompPhaseNameMacro(PHASE_INSERT_STATINIT_CHECKS,     "Insert is-cls-stat-init Checks", false, -1, true)
 CompPhaseNameMacro(PHASE_DETERMINE_FIRST_COLD_BLOCK, "Determine first cold block",     false, -1, true)
 CompPhaseNameMacro(PHASE_RATIONALIZE,                "Rationalize IR",                 false, -1, false)
 CompPhaseNameMacro(PHASE_SIMPLE_LOWERING,            "Do 'simple' lowering",           false, -1, false)

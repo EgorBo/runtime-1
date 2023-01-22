@@ -4463,6 +4463,17 @@ bool CEEInfo::satisfiesClassConstraints(CORINFO_CLASS_HANDLE cls)
     return result;
 }
 
+int32_t* CEEInfo::getTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls)
+{
+    CONTRACTL {
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    return nullptr;
+}
+
 /*********************************************************************/
 // Check if this is a single dimensional array type
 bool CEEInfo::isSDArray(CORINFO_CLASS_HANDLE  cls)

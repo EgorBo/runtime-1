@@ -52,6 +52,225 @@ static bool blockNeedsGCPoll(BasicBlock* block)
     return blockMayNeedGCPoll;
 }
 
+PhaseStatus Compiler::fgInsertClsInitChecks()
+{
+    if (!opts.OptimizationEnabled() && !IsTargetAbi(CORINFO_NATIVEAOT_ABI))
+    {
+        return PhaseStatus::MODIFIED_NOTHING;
+    }
+
+    bool        modified = false;
+    BasicBlock* block;
+    BasicBlock* prevBb = nullptr;
+    for (block = fgFirstBB; block; block = block->bbNext)
+    {
+        // Skip cold blocks. Also, we might want to split basic-blocks in the middle
+        // so let's skip those with BBF_GC_SAFE_POINT for simplicity.
+        if (!block->isRunRarely() && !(block->bbFlags & BBF_GC_SAFE_POINT))
+        {
+            Statement* prevStmt = nullptr;
+            for (Statement* stmt : block->Statements())
+            {
+                for (GenTree* tree = stmt->GetTreeList(); tree != nullptr; tree = tree->gtNext)
+                {
+                    // We only need GT_CALL nodes with helper funcs
+                    // Looks like BBF_HAS_CALL/GTF_CALL aren't reliable as a fast check.
+                    if (!tree->IsCall())
+                    {
+                        continue;
+                    }
+
+                    GenTreeCall* call = tree->AsCall();
+                    if ((call->gtCallType != CT_HELPER) || (call->gtRetClsHnd == nullptr))
+                    {
+                        continue;
+                    }
+
+                    CorInfoHelpFunc helpFunc = eeGetHelperNum(call->gtCallMethHnd);
+                    if ((helpFunc != CORINFO_HELP_GETSHARED_NONGCSTATIC_BASE) &&
+                        (helpFunc != CORINFO_HELP_CLASSINIT_SHARED_DYNAMICCLASS))
+                    {
+                        continue;
+                    }
+                    assert(call->fgArgInfo->ArgCount() == 2);
+
+                    GenTree* moduleIdArg = call->fgArgInfo->GetArgNode(0);
+                    GenTree* clsIdArg = call->fgArgInfo->GetArgNode(1);
+
+                    if (!moduleIdArg->IsCnsIntOrI() || !clsIdArg->IsCnsIntOrI())
+                    {
+                        // ModuleId or/and clsId were passed as indirect loads
+                        // We can consider optimizing this case too (for R2R)
+                        // but it most likely will come with a noticeable size regression.
+                        continue;
+                    }
+
+                    int    isInitMask = 0;
+                    size_t isInitAddr = info.compCompHnd->getIsClassInitedFieldAddress(call->gtRetClsHnd, &isInitMask);
+                    if ((isInitAddr == 0) || (isInitMask == 0))
+                    {
+                        JITDUMP("getIsClassInitedFieldAddress: returned empty isInitAddr or isInitedMask.");
+                        continue;
+                    }
+                    assert(isInitMask > 0);
+
+                    if (prevBb == nullptr)
+                    {
+                        // We're going to emit a BB in front of fgFirstBB
+                        fgEnsureFirstBBisScratch();
+                        prevBb = fgFirstBB;
+                        if (prevBb == block)
+                        {
+                            JITDUMP("fgInsertClsInitChecks: fgFirstBB is fgFirstBBScratch with initclass helper");
+                            // It means the first bb is already a scratch one so it's probably not a good idea
+                            // to insert blocks before them.
+                            continue;
+                        }
+                    }
+
+                    // So, we found a helper call inside the "block" - let's extract it to a
+                    // separate block "callInitBb" and guard it with a fast "isInitedBb" bb.
+                    // The final layout should look like this:
+                    //
+                    // BB0 "prevBb":
+                    //     ...
+                    //
+                    // BB1 "isInitedBb":    (preds: BB0 + %current preds of BB3%)
+                    //
+                    //  *  JTRUE     void
+                    //  \--*  NE        int
+                    //     +--*  AND       int
+                    //     |  +--*  IND       ubyte
+                    //     |  |  \--*  CNS_INT   long   isInitAdr
+                    //     |  \--*  CNS_INT   int    isInitMask
+                    //     \--*  CNS_INT   int    0
+                    //
+                    //
+                    // BB2 "callInitBb":    (preds: BB1)
+                    //
+                    //  *  CALL   long   CORINFO_HELP_INITCLASS
+                    //  +--*  CNS_INT   long   cl
+                    //
+                    // BB3 "block"          (preds: BB1, BB2)
+                    //     ...
+                    //
+
+                    // Insert a no-op statement that we can use as a splitter in fgSplitBlockAfterStatement
+                    // in case if we're on the first statement.
+                    if (prevStmt == nullptr)
+                    {
+                        prevStmt = fgNewStmtFromTree(gtNewNothingNode());
+                        fgInsertStmtAtBeg(block, prevStmt);
+                    }
+
+                    BasicBlock* newBlock = fgSplitBlockAfterStatement(block, prevStmt);
+                    newBlock->bbFlags |= (BBF_HAS_LABEL | BBF_INTERNAL);
+
+                    prevBb = block;
+                    block = newBlock;
+
+                    // BB1 "isInitedBb"
+                    BasicBlock* isInitedBb = fgNewBBafter(BBJ_COND, prevBb, true);
+                    isInitedBb->inheritWeight(prevBb);
+                    isInitedBb->bbFlags |= (BBF_INTERNAL | BBF_HAS_LABEL | BBF_HAS_JMP);
+
+                    GenTree* isInitAdrNode = gtNewIndOfIconHandleNode(TYP_UBYTE, isInitAddr, GTF_ICON_CONST_PTR, true);
+                    GenTree* isInitedMaskNode =
+                        gtNewOperNode(GT_AND, TYP_INT, isInitAdrNode, gtNewIconNode(isInitMask));
+                    GenTree* isInitedCmp = gtNewOperNode(GT_NE, TYP_INT, isInitedMaskNode, gtNewIconNode(0));
+                    isInitedCmp->gtFlags |= (GTF_RELOP_JMP_USED | GTF_DONT_CSE);
+                    gtSetEvalOrder(isInitedCmp);
+
+                    Statement* isInitedStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, isInitedCmp));
+                    gtSetStmtInfo(isInitedStmt);
+                    fgSetStmtSeq(isInitedStmt);
+
+                    fgInsertStmtAtEnd(isInitedBb, isInitedStmt);
+                    isInitedBb->bbJumpDest = block;
+                    block->bbFlags |= BBF_JMP_TARGET;
+
+                    // Let's start from emitting that BB2 "callInitBb"
+                    BasicBlock* callInitBb = fgNewBBafter(BBJ_ALWAYS, isInitedBb, true);
+                    // it's executed only once so can be marked as cold
+                    callInitBb->bbSetRunRarely();
+                    callInitBb->bbFlags |= (BBF_INTERNAL | BBF_HAS_CALL | BBF_HAS_LABEL | BBF_HAS_JMP);
+                    callInitBb->bbJumpDest = block;
+
+                    // Replace the helper call with a slower CORINFO_HELP_INITCLASS
+                    // it accepts a single argument instead of two so we can save some space.
+                    BOOL                   runtimeLookup;
+                    CORINFO_RESOLVED_TOKEN resolvedToken = {};
+                    resolvedToken.hClass = call->gtRetClsHnd;
+                    GenTree* pMT = impParentClassTokenToHandle(&resolvedToken, &runtimeLookup);
+                    GenTreeCall* slowCall = gtNewHelperCallNode(CORINFO_HELP_INITCLASS, TYP_VOID, gtNewCallArgs(pMT));
+                    slowCall->gtFlags |= call->gtFlags;
+                    slowCall = fgMorphCall(slowCall)->AsCall();
+                    gtSetEvalOrder(slowCall);
+
+                    Statement* callStmt = fgNewStmtFromTree(slowCall);
+                    gtSetStmtInfo(callStmt);
+                    fgSetStmtSeq(callStmt);
+                    fgInsertStmtAtEnd(callInitBb, callStmt);
+
+                    // Replace the call with the "moduleId" node.
+                    gtReplaceTree(stmt, call, gtClone(moduleIdArg));
+
+                    // Fix all the connections to predecessors and successors:
+                    fgAddRefPred(block, callInitBb);
+                    fgAddRefPred(block, isInitedBb);
+                    fgAddRefPred(isInitedBb, prevBb);
+                    fgAddRefPred(callInitBb, isInitedBb);
+                    fgRemoveRefPred(block, prevBb);
+
+                    // Convert the prevBB (it used to be the current block before fgSplitBlockAfterStatement)
+                    // to BBJ_ALWAYS
+                    if (prevBb->bbJumpKind == BBJ_NONE)
+                    {
+                        prevBb->bbJumpDest = isInitedBb;
+                        prevBb->bbJumpKind = BBJ_ALWAYS;
+                        isInitedBb->bbFlags |= BBF_JMP_TARGET;
+                        prevBb->bbFlags |= BBF_HAS_JMP;
+                    }
+
+                    // Make sure all four basic blocks are in the same EH region:
+                    assert(BasicBlock::sameEHRegion(prevBb, block));
+                    assert(BasicBlock::sameEHRegion(callInitBb, block));
+                    assert(BasicBlock::sameEHRegion(isInitedBb, block));
+
+                    assert((isInitedBb->bbJumpDest == block) && (isInitedBb->bbNext == callInitBb));
+                    assert((callInitBb->bbJumpDest == block) && (callInitBb->bbNext == block));
+                    assert((prevBb->bbNext == isInitedBb) && (prevBb->bbJumpDest == isInitedBb));
+
+                    modified = true;
+                    break;
+                }
+                if (modified)
+                {
+                    // Clear potential leftover GTF_CALL and GTF_EXC flags in the current stmt
+                    gtUpdateStmtSideEffects(stmt);
+                }
+                prevStmt = stmt;
+            }
+        }
+        prevBb = block;
+    }
+
+    if (modified)
+    {
+#ifdef DEBUG
+        if (verbose)
+        {
+            printf("*************** After fgInsertClsInitChecks()\n");
+            fgDispBasicBlocks(true);
+        }
+#endif // DEBUG
+
+        fgReorderBlocks();
+        return PhaseStatus::MODIFIED_EVERYTHING;
+    }
+    return PhaseStatus::MODIFIED_NOTHING;
+}
+
 //------------------------------------------------------------------------------
 // fgInsertGCPolls : Insert GC polls for basic blocks containing calls to methods
 //                   with SuppressGCTransitionAttribute.

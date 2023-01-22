@@ -4923,6 +4923,10 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     fgDomsComputed    = false;
     optLoopTableValid = false;
 
+    // Insert quick "is class statically initialized" checks in front of
+    // static init helper calls
+    DoPhase(this, PHASE_INSERT_STATINIT_CHECKS, &Compiler::fgInsertClsInitChecks);
+
     // Insert GC Polls
     DoPhase(this, PHASE_INSERT_GC_POLLS, &Compiler::fgInsertGCPolls);
 

@@ -975,6 +975,14 @@ bool interceptor_ICJI::satisfiesClassConstraints(CORINFO_CLASS_HANDLE cls)
     return temp;
 }
 
+int32_t* interceptor_ICJI::getTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls)
+{
+    mc->cr->AddCall("getTypeIsInitedAddr");
+    int32_t* temp = original_ICorJitInfo->getTypeIsInitedAddr(cls);
+    mc->recGetTypeIsInitedAddr(cls, temp);
+    return temp;
+}
+
 // Check if this is a single dimensional array type
 bool interceptor_ICJI::isSDArray(CORINFO_CLASS_HANDLE cls)
 {

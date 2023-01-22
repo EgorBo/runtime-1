@@ -654,6 +654,10 @@ public:
     void dmpSatisfiesClassConstraints(DWORDLONG key, DWORD value);
     bool repSatisfiesClassConstraints(CORINFO_CLASS_HANDLE cls);
 
+    void recGetTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls, int32_t* result);
+    void dmpGetTypeIsInitedAddr(DWORDLONG key, DWORDLONG value);
+    int32_t* repGetTypeIsInitedAddr(CORINFO_CLASS_HANDLE cls);
+
     void recGetMethodHash(CORINFO_METHOD_HANDLE ftn, unsigned result);
     void dmpGetMethodHash(DWORDLONG key, DWORD value);
     unsigned repGetMethodHash(CORINFO_METHOD_HANDLE ftn);
@@ -1161,6 +1165,7 @@ enum mcPackets
     Packet_GetArrayOrStringLength = 202,
     Packet_IsEnum = 203,
     Packet_GetStringChar = 204,
+    Packet_GetTypeIsInitedAddr = 205,
 };
 
 void SetDebugDumpVariables();

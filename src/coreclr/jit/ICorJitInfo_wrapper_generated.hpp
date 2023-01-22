@@ -859,6 +859,15 @@ bool WrapICorJitInfo::satisfiesClassConstraints(
     return temp;
 }
 
+int32_t* WrapICorJitInfo::getTypeIsInitedAddr(
+          CORINFO_CLASS_HANDLE cls)
+{
+    API_ENTER(getTypeIsInitedAddr);
+    int32_t* temp = wrapHnd->getTypeIsInitedAddr(cls);
+    API_LEAVE(getTypeIsInitedAddr);
+    return temp;
+}
+
 bool WrapICorJitInfo::isSDArray(
           CORINFO_CLASS_HANDLE cls)
 {

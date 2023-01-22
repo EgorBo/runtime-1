@@ -2658,6 +2658,11 @@ public:
             CORINFO_CLASS_HANDLE cls
             ) = 0;
 
+    // Get address of a slot to check whether given type is statically initialized or not
+    virtual int32_t* getTypeIsInitedAddr(
+            CORINFO_CLASS_HANDLE cls
+            ) = 0;
+
     // Check if this is a single dimensional array type
     virtual bool isSDArray(
             CORINFO_CLASS_HANDLE        cls

@@ -2316,6 +2316,14 @@ namespace Internal.JitInterface
             return null;
         }
 
+#pragma warning disable CA1822 // Mark members as static
+        private int* getTypeIsInitedAddr(CORINFO_CLASS_STRUCT_* cls)
+#pragma warning restore CA1822 // Mark members as static
+        {
+            // Less important for R2R so we leave this unimplemented
+            return null;
+        }
+
         private bool isObjectImmutable(CORINFO_OBJECT_STRUCT_* objPtr)
         {
             object obj = HandleToObject(objPtr);
