@@ -9156,7 +9156,8 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                         clsHnd)
                     {
                         if ((info.compCompHnd->getTypeForPrimitiveValueClass(clsHnd) == CORINFO_TYPE_UNDEF) &&
-                            !(info.compFlags & CORINFO_FLG_FORCEINLINE))
+                            !(info.compFlags & CORINFO_FLG_FORCEINLINE) &&
+                            !(fieldInfo.fieldFlags & CORINFO_FLG_FIELD_FINAL))
                         {
                             // Loading a static valuetype field usually will cause a JitHelper to be called
                             // for the static base. This will bloat the code.
