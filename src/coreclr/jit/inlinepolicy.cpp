@@ -1239,6 +1239,19 @@ void ExtendedDefaultPolicy::NoteBool(InlineObservation obs, bool value)
 {
     switch (obs)
     {
+        case InlineObservation::CALLSITE_LDFLD_NEEDS_HELPER:
+        case InlineObservation::CALLEE_LDFLD_NEEDS_HELPER:
+        case InlineObservation::CALLEE_LDFLD_STATIC_VALUECLASS:
+            // Normally, these three lead to a size increase due to helper calls
+            // so we usually cancel inlining.
+            // Let's still allow it for very hot places with help of PGO.
+            if (!m_HasProfileWeights || m_ProfileFrequency < 0.5)
+            {
+                // Let DefaultPolicy decide
+                DefaultPolicy::NoteBool(obs, value);
+            }
+            break;
+
         case InlineObservation::CALLEE_RETURNS_STRUCT:
             m_ReturnsStructByValue = value;
             break;
