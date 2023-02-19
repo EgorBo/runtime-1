@@ -948,7 +948,10 @@ PCODE MethodDesc::JitCompileCodeLocked(PrepareCodeConfig* pConfig, JitListLockEn
     EX_TRY
     {
         Thread::CurrentPrepareCodeConfigHolder threadPrepareCodeConfigHolder(GetThread(), pConfig);
-
+        if (pilHeader != nullptr && pilHeader->CodeSize > 0 && pilHeader->CodeSize <= 16)
+        {
+            pConfig->GetMethodDesc()->SetKnownSmall();
+        }
         pCode = UnsafeJitFunction(pConfig, pilHeader, *pFlags, pSizeOfCode);
     }
     EX_CATCH

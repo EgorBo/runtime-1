@@ -683,6 +683,18 @@ public:
         return (m_wFlags & mdcNotInline);
     }
 
+    inline BOOL IsKnownSmall()
+    {
+        LIMITED_METHOD_CONTRACT;
+        return (m_bFlags2 & enum_flag2_IsKnownSmallMethod);
+    }
+
+    inline void SetKnownSmall()
+    {
+        WRAPPER_NO_CONTRACT;
+        m_bFlags2 |= enum_flag2_IsKnownSmallMethod;
+    }
+
     inline void SetNotInline(BOOL set)
     {
         WRAPPER_NO_CONTRACT;
@@ -1680,9 +1692,9 @@ protected:
 
         enum_flag2_IsEligibleForTieredCompilation       = 0x20,
 
-        enum_flag2_RequiresCovariantReturnTypeChecking  = 0x40
+        enum_flag2_RequiresCovariantReturnTypeChecking  = 0x40,
 
-        // unused                           = 0x80,
+        enum_flag2_IsKnownSmallMethod                   = 0x80,   // A hint for the tiered compilation that the method is known to be small
     };
     BYTE        m_bFlags2;
 

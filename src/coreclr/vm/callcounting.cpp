@@ -662,6 +662,12 @@ bool CallCountingManager::SetCodeEntryPoint(
             CallCount callCountThreshold = g_pConfig->TieredCompilation_CallCountThreshold();
             _ASSERTE(callCountThreshold != 0);
 
+            if (methodDesc->IsKnownSmall())
+            {
+                // Multiply by 10 for small methods (max() to handle a potential overflow)
+                callCountThreshold = max(callCountThreshold, callCountThreshold * 10);
+            }
+
             NewHolder<CallCountingInfo> callCountingInfoHolder = new CallCountingInfo(activeCodeVersion, callCountThreshold);
             callCountingInfoByCodeVersionHash.Add(callCountingInfoHolder);
             callCountingInfo = callCountingInfoHolder.Extract();
