@@ -9991,8 +9991,7 @@ DONE_MORPHING_CHILDREN:
             if (tree->AsIntrinsic()->gtIntrinsicName ==
                 NI_System_Runtime_CompilerServices_RuntimeHelpers_IsKnownConstant)
             {
-                // Should be expanded by the time it reaches CSE phase
-                assert(!optValnumCSE_phase);
+                // It's expected to be folded in importer if opts aren't allowed
                 assert(opts.OptimizationEnabled());
 
                 JITDUMP("\nExpanding RuntimeHelpers.IsKnownConstant to ");
@@ -10015,7 +10014,7 @@ DONE_MORPHING_CHILDREN:
                         JITDUMP("false with side effects:\n")
                         DISPTREE(tree);
                     }
-                    else if (op1->OperIs(GT_LCL_VAR))
+                    else if (op1->OperIsLocal())
                     {
                         // Give it one last chance to be folded in VN/ConstProp.
                         // Limitted to locals for TP reasons, can be relaxed if needed
