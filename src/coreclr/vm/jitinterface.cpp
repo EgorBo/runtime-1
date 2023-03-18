@@ -2845,13 +2845,23 @@ void CEEInfo::ComputeRuntimeLookupForSharedGenericToken(DictionaryEntryKind entr
     pResult->indirections = CORINFO_USEHELPER;
 
     // Runtime lookups in inlined contexts are not supported by the runtime for now
-    if (pResolvedToken->tokenContext != METHOD_BEING_COMPILED_CONTEXT())
-    {
-        pResultLookup->lookupKind.runtimeLookupKind = CORINFO_LOOKUP_NOT_SUPPORTED;
-        return;
-    }
+
 
     MethodDesc* pContextMD = GetMethodFromContext(pResolvedToken->tokenContext);
+    if (pResolvedToken->tokenContext != METHOD_BEING_COMPILED_CONTEXT())
+    {
+        if (pContextMD->RequiresInstMethodDescArg())
+        {
+            pResultLookup->lookupKind.runtimeLookupKind = CORINFO_LOOKUP_METHODPARAM_INLINEE;
+        }
+        else
+        {
+            pResultLookup->lookupKind.runtimeLookupKind = CORINFO_LOOKUP_NOT_SUPPORTED;
+            return;
+        }
+    }
+
+
     MethodTable* pContextMT = pContextMD->GetMethodTable();
     bool isStaticVirtual = (pConstrainedResolvedToken != nullptr && pContextMD != nullptr && pContextMD->IsStatic());
 
@@ -3002,7 +3012,8 @@ NoSpecialCase:
 
     sigBuilder.AppendData(entryKind);
 
-    if (pResultLookup->lookupKind.runtimeLookupKind != CORINFO_LOOKUP_METHODPARAM)
+    if (pResultLookup->lookupKind.runtimeLookupKind != CORINFO_LOOKUP_METHODPARAM &&
+        pResultLookup->lookupKind.runtimeLookupKind != CORINFO_LOOKUP_METHODPARAM_INLINEE)
     {
         _ASSERTE(pContextMT->GetNumDicts() > 0);
         sigBuilder.AppendData(pContextMT->GetNumDicts() - 1);
@@ -3173,7 +3184,8 @@ NoSpecialCase:
     WORD slot;
 
     // It's a method dictionary lookup
-    if (pResultLookup->lookupKind.runtimeLookupKind == CORINFO_LOOKUP_METHODPARAM)
+    if (pResultLookup->lookupKind.runtimeLookupKind == CORINFO_LOOKUP_METHODPARAM ||
+        pResultLookup->lookupKind.runtimeLookupKind == CORINFO_LOOKUP_METHODPARAM_INLINEE)
     {
         _ASSERTE(pContextMD != NULL);
         _ASSERTE(pContextMD->HasMethodInstantiation());

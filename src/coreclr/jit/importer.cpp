@@ -1545,6 +1545,15 @@ GenTree* Compiler::impLookupToTree(CORINFO_RESOLVED_TOKEN* pResolvedToken,
         return nullptr;
     }
 
+    if (pLookup->lookupKind.runtimeLookupKind == CORINFO_LOOKUP_METHODPARAM_INLINEE && !ISMETHOD("Test"))
+    {
+        // Runtime does not support inlining of all shapes of runtime lookups
+        // Inlining has to be aborted in such a case
+        assert(compIsForInlining());
+        compInlineResult->NoteFatal(InlineObservation::CALLSITE_GENERIC_DICTIONARY_LOOKUP);
+        return nullptr;
+    }
+
     // Need to use dictionary-based access which depends on the typeContext
     // which is only available at runtime, not at compile-time.
     return impRuntimeLookupToTree(pResolvedToken, pLookup, compileTimeHandle);
@@ -1702,7 +1711,7 @@ GenTree* Compiler::impMethodPointer(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORI
 // Notes:
 //    Reports about generic context using.
 
-GenTree* Compiler::getRuntimeContextTree(CORINFO_RUNTIME_LOOKUP_KIND kind)
+GenTree* Compiler::getRuntimeContextTree(CORINFO_RUNTIME_LOOKUP_KIND kind, void* compileTimeHandle)
 {
     GenTree* ctxTree = nullptr;
 
@@ -1721,6 +1730,12 @@ GenTree* Compiler::getRuntimeContextTree(CORINFO_RUNTIME_LOOKUP_KIND kind)
 
         // context is the method table pointer of the this object
         ctxTree = gtNewMethodTableLookup(ctxTree);
+    }
+    else if (kind == CORINFO_LOOKUP_METHODPARAM_INLINEE)
+    {
+        ctxTree = gtNewLclvNode(pRoot->info.compTypeCtxtArg, TYP_I_IMPL);
+        ctxTree->gtFlags |= GTF_VAR_CONTEXT;
+        ctxTree = gtNewRuntimeLookupHelperCallNode(&pRoot->info.compLastCallsiteLookup, ctxTree, compileTimeHandle);
     }
     else
     {
@@ -1757,7 +1772,16 @@ GenTree* Compiler::impRuntimeLookupToTree(CORINFO_RESOLVED_TOKEN* pResolvedToken
                                           CORINFO_LOOKUP*         pLookup,
                                           void*                   compileTimeHandle)
 {
-    GenTree* ctxTree = getRuntimeContextTree(pLookup->lookupKind.runtimeLookupKind);
+    if (!compIsForInlining() && ISMETHOD("Test"))
+    {
+        info.compLastCallsiteLookup = pLookup->runtimeLookup;
+    }
+    else if (compIsForInlining() && ISMETHOD("Test"))
+    {
+        printf("");
+    }
+
+    GenTree* ctxTree = getRuntimeContextTree(pLookup->lookupKind.runtimeLookupKind, compileTimeHandle);
 
     CORINFO_RUNTIME_LOOKUP* pRuntimeLookup = &pLookup->runtimeLookup;
     // It's available only via the run-time helper function
