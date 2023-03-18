@@ -6365,6 +6365,9 @@ void Lowering::ContainCheckIntrinsic(GenTreeOp* node)
             TryMakeSrcContainedOrRegOptional(node, op1);
         }
     }
+
+    // It's expected to be folded to 0/1 earlier
+    assert(intrinsicName != NI_System_Runtime_CompilerServices_RuntimeHelpers_IsKnownConstant);
 }
 
 #ifdef FEATURE_HW_INTRINSICS

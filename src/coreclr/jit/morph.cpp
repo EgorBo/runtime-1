@@ -9993,6 +9993,7 @@ DONE_MORPHING_CHILDREN:
             {
                 // Should be expanded by the time it reaches CSE phase
                 assert(!optValnumCSE_phase);
+                assert(opts.OptimizationEnabled());
 
                 JITDUMP("\nExpanding RuntimeHelpers.IsKnownConstant to ");
                 if (op1->OperIsConst() || gtIsTypeof(op1))
@@ -10013,6 +10014,12 @@ DONE_MORPHING_CHILDREN:
                         tree = gtNewOperNode(GT_COMMA, TYP_INT, op1SideEffects, gtNewIconNode(0));
                         JITDUMP("false with side effects:\n")
                         DISPTREE(tree);
+                    }
+                    else if (op1->OperIs(GT_LCL_VAR))
+                    {
+                        // Give it one last chance to be folded in VN/ConstProp.
+                        // Limitted to locals for TP reasons, can be relaxed if needed
+                        return tree;
                     }
                     else
                     {

@@ -114,6 +114,9 @@ namespace System.Runtime.CompilerServices
 
         [Intrinsic]
         internal static bool IsKnownConstant(int t) => false;
+
+        [Intrinsic]
+        internal static bool IsKnownConstant(nuint t) => false;
 #pragma warning restore IDE0060
     }
 }

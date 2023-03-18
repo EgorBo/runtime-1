@@ -354,18 +354,29 @@ namespace System
                 ref byte src = ref Unsafe.As<T, byte>(ref source);
                 nuint byteLen = elementCount * (nuint)sizeof(T);
 
-                // P/Invoke into the native version when the buffers are overlapping.
-                if (byteLen <= 128 &&
-                    Unsafe.ByteOffset(ref src, ref dst) > (nint)byteLen &&
-                    Unsafe.ByteOffset(ref dst, ref src) > (nint)byteLen)
+#if TARGET_64BIT
+                // If pointers don't overlap and length is small enough -
+                // we can unroll it with Unsafe.CopyBlockUnaligned.
+                // 128 is based on JIT's internal getUnrollThreshold(memcpy) implementation, keep in sync
+                const nuint unrollThreshold = 128;
+                if (RuntimeHelpers.IsKnownConstant(byteLen) && byteLen <= unrollThreshold)
                 {
-                    Unsafe.CopyBlockUnaligned(ref dst, ref src, (uint)byteLen);
+                    // This check can be made faster with abs()
+                    if (((nuint)(nint)Unsafe.ByteOffset(ref src, ref dst) < byteLen) ||
+                        ((nuint)(nint)Unsafe.ByteOffset(ref dst, ref src) < byteLen))
+                    {
+                        // they overlap
+                    }
+                    else
+                    {
+                        Unsafe.CopyBlockUnaligned(ref dst, ref src, (uint)byteLen);
+                        return;
+                    }
                 }
-                else
-                {
-                    // Blittable memmove
-                    Memmove(ref dst, ref src, byteLen);
-                }
+#endif
+
+                // Blittable memmove
+                Memmove(ref dst, ref src, byteLen);
             }
             else
             {
