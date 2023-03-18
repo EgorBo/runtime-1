@@ -11052,7 +11052,7 @@ void Compiler::fgValueNumberIntrinsic(GenTree* tree)
     {
         ValueNumPair isCnsVNP(vnStore->VNForIntCon(vnStore->IsVNConstant(arg0VNP.GetLiberal()) ? 1 : 0),
                               vnStore->VNForIntCon(vnStore->IsVNConstant(arg0VNP.GetConservative()) ? 1 : 0));
-        intrinsic->gtVNPair = vnStore->VNPWithExc(ValueNumPair(isCnsVN, isCnsVN), arg0VNPx);
+        intrinsic->gtVNPair = vnStore->VNPWithExc(isCnsVNP, arg0VNPx);
     }
     else
     {
