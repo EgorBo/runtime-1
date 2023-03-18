@@ -350,11 +350,22 @@ namespace System
 #pragma warning disable 8500 // sizeof of managed types
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
-                // Blittable memmove
-                Memmove(
-                    ref Unsafe.As<T, byte>(ref destination),
-                    ref Unsafe.As<T, byte>(ref source),
-                    elementCount * (nuint)sizeof(T));
+                ref byte dst = ref Unsafe.As<T, byte>(ref destination);
+                ref byte src = ref Unsafe.As<T, byte>(ref source);
+                nuint byteLen = elementCount * (nuint)sizeof(T);
+
+                // P/Invoke into the native version when the buffers are overlapping.
+                if (byteLen <= 128 &&
+                    Unsafe.ByteOffset(ref src, ref dst) > (nint)byteLen &&
+                    Unsafe.ByteOffset(ref dst, ref src) > (nint)byteLen)
+                {
+                    Unsafe.CopyBlockUnaligned(ref dst, ref src, (uint)byteLen);
+                }
+                else
+                {
+                    // Blittable memmove
+                    Memmove(ref dst, ref src, byteLen);
+                }
             }
             else
             {
