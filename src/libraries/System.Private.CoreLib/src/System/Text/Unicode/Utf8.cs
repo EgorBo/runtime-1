@@ -9,6 +9,16 @@ using System.Runtime.InteropServices;
 
 namespace System.Text.Unicode
 {
+    internal static class Foo
+    {
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static bool Test(byte[] dst)
+        {
+            bool rz = Encoding.UTF8.TryGetBytes("hello", dst.AsSpan(), out int written);
+            return rz && written < 100;
+        }
+    }
+
 #if SYSTEM_PRIVATE_CORELIB
     public
 #else
@@ -293,6 +303,7 @@ namespace System.Text.Unicode
             /// <remarks>This is intended to be called only by compiler-generated code. Arguments are not validated as they'd otherwise be for members intended to be used directly.</remarks>
             public TryWriteInterpolatedStringHandler(int literalLength, int formattedCount, Span<byte> destination, IFormatProvider? provider, out bool shouldAppend)
             {
+                Foo.Test(new byte[100]);
                 _destination = destination;
                 _provider = provider;
                 _pos = 0;

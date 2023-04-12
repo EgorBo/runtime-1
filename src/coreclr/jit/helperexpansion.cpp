@@ -687,7 +687,7 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock* block, Statement* st
 //    true if there was any helper that was expanded.
 //
 template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
+PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks, bool handleIntrinsics)
 {
     PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
     for (BasicBlock* block = fgFirstBB; block != nullptr; block = block->bbNext)
@@ -699,7 +699,7 @@ PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
         }
 
         // Expand and visit the last block again to find more candidates
-        while (fgExpandHelperForBlock<ExpansionFunction>(block))
+        while (fgExpandHelperForBlock<ExpansionFunction>(block, handleIntrinsics))
         {
             result = PhaseStatus::MODIFIED_EVERYTHING;
         }
@@ -719,7 +719,7 @@ PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
 //    true if a helper was expanded
 //
 template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-bool Compiler::fgExpandHelperForBlock(BasicBlock* block)
+bool Compiler::fgExpandHelperForBlock(BasicBlock* block, bool handleIntrinsics)
 {
     for (Statement* const stmt : block->NonPhiStatements())
     {
@@ -731,7 +731,14 @@ bool Compiler::fgExpandHelperForBlock(BasicBlock* block)
 
         for (GenTree* const tree : stmt->TreeList())
         {
-            if (!tree->IsHelperCall())
+            if (handleIntrinsics)
+            {
+                if (!tree->IsCall() || !(tree->AsCall()->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC))
+                {
+                    continue;
+                }
+            }
+            else if (!tree->IsHelperCall())
             {
                 continue;
             }
@@ -741,6 +748,109 @@ bool Compiler::fgExpandHelperForBlock(BasicBlock* block)
                 return true;
             }
         }
+    }
+    return false;
+}
+
+PhaseStatus Compiler::fgVectorization()
+{
+    PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+
+    if (opts.OptimizationDisabled())
+    {
+        JITDUMP("Optimizations aren't allowed - bail out.\n")
+            return result;
+    }
+
+    // TODO: Replace with opts.compCodeOpt once it's fixed
+    const bool preferSize = opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT);
+    if (preferSize)
+    {
+        // The optimization comes with a codegen size increase
+        JITDUMP("Optimized for size - bail out.\n")
+        return result;
+    }
+    return fgExpandHelper<&Compiler::fgVectorizationForCall>(true, true);
+}
+
+bool Compiler::fgVectorizationForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call)
+{
+    if (!ISMETHOD("Test"))
+        return false;
+
+    assert(call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC);
+    NamedIntrinsic ni = lookupNamedIntrinsic(call->gtCallMethHnd);
+    if (ni != NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetBytes)
+    {
+        return false;
+    }
+
+    auto userArgs = call->gtArgs.CountUserArgs();
+    auto arg0 = call->gtArgs.GetUserArgByIndex(1);
+
+
+    VNFuncApp func;
+    if (vnStore->GetVNFunc(arg0->GetNode()->gtVNPair.GetLiberal(), &func) && (func.m_func == VNF_PtrToLoc))
+    {
+        ssize_t lclNum = vnStore->CoercedConstantValue<ssize_t>(func.m_args[0]);
+        ssize_t offs = vnStore->CoercedConstantValue<ssize_t>(func.m_args[1]);
+
+        auto argSetup = arg0->GetEarlyNode();
+        if (argSetup->OperIs(GT_COMMA))
+        {
+            auto asg1 = argSetup->gtGetOp1();
+            auto asg2 = argSetup->gtGetOp2();
+            if (asg1->OperIs(GT_ASG) && asg2->OperIs(GT_ASG))
+            {
+                if (asg1->gtGetOp1()->OperIs(GT_LCL_FLD) && asg2->gtGetOp1()->OperIs(GT_LCL_FLD))
+                {
+                    auto lcl1 = asg1->gtGetOp1()->AsLclFld();
+                    auto lcl2 = asg1->gtGetOp1()->AsLclFld();
+                    if (lcl1->GetLclNum() == lclNum && lcl2->GetLclNum() == lclNum &&
+                        lcl1->GetLclOffs() == offs && lcl2->GetLclOffs() == offs)
+                    {
+                        auto spanRef = asg1->gtGetOp2();
+                        auto spanLen = asg2->gtGetOp2();
+
+                        auto isCns = vnStore->IsVNConstant(spanLen->gtVNPair.GetLiberal());
+
+                        VNFuncApp func;
+                        if (vnStore->GetVNFunc(spanRef->gtVNPair.GetLiberal(), &func) && func.m_func == (VNFunc)GT_ADD)
+                        {
+                            auto cns1 = func.m_args[0];
+                            auto cns2 = func.m_args[1];
+
+                            auto isCns1 = vnStore->IsVNHandle(cns1);
+                            auto isCns2 = vnStore->IsVNConstant(cns2);
+
+                            if (isCns1 && isCns2 && vnStore->GetHandleFlags(cns1) == GTF_ICON_OBJ_HDL)
+                            {
+                                auto strObj = vnStore->CoercedConstantValue<ssize_t>(cns1);
+                                auto strDataOffs = vnStore->CoercedConstantValue<ssize_t>(cns2);
+                                auto strLen = vnStore->CoercedConstantValue<ssize_t>(spanLen->gtVNPair.GetLiberal());
+                                if (strDataOffs == OFFSETOF__CORINFO_String__chars && strLen > 0)
+                                {
+                                    for (int i = 0; i < strLen; i++)
+                                    {
+                                        uint16_t ch = 0;
+                                        if (!info.compCompHnd->getStringChar((CORINFO_OBJECT_HANDLE)strObj, i, &ch))
+                                        {
+                                            return false;
+                                        }
+                                        if (ch > 127) // non-ASCII
+                                        {
+                                            return false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        printf("");
     }
     return false;
 }

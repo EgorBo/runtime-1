@@ -3791,6 +3791,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
+            case NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetBytes:
             case NI_System_SpanHelpers_SequenceEqual:
             case NI_System_Buffer_Memmove:
             {
@@ -6574,6 +6575,11 @@ void Compiler::impDevirtualizeCall(GenTreeCall*            call,
         return;
     }
 
+    if (ISMETHOD("Test"))
+    {
+        printf("");
+    }
+
     // Optionally, print info on devirtualization
     Compiler* const rootCompiler = impInlineRoot();
     const bool      doPrint      = JitConfig.JitPrintDevirtualizedMethods().contains(rootCompiler->info.compMethodHnd,
@@ -6870,6 +6876,15 @@ void Compiler::impDevirtualizeCall(GenTreeCall*            call,
     {
         printf("Devirtualized %s call to %s:%s; now direct call to %s:%s [%s]\n", callKind, baseClassName,
                baseMethodName, derivedClassName, derivedMethodName, note);
+    }
+
+    if (derivedMethodAttribs & CORINFO_FLG_INTRINSIC)
+    {
+        const NamedIntrinsic ni = lookupNamedIntrinsic(derivedMethod);
+        if (ni == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetBytes)
+        {
+            call->gtCallMoreFlags |= GTF_CALL_M_SPECIAL_INTRINSIC;
+        }
     }
 
     // If we successfully devirtualized based on an exact or final class,
@@ -8556,6 +8571,16 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
                     else if (strcmp(methodName, "NextCallReturnAddress") == 0)
                     {
                         result = NI_System_StubHelpers_NextCallReturnAddress;
+                    }
+                }
+            }
+            else if (strcmp(namespaceName, "Text") == 0)
+            {
+                if ((strcmp(className, "UTF8Encoding") == 0) || (strcmp(className, "UTF8EncodingSealed") == 0))
+                {
+                    if (strcmp(methodName, "TryGetBytes") == 0)
+                    {
+                        result = NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetBytes;
                     }
                 }
             }

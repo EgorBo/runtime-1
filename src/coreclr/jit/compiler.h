@@ -5289,10 +5289,10 @@ public:
     void SplitTreesRemoveCommas();
 
     template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-    PhaseStatus fgExpandHelper(bool skipRarelyRunBlocks);
+    PhaseStatus fgExpandHelper(bool skipRarelyRunBlocks, bool handleIntrinsics = false);
 
     template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-    bool fgExpandHelperForBlock(BasicBlock* block);
+    bool fgExpandHelperForBlock(BasicBlock* block, bool handleIntrinsics);
 
     PhaseStatus fgExpandRuntimeLookups();
     bool fgExpandRuntimeLookupsForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
@@ -5302,6 +5302,9 @@ public:
 
     PhaseStatus fgExpandStaticInit();
     bool fgExpandStaticInitForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
+
+    PhaseStatus fgVectorization();
+    bool fgVectorizationForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
 
     PhaseStatus fgInsertGCPolls();
     BasicBlock* fgCreateGCPoll(GCPollType pollType, BasicBlock* block);

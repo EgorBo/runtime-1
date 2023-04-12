@@ -4895,6 +4895,7 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         bool doBranchOpt               = true;
         bool doCse                     = true;
         bool doAssertionProp           = true;
+        bool doVectorization           = true;
         bool doRangeAnalysis           = true;
         bool doVNBasedDeadStoreRemoval = true;
         int  iterations                = 1;
@@ -4908,6 +4909,7 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         doBranchOpt               = doValueNum && (JitConfig.JitDoRedundantBranchOpts() != 0);
         doCse                     = doValueNum;
         doAssertionProp           = doValueNum && (JitConfig.JitDoAssertionProp() != 0);
+        doVectorization           = doValueNum;
         doRangeAnalysis           = doAssertionProp && (JitConfig.JitDoRangeAnalysis() != 0);
         doVNBasedDeadStoreRemoval = doValueNum && (JitConfig.JitDoVNBasedDeadStoreRemoval() != 0);
 
@@ -4989,6 +4991,12 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 // Assertion propagation
                 //
                 DoPhase(this, PHASE_ASSERTION_PROP_MAIN, &Compiler::optAssertionPropMain);
+            }
+
+            if (doVectorization)
+            {
+                // Partially inline static initializations
+                DoPhase(this, PHASE_VECTORIZATION, &Compiler::fgVectorization);
             }
 
             if (doRangeAnalysis)

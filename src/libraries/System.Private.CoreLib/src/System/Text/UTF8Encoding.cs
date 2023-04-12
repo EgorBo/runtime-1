@@ -375,6 +375,8 @@ namespace System.Text
         /// <param name="bytes">The byte span to hold the encoded bytes.</param>
         /// <param name="bytesWritten">Upon successful completion of the operation, the number of bytes encoded into <paramref name="bytes"/>.</param>
         /// <returns><see langword="true"/> if all of the characters were encoded into the destination; <see langword="false"/> if the destination was too small to contain all the encoded bytes.</returns>
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal override unsafe bool TryGetBytes(ReadOnlySpan<char> chars, Span<byte> bytes, out int bytesWritten)
         {
             fixed (char* charsPtr = &MemoryMarshal.GetReference(chars))

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace System.Text
 {
@@ -148,9 +149,10 @@ namespace System.Text
             }
 
             // TODO https://github.com/dotnet/runtime/issues/84425: Make this public.
-            // TODO: Make this [Intrinsic] and handle JIT-time UTF8 encoding of literal `chars`.
+            [Intrinsic]
             internal override unsafe bool TryGetBytes(ReadOnlySpan<char> chars, Span<byte> bytes, out int bytesWritten)
             {
+                if ()
                 return base.TryGetBytes(chars, bytes, out bytesWritten);
             }
         }
