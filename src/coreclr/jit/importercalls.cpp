@@ -970,6 +970,11 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
         }
     }
 
+    if (call->AsCall()->IsVirtualStub() || call->AsCall()->IsVirtualVtable())
+    {
+        setMethodHasGDVCandidates();
+    }
+
     //-------------------------------------------------------------------------
     // The "this" pointer for "newobj"
 

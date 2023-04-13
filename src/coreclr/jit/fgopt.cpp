@@ -1461,23 +1461,17 @@ PhaseStatus Compiler::fgPostImportationCleanup()
         }
     }
 
-    // Tell VM that this method won't ever need instrumentation for PGO
-    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_BBINSTR) && !compIsForInlining() && (fgBBcount < 2) &&
-        !(fgFirstBB->bbFlags & BBF_HAS_CALL))
-    {
-        // TODO: the logic could be more sophisticated but the main goal is to give up
-        // on simple properties
-        info.compCompHnd->reportNoInstrumentationNeeded();
-    }
-
     BasicBlock* cur;
     BasicBlock* nxt;
 
     // If we remove any blocks, we'll have to do additional work
     unsigned removedBlks = 0;
+    unsigned totalBlks   = 0;
 
     for (cur = fgFirstBB; cur != nullptr; cur = nxt)
     {
+        totalBlks++;
+
         // Get hold of the next block (in case we delete 'cur')
         nxt = cur->bbNext;
 
@@ -1518,6 +1512,15 @@ PhaseStatus Compiler::fgPostImportationCleanup()
                 cur->bbFlags |= BBF_IMPORTED;
             }
         }
+    }
+
+    // Tell VM that this method won't ever need instrumentation for PGO
+    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_BBINSTR) && !compIsForInlining() && ((totalBlks - removedBlks) < 2) &&
+        !doesMethodHaveGDVCandidates())
+    {
+        // TODO: the logic could be more sophisticated but the main goal is to give up
+        // on simple properties
+        info.compCompHnd->reportNoInstrumentationNeeded();
     }
 
     // If no blocks were removed, we're done.
