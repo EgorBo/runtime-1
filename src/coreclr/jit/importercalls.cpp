@@ -7285,8 +7285,9 @@ Compiler::GDVProbeType Compiler::compClassifyGDVProbeType(GenTreeCall* call, boo
         // exact or not) have probes. For those helpers we do not use this
         // function to classify the probe type until after we have decided on
         // whether we probe them or not.
-        createTypeHistogram = createTypeHistogram || (impIsCastHelperEligibleForClassProbe(call) &&
-                                                      (speculative || call->gtHandleHistogramProfileCandidateInfo != nullptr));
+        createTypeHistogram =
+            createTypeHistogram || (impIsCastHelperEligibleForClassProbe(call) &&
+                                    (speculative || call->gtHandleHistogramProfileCandidateInfo != nullptr));
     }
 
     bool createMethodHistogram = ((JitConfig.JitDelegateProfiling() > 0) && call->IsDelegateInvoke()) ||
