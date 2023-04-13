@@ -3757,7 +3757,7 @@ public:
         MethodAndClassProfile,
     };
 
-    GDVProbeType compClassifyGDVProbeType(GenTreeCall* call);
+    GDVProbeType compClassifyGDVProbeType(GenTreeCall* call, bool speculative = false);
 
     //=========================================================================
     //                          PROTECTED

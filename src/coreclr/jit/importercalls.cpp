@@ -970,7 +970,7 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
         }
     }
 
-    if (call->AsCall()->IsVirtualStub() || call->AsCall()->IsVirtualVtable())
+    if (compClassifyGDVProbeType(call->AsCall(), true) != GDVProbeType::None)
     {
         setMethodHasGDVCandidates();
     }
@@ -7255,12 +7255,13 @@ bool Compiler::impConsiderCallProbe(GenTreeCall* call, IL_OFFSET ilOffset)
 //   Classify the type of GDV probe to use for a call site.
 //
 // Arguments:
-//     call - The call
+//     call        - The call
+//     speculative - result is using for guessing whether we will need probing or not
 //
 // Returns:
 //     The type of probe to use.
 //
-Compiler::GDVProbeType Compiler::compClassifyGDVProbeType(GenTreeCall* call)
+Compiler::GDVProbeType Compiler::compClassifyGDVProbeType(GenTreeCall* call, bool speculative)
 {
     if (call->gtCallType == CT_INDIRECT)
     {
@@ -7269,7 +7270,10 @@ Compiler::GDVProbeType Compiler::compClassifyGDVProbeType(GenTreeCall* call)
 
     if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_BBINSTR) || opts.jitFlags->IsSet(JitFlags::JIT_FLAG_PREJIT))
     {
-        return GDVProbeType::None;
+        if (!speculative)
+        {
+            return GDVProbeType::None;
+        }
     }
 
     bool createTypeHistogram = false;
@@ -7282,7 +7286,7 @@ Compiler::GDVProbeType Compiler::compClassifyGDVProbeType(GenTreeCall* call)
         // function to classify the probe type until after we have decided on
         // whether we probe them or not.
         createTypeHistogram = createTypeHistogram || (impIsCastHelperEligibleForClassProbe(call) &&
-                                                      (call->gtHandleHistogramProfileCandidateInfo != nullptr));
+                                                      (speculative || call->gtHandleHistogramProfileCandidateInfo != nullptr));
     }
 
     bool createMethodHistogram = ((JitConfig.JitDelegateProfiling() > 0) && call->IsDelegateInvoke()) ||
