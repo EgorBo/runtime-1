@@ -769,6 +769,7 @@ public:
         m_bFlags2 |= enum_flag2_IsUnboxingStub;
     }
 
+
     //================================================================
     // Instantiating Stubs
     //
@@ -1634,8 +1635,7 @@ protected:
         enum_flag2_HasPrecode                           = 0x02,   // Precode has been allocated for this method
 
         enum_flag2_IsUnboxingStub                       = 0x04,
-
-        enum_flag2_NeedsNoInstrumentation               = 0x08,
+        // unused                                       = 0x08,
 
         enum_flag2_IsIntrinsic                          = 0x10,   // Jit may expand method as an intrinsic
 

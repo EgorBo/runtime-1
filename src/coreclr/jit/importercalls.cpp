@@ -7256,7 +7256,7 @@ bool Compiler::impConsiderCallProbe(GenTreeCall* call, IL_OFFSET ilOffset)
 //
 // Arguments:
 //     call        - The call
-//     speculative - result is using for guessing whether we will need probing or not
+//     speculative - result is used for guessing whether we will need probing or not
 //
 // Returns:
 //     The type of probe to use.

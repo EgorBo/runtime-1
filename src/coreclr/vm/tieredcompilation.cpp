@@ -289,7 +289,7 @@ void TieredCompilationManager::AsyncPromoteToTier1(
         {
             if (currentNativeCodeVersion.NeedsNoInstrumentation())
             {
-                // Method says it needs no instrumentation so the next tier will be Tier1
+                // Skip instrumentation on explicit request
                 nextTier = NativeCodeVersion::OptimizationTier1;
             }
             else if (ExecutionManager::IsReadyToRunCode(currentNativeCodeVersion.GetNativeCode()))
