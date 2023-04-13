@@ -106,7 +106,16 @@ public:
     PTR_NativeCodeVersionNode AsNode() const;
 #endif
 
+    void SetNeedsNoInstrumentation();
+    bool NeedsNoInstrumentation() const;
+
 private:
+
+    enum NativeCodeVersionFlag : UINT16
+    {
+        None = 0,
+        NeedsNoInstrumentationFlag = 1
+    };
 
 #ifndef FEATURE_CODE_VERSIONING
     PTR_MethodDesc m_pMethodDesc;
@@ -122,7 +131,7 @@ private:
     BOOL IsActiveChildVersion() const;
     PTR_MethodDescVersioningState GetMethodDescVersioningState() const;
 
-    enum StorageKind
+    enum StorageKind : UINT16
     {
         Unknown,
         Explicit,
@@ -130,6 +139,7 @@ private:
     };
 
     StorageKind m_storageKind;
+    NativeCodeVersionFlag m_flags;
     union
     {
         PTR_NativeCodeVersionNode m_pVersionNode;

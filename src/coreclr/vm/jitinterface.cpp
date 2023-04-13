@@ -10788,8 +10788,27 @@ void CEEInfo::reportFatalError(CorJitResult result)
 
 void CEEInfo::reportNoInstrumentationNeeded()
 {
+    CONTRACTL
+    {
+        NOTHROW;
+        GC_NOTRIGGER;
+        MODE_PREEMPTIVE;
+    }
+    CONTRACTL_END;
+
+    JIT_TO_EE_TRANSITION();
+
     _ASSERT(m_pMethodBeingCompiled != nullptr);
-    m_pMethodBeingCompiled->SetNeedsNoInstrumentation();
+
+    if (m_pMethodBeingCompiled->IsVersionable())
+    {
+        CodeVersionManager* pCodeVersionManager = m_pMethodBeingCompiled->GetCodeVersionManager();
+        CodeVersionManager::LockHolder codeVersioningLockHolder;
+        ILCodeVersion ilVersion = pCodeVersionManager->GetActiveILCodeVersion(m_pMethodBeingCompiled);
+        ilVersion.GetActiveNativeCodeVersion(m_pMethodBeingCompiled).SetNeedsNoInstrumentation();
+    }
+
+    EE_TO_JIT_TRANSITION();
 }
 
 bool CEEInfo::logMsg(unsigned level, const char* fmt, va_list args)

@@ -283,6 +283,18 @@ BOOL NativeCodeVersion::IsActiveChildVersion() const
     }
 }
 
+void NativeCodeVersion::SetNeedsNoInstrumentation()
+{
+    LIMITED_METHOD_CONTRACT;
+    m_flags = (NativeCodeVersionFlag)(m_flags | NeedsNoInstrumentationFlag);
+}
+
+bool NativeCodeVersion::NeedsNoInstrumentation() const
+{
+    LIMITED_METHOD_CONTRACT;
+    return m_flags & NeedsNoInstrumentationFlag;
+}
+
 PTR_MethodDescVersioningState NativeCodeVersion::GetMethodDescVersioningState() const
 {
     LIMITED_METHOD_DAC_CONTRACT;

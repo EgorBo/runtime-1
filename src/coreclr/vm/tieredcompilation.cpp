@@ -287,7 +287,7 @@ void TieredCompilationManager::AsyncPromoteToTier1(
         if (currentNativeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0 &&
             g_pConfig->TieredPGO_InstrumentOnlyHotCode())
         {
-            if (pMethodDesc->NeedsNoInstrumentation())
+            if (currentNativeCodeVersion.NeedsNoInstrumentation())
             {
                 // Method says it needs no instrumentation so the next tier will be Tier1
                 nextTier = NativeCodeVersion::OptimizationTier1;

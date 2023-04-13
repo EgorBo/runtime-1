@@ -769,18 +769,6 @@ public:
         m_bFlags2 |= enum_flag2_IsUnboxingStub;
     }
 
-    BOOL NeedsNoInstrumentation()
-    {
-        LIMITED_METHOD_DAC_CONTRACT;
-        return (m_bFlags2 & enum_flag2_NeedsNoInstrumentation) != 0;
-    }
-
-    void SetNeedsNoInstrumentation()
-    {
-        LIMITED_METHOD_CONTRACT;
-        m_bFlags2 |= enum_flag2_NeedsNoInstrumentation;
-    }
-
     //================================================================
     // Instantiating Stubs
     //
