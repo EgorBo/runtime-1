@@ -1461,6 +1461,15 @@ PhaseStatus Compiler::fgPostImportationCleanup()
         }
     }
 
+    // Tell VM that this method won't ever need instrumentation for PGO
+    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_BBINSTR) && !compIsForInlining() && (fgBBcount < 2) &&
+        !(fgFirstBB->bbFlags & BBF_HAS_CALL))
+    {
+        // TODO: the logic could be more sophisticated but the main goal is to give up
+        // on simple properties
+        info.compCompHnd->reportNoInstrumentationNeeded();
+    }
+
     BasicBlock* cur;
     BasicBlock* nxt;
 
