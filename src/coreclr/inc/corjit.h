@@ -322,6 +322,8 @@ public:
 
     virtual void reportFatalError(CorJitResult result) = 0;
 
+    virtual void reportNoInstrumentationNeeded() = 0;
+
     struct BlockCounts  // Also defined by:  CORBBTPROF_BLOCK_DATA
     {
         uint32_t ILOffset;

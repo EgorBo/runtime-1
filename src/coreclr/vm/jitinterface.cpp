@@ -10786,6 +10786,12 @@ void CEEInfo::reportFatalError(CorJitResult result)
     EE_TO_JIT_TRANSITION_LEAF();
 }
 
+void CEEInfo::reportNoInstrumentationNeeded()
+{
+    _ASSERT(m_pMethodBeingCompiled != nullptr);
+    m_pMethodBeingCompiled->SetNeedsNoInstrumentation();
+}
+
 bool CEEInfo::logMsg(unsigned level, const char* fmt, va_list args)
 {
     STATIC_CONTRACT_THROWS;

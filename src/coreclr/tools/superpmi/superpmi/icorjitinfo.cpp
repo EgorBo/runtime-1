@@ -1858,6 +1858,10 @@ void MyICJI::reportFatalError(CorJitResult result)
     jitInstance->mc->cr->recReportFatalError(result);
 }
 
+void MyICJI::reportNoInstrumentationNeeded()
+{
+}
+
 // allocate a basic block profile buffer where execution counts will be stored
 // for jitted basic blocks.
 HRESULT MyICJI::allocPgoInstrumentationBySchema(CORINFO_METHOD_HANDLE ftnHnd,

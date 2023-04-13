@@ -2014,6 +2014,10 @@ void interceptor_ICJI::reportFatalError(CorJitResult result)
     mc->cr->recReportFatalError(result);
 }
 
+void interceptor_ICJI::reportNoInstrumentationNeeded() 
+{
+}
+
 // allocate a basic block profile buffer where execution counts will be stored
 // for jitted basic blocks.
 HRESULT interceptor_ICJI::allocPgoInstrumentationBySchema(CORINFO_METHOD_HANDLE ftnHnd,

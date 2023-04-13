@@ -287,7 +287,12 @@ void TieredCompilationManager::AsyncPromoteToTier1(
         if (currentNativeCodeVersion.GetOptimizationTier() == NativeCodeVersion::OptimizationTier0 &&
             g_pConfig->TieredPGO_InstrumentOnlyHotCode())
         {
-            if (ExecutionManager::IsReadyToRunCode(currentNativeCodeVersion.GetNativeCode()))
+            if (pMethodDesc->NeedsNoInstrumentation())
+            {
+                // Method says it needs no instrumentation so the next tier will be Tier1
+                nextTier = NativeCodeVersion::OptimizationTier1;
+            }
+            else if (ExecutionManager::IsReadyToRunCode(currentNativeCodeVersion.GetNativeCode()))
             {
                 // We definitely don't want to use unoptimized instrumentation tier for hot R2R:
                 // 1) It will produce a lot of new compilations for small methods which were inlined in R2R

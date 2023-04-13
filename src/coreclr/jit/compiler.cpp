@@ -7002,6 +7002,7 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
                 {
                     assert((info.compFlags & CORINFO_FLG_DISABLE_TIER0_FOR_LOOPS) == 0);
                     opts.jitFlags->Set(JitFlags::JIT_FLAG_BBINSTR);
+                    info.compCompHnd->reportNoInstrumentationNeeded();
                     JITDUMP("\nEnabling instrumentation for this method so OSR'd version will have a profile.\n");
                 }
             }

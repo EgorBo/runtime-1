@@ -188,6 +188,7 @@ struct JitInterfaceCallbacks
     bool (* logMsg)(void * thisHandle, CorInfoExceptionClass** ppException, unsigned level, const char* fmt, va_list args);
     int (* doAssert)(void * thisHandle, CorInfoExceptionClass** ppException, const char* szFile, int iLine, const char* szExpr);
     void (* reportFatalError)(void * thisHandle, CorInfoExceptionClass** ppException, CorJitResult result);
+    void (* reportNoInstrumentationNeeded)(void * thisHandle, CorInfoExceptionClass** ppException);
     JITINTERFACE_HRESULT (* getPgoInstrumentationResults)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_METHOD_HANDLE ftnHnd, ICorJitInfo::PgoInstrumentationSchema** pSchema, uint32_t* pCountSchemaItems, uint8_t** pInstrumentationData, ICorJitInfo::PgoSource* pgoSource);
     JITINTERFACE_HRESULT (* allocPgoInstrumentationBySchema)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_METHOD_HANDLE ftnHnd, ICorJitInfo::PgoInstrumentationSchema* pSchema, uint32_t countSchemaItems, uint8_t** pInstrumentationData);
     void (* recordCallSite)(void * thisHandle, CorInfoExceptionClass** ppException, uint32_t instrOffset, CORINFO_SIG_INFO* callSig, CORINFO_METHOD_HANDLE methodHandle);
@@ -1919,6 +1920,13 @@ public:
 {
     CorInfoExceptionClass* pException = nullptr;
     _callbacks->reportFatalError(_thisHandle, &pException, result);
+    if (pException != nullptr) throw pException;
+}
+
+    virtual void reportNoInstrumentationNeeded()
+{
+    CorInfoExceptionClass* pException = nullptr;
+    _callbacks->reportNoInstrumentationNeeded(_thisHandle, &pException);
     if (pException != nullptr) throw pException;
 }
 

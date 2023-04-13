@@ -732,6 +732,8 @@ int doAssert(
 void reportFatalError(
           CorJitResult result) override;
 
+void reportNoInstrumentationNeeded() override;
+
 JITINTERFACE_HRESULT getPgoInstrumentationResults(
           CORINFO_METHOD_HANDLE ftnHnd,
           ICorJitInfo::PgoInstrumentationSchema** pSchema,

@@ -3610,6 +3610,12 @@ namespace Internal.JitInterface
         }
 
 #pragma warning disable CA1822 // Mark members as static
+        private void reportNoInstrumentationNeeded()
+#pragma warning restore CA1822 // Mark members as static
+        {
+        }
+
+#pragma warning disable CA1822 // Mark members as static
         private void recordCallSite(uint instrOffset, CORINFO_SIG_INFO* callSig, CORINFO_METHOD_STRUCT_* methodHandle)
 #pragma warning restore CA1822 // Mark members as static
         {

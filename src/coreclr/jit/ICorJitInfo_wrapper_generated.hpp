@@ -1742,6 +1742,13 @@ void WrapICorJitInfo::reportFatalError(
     API_LEAVE(reportFatalError);
 }
 
+void WrapICorJitInfo::reportNoInstrumentationNeeded()
+{
+    API_ENTER(reportNoInstrumentationNeeded);
+    wrapHnd->reportNoInstrumentationNeeded();
+    API_LEAVE(reportNoInstrumentationNeeded);
+}
+
 JITINTERFACE_HRESULT WrapICorJitInfo::getPgoInstrumentationResults(
           CORINFO_METHOD_HANDLE ftnHnd,
           ICorJitInfo::PgoInstrumentationSchema** pSchema,
