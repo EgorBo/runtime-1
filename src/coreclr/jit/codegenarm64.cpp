@@ -3045,20 +3045,14 @@ void CodeGen::genLclHeap(GenTree* tree)
     noway_assert(isFramePointerUsed()); // localloc requires Frame Pointer to be established since SP changes
     noway_assert(genStackLevel == 0);   // Can't have anything on the stack
 
+    const bool sizeIsCns = size->IsCnsIntOrI() && size->isContained();
+
     // compute the amount of memory to allocate to properly STACK_ALIGN.
     size_t amount = 0;
-    if (size->IsCnsIntOrI())
+    if (sizeIsCns)
     {
-        // If size is a constant, then it must be contained.
-        assert(size->isContained());
-
-        // If amount is zero then return null in targetReg
-        amount = size->AsIntCon()->gtIconVal;
-        if (amount == 0)
-        {
-            instGen_Set_Reg_To_Zero(EA_PTRSIZE, targetReg);
-            goto BAILOUT;
-        }
+        amount = size->AsIntCon()->IconValue();
+        assert((amount > 0) && (amount <= UINT_MAX));
 
         // 'amount' is the total number of bytes to localloc to properly STACK_ALIGN
         amount = AlignUp(amount, STACK_ALIGN);
@@ -3111,46 +3105,16 @@ void CodeGen::genLclHeap(GenTree* tree)
         stackAdjustment += compiler->lvaOutgoingArgSpaceSize;
     }
 
-    if (size->IsCnsIntOrI())
+    if (sizeIsCns)
     {
         // We should reach here only for non-zero, constant size allocations.
         assert(amount > 0);
 
-        const int storePairRegsWritesBytes = 2 * REGSIZE_BYTES;
-
-        // For small allocations we will generate up to four stp instructions, to zero 16 to 64 bytes.
-        static_assert_no_msg(STACK_ALIGN == storePairRegsWritesBytes);
-        assert(amount % storePairRegsWritesBytes == 0); // stp stores two registers at a time
-
         if (compiler->info.compInitMem)
         {
-            if (amount <= compiler->getUnrollThreshold(Compiler::UnrollKind::Memset))
+            if (amount < compiler->eeGetPageSize())
             {
-                // The following zeroes the last 16 bytes and probes the page containing [sp, #16] address.
-                // stp xzr, xzr, [sp, #-16]!
-                GetEmitter()->emitIns_R_R_R_I(INS_stp, EA_8BYTE, REG_ZR, REG_ZR, REG_SPBASE, -storePairRegsWritesBytes,
-                                              INS_OPTS_PRE_INDEX);
-
-                if (amount > storePairRegsWritesBytes)
-                {
-                    // The following sets SP to its final value and zeroes the first 16 bytes of the allocated space.
-                    // stp xzr, xzr, [sp, #-amount+16]!
-                    const ssize_t finalSpDelta = (ssize_t)amount - storePairRegsWritesBytes;
-                    GetEmitter()->emitIns_R_R_R_I(INS_stp, EA_8BYTE, REG_ZR, REG_ZR, REG_SPBASE, -finalSpDelta,
-                                                  INS_OPTS_PRE_INDEX);
-
-                    // The following zeroes the remaining space in [finalSp+16, initialSp-16) interval
-                    // using a sequence of stp instruction with unsigned offset.
-                    for (ssize_t offset = storePairRegsWritesBytes; offset < finalSpDelta;
-                         offset += storePairRegsWritesBytes)
-                    {
-                        // stp xzr, xzr, [sp, #offset]
-                        GetEmitter()->emitIns_R_R_R_I(INS_stp, EA_8BYTE, REG_ZR, REG_ZR, REG_SPBASE, offset);
-                    }
-                }
-
                 lastTouchDelta = 0;
-
                 goto ALLOC_DONE;
             }
         }
@@ -3196,7 +3160,7 @@ void CodeGen::genLclHeap(GenTree* tree)
         // If compInitMem=true, we can reuse targetReg as regcnt.
         // Since size is a constant, regCnt is not yet initialized.
         assert(regCnt == REG_NA);
-        if (compiler->info.compInitMem)
+        if (compiler->info.compInitMem && !sizeIsCns)
         {
             assert(tree->AvailableTempRegCount() == 0);
             regCnt = targetReg;
@@ -3208,7 +3172,7 @@ void CodeGen::genLclHeap(GenTree* tree)
         instGen_Set_Reg_To_Imm(((unsigned int)amount == amount) ? EA_4BYTE : EA_8BYTE, regCnt, amount);
     }
 
-    if (compiler->info.compInitMem)
+    if (compiler->info.compInitMem && !sizeIsCns)
     {
         BasicBlock* loop = genCreateTempLabel();
 
@@ -3338,7 +3302,6 @@ ALLOC_DONE:
         inst_Mov(TYP_I_IMPL, targetReg, REG_SPBASE, /* canSkip */ false);
     }
 
-BAILOUT:
     if (endLabel != nullptr)
         genDefineTempLabel(endLabel);
 

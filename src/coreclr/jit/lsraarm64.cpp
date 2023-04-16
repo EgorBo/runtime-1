@@ -1086,52 +1086,26 @@ int LinearScan::BuildNode(GenTree* tree)
         {
             assert(dstCount == 1);
 
-            // Need a variable number of temp regs (see genLclHeap() in codegenarm64.cpp):
-            // Here '-' means don't care.
-            //
-            //  Size?                   Init Memory?    # temp regs
-            //   0                          -               0
-            //   const and <=UnrollLimit    -               0
-            //   const and <PageSize        No              0
-            //   >UnrollLimit               Yes             0
-            //   Non-const                  Yes             0
-            //   Non-const                  No              2
-            //
-
             GenTree* size = tree->gtGetOp1();
-            if (size->IsCnsIntOrI())
+            if (size->IsCnsIntOrI() && size->isContained())
             {
-                assert(size->isContained());
                 srcCount = 0;
 
                 size_t sizeVal = size->AsIntCon()->gtIconVal;
+                assert((sizeVal > 0) && (sizeVal <= UINT_MAX));
 
-                if (sizeVal != 0)
+                // Compute the amount of memory to properly STACK_ALIGN.
+                sizeVal = AlignUp(sizeVal, STACK_ALIGN);
+
+                // Make sure we're still behind UINT_MAX after AlignUp
+                assert(sizeVal <= UINT_MAX);
+
+                if (sizeVal >= compiler->eeGetPageSize())
                 {
-                    // Compute the amount of memory to properly STACK_ALIGN.
-                    // Note: The Gentree node is not updated here as it is cheap to recompute stack aligned size.
-                    // This should also help in debugging as we can examine the original size specified with
-                    // localloc.
-                    sizeVal = AlignUp(sizeVal, STACK_ALIGN);
-
-                    if (sizeVal <= compiler->getUnrollThreshold(Compiler::UnrollKind::Memset))
-                    {
-                        // Need no internal registers
-                    }
-                    else if (!compiler->info.compInitMem)
-                    {
-                        // No need to initialize allocated stack space.
-                        if (sizeVal < compiler->eeGetPageSize())
-                        {
-                            // Need no internal registers
-                        }
-                        else
-                        {
-                            // We need two registers: regCnt and RegTmp
-                            buildInternalIntRegisterDefForNode(tree);
-                            buildInternalIntRegisterDefForNode(tree);
-                        }
-                    }
+                    // We need two registers: regCnt and RegTmp to do stack probing
+                    // for large allocations
+                    buildInternalIntRegisterDefForNode(tree);
+                    buildInternalIntRegisterDefForNode(tree);
                 }
             }
             else
@@ -1139,6 +1113,7 @@ int LinearScan::BuildNode(GenTree* tree)
                 srcCount = 1;
                 if (!compiler->info.compInitMem)
                 {
+                    // We need two registers: regCnt and RegTmp
                     buildInternalIntRegisterDefForNode(tree);
                     buildInternalIntRegisterDefForNode(tree);
                 }
