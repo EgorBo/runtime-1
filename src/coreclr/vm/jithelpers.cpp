@@ -2387,6 +2387,42 @@ HCIMPL1(Object*, JIT_New, CORINFO_CLASS_HANDLE typeHnd_)
 HCIMPLEND
 
 
+/*************************************************************/
+HCIMPL1(Object*, JIT_NewFrozen, CORINFO_CLASS_HANDLE typeHnd_)
+{
+    FCALL_CONTRACT;
+
+    OBJECTREF newobj = NULL;
+    HELPER_METHOD_FRAME_BEGIN_RET_0();    // Set up a frame
+
+    TypeHandle typeHnd(typeHnd_);
+
+    _ASSERTE(!typeHnd.IsTypeDesc());  // heap objects must have method tables
+    MethodTable* pMT = typeHnd.AsMethodTable();
+    _ASSERTE(pMT->IsRestored_NoLogging());
+
+#ifdef _DEBUG
+    if (g_pConfig->FastGCStressLevel()) {
+        GetThread()->DisableStressHeap();
+    }
+#endif // _DEBUG
+
+    if (!pMT->Collectible() && !pMT->ContainsPointers())
+    {
+        newobj = TryAllocateFrozenObject (pMT);
+        // Might still be null (e.g. object is too big)
+    }
+
+    if (newobj == NULL)
+    {
+        // Fallback to normal heap allocation.
+        newobj = AllocateObject(pMT);
+    }
+
+    HELPER_METHOD_FRAME_END();
+    return(OBJECTREFToObject(newobj));
+}
+HCIMPLEND
 
 //========================================================================
 //

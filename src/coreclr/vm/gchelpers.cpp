@@ -1036,6 +1036,21 @@ OBJECTREF AllocateObject(MethodTable *pMT
     return UNCHECKED_OBJECTREF_TO_OBJECTREF(oref);
 }
 
+OBJECTREF TryAllocateFrozenObject(MethodTable* pMT)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_COOPERATIVE; // returns an objref without pinning it => cooperative
+        PRECONDITION(CheckPointer(pMT));
+        PRECONDITION(pMT->CheckInstanceActivated());
+    } CONTRACTL_END;
+
+    FrozenObjectHeapManager* foh = SystemDomain::GetFrozenObjectHeapManager();
+    Object* orObject = foh->TryAllocateObject(pMT, pMT->GetBaseSize());
+    return ObjectToOBJECTREF(orObject);
+}
+
 //========================================================================
 //
 //      WRITE BARRIER HELPERS

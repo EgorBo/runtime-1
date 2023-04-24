@@ -2462,12 +2462,12 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     {
         opts.compFlags = CLFLG_MINOPT;
     }
-    // Don't optimize .cctors (except prejit) or if we're an inlinee
-    else if (!jitFlags->IsSet(JitFlags::JIT_FLAG_PREJIT) && ((info.compFlags & FLG_CCTOR) == FLG_CCTOR) &&
-             !compIsForInlining())
-    {
-        opts.compFlags = CLFLG_MINOPT;
-    }
+    //// Don't optimize .cctors (except prejit) or if we're an inlinee
+    //else if (!jitFlags->IsSet(JitFlags::JIT_FLAG_PREJIT) && ((info.compFlags & FLG_CCTOR) == FLG_CCTOR) &&
+    //         !compIsForInlining())
+    //{
+    //    opts.compFlags = CLFLG_MINOPT;
+    //}
 
     // Default value is to generate a blend of size and speed optimizations
     //
@@ -5030,6 +5030,9 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     DoPhase(this, PHASE_STRESS_SPLIT_TREE, &Compiler::StressSplitTree);
 #endif
 
+    // Replace normal heap allocators with frozen heap ones
+    DoPhase(this, PHASE_FREEZE_ALLOCS, &Compiler::fgReplaceAllocatorsWithFrozenAllocators);
+
     // Expand runtime lookups (an optimization but we'd better run it in tier0 too)
     DoPhase(this, PHASE_EXPAND_RTLOOKUPS, &Compiler::fgExpandRuntimeLookups);
 
@@ -6931,6 +6934,13 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         goto _Next;
     }
 
+    if (strstr(info.compClassName, "Egor"))
+    {
+        auto fn = info.compFullName;
+        printf("");
+    }
+
+
     // We may decide to optimize this method,
     // to avoid spending a long time stuck in Tier0 code.
     //
@@ -7002,6 +7012,11 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
                 JITDUMP("\nOSR disabled for this method: %s\n", reason);
                 assert(reason != nullptr);
             }
+        }
+
+        if (ISMETHOD(".cctor"))
+        {
+            reason = ".cctor";
         }
 
         if (reason != nullptr)

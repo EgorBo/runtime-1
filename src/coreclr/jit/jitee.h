@@ -40,7 +40,7 @@ public:
         JIT_FLAG_OSR                     = 13, // Generate alternate version for On Stack Replacement
 
         JIT_FLAG_ALT_JIT                 = 14, // JIT should consider itself an ALT_JIT
-        JIT_FLAG_UNUSED8                 = 15,
+        JIT_FLAG_FROZEN_ALLOC_ALLOWED    = 15, // JIT is allowed to use *_FROZEN allocators
         JIT_FLAG_UNUSED9                 = 16,
 
     #if defined(TARGET_X86) || defined(TARGET_AMD64) || defined(TARGET_ARM64)
@@ -207,6 +207,7 @@ public:
         FLAGS_EQUAL(CORJIT_FLAGS::CORJIT_FLAG_REVERSE_PINVOKE, JIT_FLAG_REVERSE_PINVOKE);
         FLAGS_EQUAL(CORJIT_FLAGS::CORJIT_FLAG_TIER0, JIT_FLAG_TIER0);
         FLAGS_EQUAL(CORJIT_FLAGS::CORJIT_FLAG_TIER1, JIT_FLAG_TIER1);
+        FLAGS_EQUAL(CORJIT_FLAGS::CORJIT_FLAG_FROZEN_ALLOC_ALLOWED, JIT_FLAG_FROZEN_ALLOC_ALLOWED);
 
 #if defined(TARGET_ARM)
 

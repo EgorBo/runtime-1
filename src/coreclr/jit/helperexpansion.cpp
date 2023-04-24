@@ -392,6 +392,103 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock* block, Statement* stmt,
     return true;
 }
 
+PhaseStatus Compiler::fgReplaceAllocatorsWithFrozenAllocators()
+{
+    // We don't change layout here
+    const PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+
+    if ((info.compFlags & FLG_CCTOR) != FLG_CCTOR)
+    {
+        // We can only do this for static constructors.
+        return result;
+    }
+
+    if (opts.OptimizationDisabled())
+    {
+        // We rely on optimizations here.
+        return result;
+    }
+
+    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_FROZEN_ALLOC_ALLOWED))
+    {
+        // VM doesn't allow us to do this - bail out.
+        return result;
+    }
+
+    if (compHasBackwardJump || (compHndBBtabCount != 0))
+    {
+        // Ignore CCTORs with backward jumps or EH due to complex control flow.
+        return result;
+    }
+
+    if (IsTargetAbi(CORINFO_NATIVEAOT_ABI))
+    {
+        // For NativeAOT we rely on its type preinitializer
+        return result;
+    }
+
+    if (opts.IsReadyToRun())
+    {
+        // TODO: implement for R2R
+        return result;
+    }
+
+    if (!strstr(info.compClassName, "Egor"))
+    {
+        return result;
+    }
+
+    fgDispBasicBlocks(true);
+
+
+    typedef SmallHashTable<ssize_t, ValueNum> FieldDstSrcVNMap;
+    FieldDstSrcVNMap fieldMap(getAllocator());
+
+    for (BasicBlock* const block : Blocks())
+    {
+        if ((block->bbJumpKind == BBJ_COND) || (block->bbJumpKind == BBJ_SWITCH))
+        {
+            // Non-linear control flow - bail out.
+            return result;
+        }
+
+        for (Statement* const stmt : block->NonPhiStatements())
+        {
+            for (GenTree* const tree : stmt->TreeList())
+            {
+                if (tree->IsCall() && !tree->IsHelperCall())
+                {
+                    // Unknown call - ignore everything we recorded before it.
+                    fieldMap.Clear();
+                    continue;
+                }
+
+                if (tree->OperIs(GT_ASG) && tree->gtGetOp1()->OperIs(GT_IND))
+                {
+                    GenTree* addr = tree->gtGetOp1()->gtGetOp1();
+                    ValueNum srcVN = addr->gtVNPair.GetLiberal();
+                    if (vnStore->IsVNHandle(srcVN) && vnStore->GetHandleFlags(srcVN) == GTF_ICON_STATIC_HDL)
+                    {
+                        // TODO: Check that the field is readonly
+                        ValueNum dstVN = tree->gtGetOp2()->gtVNPair.GetLiberal();
+                        VNFuncApp funcApp;
+                        if (vnStore->GetVNFunc(dstVN, &funcApp) && funcApp.m_func == VNF_JitNew)
+                        {
+                            fieldMap.AddOrUpdate(vnStore->CoercedConstantValue<ssize_t>(srcVN), dstVN);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (auto fieldMapKVP : fieldMap)
+    {
+    }
+
+    return result;
+}
+
 //------------------------------------------------------------------------------
 // fgExpandThreadLocalAccess: Inline the CORINFO_HELP_GETSHARED_NONGCTHREADSTATIC_BASE_NOCTOR_OPTIMIZED
 //      helper. See fgExpandThreadLocalAccessForCall for details.

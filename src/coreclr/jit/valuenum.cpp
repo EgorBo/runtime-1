@@ -10760,7 +10760,11 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                     }
                 }
 
-                if (!returnsTypeHandle)
+                if (((tree->gtFlags & GTF_IND_ASG_LHS) == 0) && fgValueNumberConstLoad(tree->AsIndir()))
+                {
+                    
+                }
+                else if (!returnsTypeHandle)
                 {
                     // Indirections off of addresses for boxed statics represent bases for
                     // the address of the static itself. Here we will use "nullptr" for the
@@ -12156,6 +12160,7 @@ VNFunc Compiler::fgValueNumberJitHelperMethodVNFunc(CorInfoHelpFunc helpFunc)
         // something about array length...
         case CORINFO_HELP_NEWFAST:
         case CORINFO_HELP_NEWSFAST:
+        case CORINFO_HELP_NEWSFAST_FROZEN:
         case CORINFO_HELP_NEWSFAST_FINALIZE:
         case CORINFO_HELP_NEWSFAST_ALIGN8:
         case CORINFO_HELP_NEWSFAST_ALIGN8_VC:

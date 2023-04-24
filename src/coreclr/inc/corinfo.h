@@ -405,6 +405,8 @@ enum CorInfoHelpFunc
 
     CORINFO_HELP_NEWFAST,
     CORINFO_HELP_NEWSFAST,          // allocator for small, non-finalizer, non-array object
+    CORINFO_HELP_NEWSFAST_FROZEN,   // allocator for small objects which can be allocated on frozen segments
+                                    // may allocate on a normal heap if object doesn't satisfy FOH requirements
     CORINFO_HELP_NEWSFAST_FINALIZE, // allocator for small, finalizable, non-array object
     CORINFO_HELP_NEWSFAST_ALIGN8,   // allocator for small, non-finalizer, non-array object, 8 byte aligned
     CORINFO_HELP_NEWSFAST_ALIGN8_VC,// allocator for small, value class, 8 byte aligned

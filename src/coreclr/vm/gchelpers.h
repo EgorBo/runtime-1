@@ -52,6 +52,8 @@ OBJECTREF AllocateObject(MethodTable *pMT
 #endif
     );
 
+OBJECTREF TryAllocateFrozenObject(MethodTable* pMT);
+
 extern int StompWriteBarrierEphemeral(bool isRuntimeSuspended);
 extern int StompWriteBarrierResize(bool isRuntimeSuspended, bool bReqUpperBoundsCheck);
 extern int SwitchToWriteWatchBarrier(bool isRuntimeSuspended);
