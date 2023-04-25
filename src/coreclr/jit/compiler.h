@@ -8877,7 +8877,7 @@ private:
 #if defined(FEATURE_SIMD) && defined(TARGET_XARCH)
         if (IsBaselineSimdIsaSupported())
         {
-            maxRegSize = max(maxRegSize, roundDownSIMDSize((unsigned)size));
+            maxRegSize = max(maxRegSize, (ssize_t)roundDownSIMDSize((unsigned)size));
         }
 #endif
         int nearestPow2 = 1 << BitOperations::Log2((unsigned)size);
