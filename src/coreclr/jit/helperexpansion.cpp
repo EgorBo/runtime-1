@@ -627,7 +627,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     dstPtr  = SpillExpression(this, dstPtr, lengthCheckBb, debugInfo);
     dstLen  = SpillExpression(this, dstLen, lengthCheckBb, debugInfo);
 
-    GenTree* lengthCheck = gtNewOperNode(GT_LE, TYP_INT, gtClone(dstLen), srcLenCnsNode);
+    GenTree* lengthCheck = gtNewOperNode(GT_GE, TYP_INT, gtClone(dstLen), srcLenCnsNode);
     lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
     Statement* lengthCheckStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, lengthCheck), debugInfo);
     fgInsertStmtAtEnd(lengthCheckBb, lengthCheckStmt);
@@ -710,8 +710,6 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     fgInsertStmtAtEnd(fastpathBb, finalStmt);
     fastpathBb->bbCodeOffs    = block->bbCodeOffsEnd;
     fastpathBb->bbCodeOffsEnd = block->bbCodeOffsEnd;
-
-    gtDispBlockStmts(fastpathBb);
 
     //
     // Update preds in all new blocks

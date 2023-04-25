@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace System.Text
 {
@@ -166,6 +167,11 @@ namespace System.Text
             [Intrinsic] // May be unrolled for constant input
             private unsafe int GetUtf8Bytes(ref char chars, int charCount, ref byte bytes, int byteCount)
             {
+                if ((charCount | byteCount) == 0)
+                {
+                    return 0;
+                }
+
                 fixed (char* pChars = &chars)
                 fixed (byte* pBytes = &bytes)
                 {
