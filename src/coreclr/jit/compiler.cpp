@@ -4883,29 +4883,31 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     // At this point we know if we are fully interruptible or not
     if (opts.OptimizationEnabled())
     {
-        bool doSsa                     = true;
-        bool doEarlyProp               = true;
-        bool doValueNum                = true;
-        bool doLoopHoisting            = true;
-        bool doCopyProp                = true;
-        bool doBranchOpt               = true;
-        bool doCse                     = true;
-        bool doAssertionProp           = true;
-        bool doRangeAnalysis           = true;
-        bool doVNBasedDeadStoreRemoval = true;
-        int  iterations                = 1;
+        bool doSsa                       = true;
+        bool doEarlyProp                 = true;
+        bool doValueNum                  = true;
+        bool doLoopHoisting              = true;
+        bool doCopyProp                  = true;
+        bool doBranchOpt                 = true;
+        bool doCse                       = true;
+        bool doAssertionProp             = true;
+        bool doVNBasedIntrinsicExpansion = true;
+        bool doRangeAnalysis             = true;
+        bool doVNBasedDeadStoreRemoval   = true;
+        int  iterations                  = 1;
 
 #if defined(OPT_CONFIG)
-        doSsa                     = (JitConfig.JitDoSsa() != 0);
-        doEarlyProp               = doSsa && (JitConfig.JitDoEarlyProp() != 0);
-        doValueNum                = doSsa && (JitConfig.JitDoValueNumber() != 0);
-        doLoopHoisting            = doValueNum && (JitConfig.JitDoLoopHoisting() != 0);
-        doCopyProp                = doValueNum && (JitConfig.JitDoCopyProp() != 0);
-        doBranchOpt               = doValueNum && (JitConfig.JitDoRedundantBranchOpts() != 0);
-        doCse                     = doValueNum;
-        doAssertionProp           = doValueNum && (JitConfig.JitDoAssertionProp() != 0);
-        doRangeAnalysis           = doAssertionProp && (JitConfig.JitDoRangeAnalysis() != 0);
-        doVNBasedDeadStoreRemoval = doValueNum && (JitConfig.JitDoVNBasedDeadStoreRemoval() != 0);
+        doSsa                       = (JitConfig.JitDoSsa() != 0);
+        doEarlyProp                 = doSsa && (JitConfig.JitDoEarlyProp() != 0);
+        doValueNum                  = doSsa && (JitConfig.JitDoValueNumber() != 0);
+        doLoopHoisting              = doValueNum && (JitConfig.JitDoLoopHoisting() != 0);
+        doCopyProp                  = doValueNum && (JitConfig.JitDoCopyProp() != 0);
+        doBranchOpt                 = doValueNum && (JitConfig.JitDoRedundantBranchOpts() != 0);
+        doCse                       = doValueNum;
+        doAssertionProp             = doValueNum && (JitConfig.JitDoAssertionProp() != 0);
+        doVNBasedIntrinsicExpansion = doValueNum;
+        doRangeAnalysis             = doAssertionProp && (JitConfig.JitDoRangeAnalysis() != 0);
+        doVNBasedDeadStoreRemoval   = doValueNum && (JitConfig.JitDoVNBasedDeadStoreRemoval() != 0);
 
         if (opts.optRepeat)
         {
@@ -4985,6 +4987,12 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 // Assertion propagation
                 //
                 DoPhase(this, PHASE_ASSERTION_PROP_MAIN, &Compiler::optAssertionPropMain);
+            }
+
+            if (doVNBasedIntrinsicExpansion)
+            {
+                // Partially inline static initializations
+                DoPhase(this, PHASE_VN_BASED_INTRINSIC_EXPAND, &Compiler::fgVNBasedIntrinsicExpansion);
             }
 
             if (doRangeAnalysis)

@@ -4015,6 +4015,13 @@ GenTree* Compiler::impImportStaticReadOnlyField(CORINFO_FIELD_HANDLE field, CORI
 //
 GenTree* Compiler::impImportCnsTreeFromBuffer(uint8_t* buffer, var_types valueType)
 {
+#if defined(FEATURE_SIMD)
+    if (varTypeIsSIMD(valueType))
+    {
+        return gtNewVconNode(valueType, buffer);
+    }
+#endif
+
     GenTree* tree = nullptr;
     switch (valueType)
     {

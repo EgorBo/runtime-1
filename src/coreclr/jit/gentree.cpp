@@ -7908,6 +7908,11 @@ GenTreeOp* Compiler::gtNewAssignNode(GenTree* dst, GenTree* src)
     assert(!src->TypeIs(TYP_VOID));
     /* Mark the target as being assigned */
 
+    if (dst->OperIs(GT_IND, GT_BLK))
+    {
+        dst->gtFlags |= GTF_IND_ASG_LHS;
+    }
+
     if ((dst->gtOper == GT_LCL_VAR) || (dst->OperGet() == GT_LCL_FLD))
     {
         dst->gtFlags |= GTF_VAR_DEF;

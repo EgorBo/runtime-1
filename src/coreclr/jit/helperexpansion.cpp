@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #include "jitpch.h"
@@ -393,6 +393,377 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock* block, Statement* stmt,
 }
 
 //------------------------------------------------------------------------------
+// fgVNBasedIntrinsicExpansion: Expand specific calls marked as intrinsics using VN.
+//
+// Returns:
+//    PhaseStatus indicating what, if anything, was changed.
+//
+PhaseStatus Compiler::fgVNBasedIntrinsicExpansion()
+{
+    PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+
+    if (opts.OptimizationDisabled())
+    {
+        JITDUMP("Optimizations aren't allowed - bail out.\n")
+        return result;
+    }
+
+    // TODO: Replace with opts.compCodeOpt once it's fixed
+    const bool preferSize = opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT);
+    if (preferSize)
+    {
+        // The optimization comes with a codegen size increase
+        JITDUMP("Optimized for size - bail out.\n")
+        return result;
+    }
+    return fgExpandHelper<&Compiler::fgVNBasedIntrinsicExpansionForCall>(true, true);
+}
+
+//------------------------------------------------------------------------------
+// fgVNBasedIntrinsicExpansionForCall : Expand specific calls marked as intrinsics using VN.
+//
+// Arguments:
+//    block - Block containing the intrinsic call to expand
+//    stmt  - Statement containing the call
+//    call  - The intrinsic call
+//
+// Returns:
+//    True if expanded, false otherwise.
+//
+bool Compiler::fgVNBasedIntrinsicExpansionForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call)
+{
+    assert(call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC);
+    NamedIntrinsic ni = lookupNamedIntrinsic(call->gtCallMethHnd);
+    if (ni == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes)
+    {
+        return fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(block, stmt, call);
+    }
+
+    // TODO: Expand IsKnownConstant here
+    // Also, move various unrollings here
+
+    return false;
+}
+
+//------------------------------------------------------------------------------
+// fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes : Expand NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes
+//    when src data is a string literal (UTF16) tha can be narrowed to ASCII (UTF8), e.g.:
+//
+//      string str = "Hello, world!";
+//      int bytesWritten = GetUtf8Bytes(ref str[0], str.Length, buffer, buffer.Length);
+//
+//    becomes:
+//
+//      if (buffer.Length >= str.Length) // *might* be folded if buffer.Length is a constant
+//      {
+//          memcpy(buffer, "Hello, world!"u8, str.Length); // note the u8 suffix
+//          bytesWritten = str.Length;
+//      }
+//      else
+//      {
+//          // fallback to the original call
+//          bytesWritten = GetUtf8Bytes(ref str[0], str.Length, buffer, buffer.Length);
+//      }
+//
+// Arguments:
+//    block - Block containing the intrinsic call to expand
+//    stmt  - Statement containing the call
+//    call  - The intrinsic call
+//
+// Returns:
+//    True if expanded, false otherwise.
+//
+bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block, Statement* stmt, GenTreeCall* call)
+{
+    // NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes
+    assert(call->gtArgs.CountUserArgs() == 5);
+
+    // First, list all arguments of the intrinsic call, the signature is:
+    //
+    //   int GetUtf8Bytes(ref char srcPtr, int srcLen, ref byte dstPtr, int dstLen)
+    //
+    GenTree* thisArg = call->gtArgs.GetUserArgByIndex(0)->GetNode();
+    GenTree* srcPtr  = call->gtArgs.GetUserArgByIndex(1)->GetNode();
+    GenTree* srcLen  = call->gtArgs.GetUserArgByIndex(2)->GetNode();
+    GenTree* dstPtr  = call->gtArgs.GetUserArgByIndex(3)->GetNode();
+    GenTree* dstLen  = call->gtArgs.GetUserArgByIndex(4)->GetNode();
+
+    // We're interested in a case when srcPtr is a string literal and srcLen is a constant
+
+    // Make sure srcPtr is a common string literal shape in VN:
+    CORINFO_OBJECT_HANDLE strObj = nullptr;
+    VNFuncApp             funcApp;
+    if (srcLen->gtVNPair.BothEqual() && vnStore->GetVNFunc(srcPtr->gtVNPair.GetLiberal(), &funcApp) &&
+        funcApp.m_func == (VNFunc)GT_ADD && vnStore->IsVNHandle(funcApp.m_args[0]) &&
+        vnStore->GetHandleFlags(funcApp.m_args[0]) == GTF_ICON_OBJ_HDL && vnStore->IsVNConstant(funcApp.m_args[1]) &&
+        vnStore->CoercedConstantValue<ssize_t>(funcApp.m_args[1]) == OFFSETOF__CORINFO_String__chars)
+    {
+        // srcPtr is ADD(strFrozenObj, OFFSETOF__CORINFO_String__chars))
+        strObj = (CORINFO_OBJECT_HANDLE)vnStore->CoercedConstantValue<ssize_t>(funcApp.m_args[0]);
+        if (info.compCompHnd->getObjectType(strObj) != impGetStringClass())
+        {
+            JITDUMP("GetUtf8Bytes: srcPtr looked like a string but it is not?\n");
+            return false;
+        }
+
+        // TODO: consider supporting any offset if that is a common pattern
+        // or e.g. RVA char[] data
+    }
+    else
+    {
+        JITDUMP("GetUtf8Bytes: srcPtr is not a string literal\n")
+        return false;
+    }
+
+    if (!srcLen->gtVNPair.BothEqual() || !vnStore->IsVNInt32Constant(srcLen->gtVNPair.GetLiberal()))
+    {
+        JITDUMP("GetUtf8Bytes: srcLen is not constant\n")
+        return false;
+    }
+
+    // TODO: have a smarter way to determine the unrollable range, let's limit it to 128 chars for now since the
+    // API is new and we don't have a good idea of the typical string length.
+    const int MaxCharLenght = 128;
+    unsigned  srcLenCns     = (unsigned)vnStore->GetConstantInt32(srcLen->gtVNPair.GetLiberal());
+    if (srcLenCns == 0 || srcLenCns > MaxCharLenght)
+    {
+        // TODO: handle srcLenCns == 0 if it's a common case
+        JITDUMP("GetUtf8Bytes: srcLenCns is out of unrollable range\n")
+        return false;
+    }
+
+    // Do we need to care if srcLenCns is larger than the actual string literal length? It's a faulty case anyway.
+
+    // Read the string literal (UTF16) into a local buffer (UTF8)
+    assert(strObj != nullptr);
+    BYTE srcUtf8cns[MaxCharLenght] = {}; // same length since we're narrowing U16 to U8
+    for (unsigned charIndex = 0; charIndex < srcLenCns; charIndex++)
+    {
+        uint16_t ch = 0;
+        if (!info.compCompHnd->getStringChar(strObj, (int)charIndex, &ch))
+        {
+            // Something went wrong, e.g. the string is shorter than expected - bail out.
+            JITDUMP("GetUtf8Bytes: getStringChar(strObj, %d, &ch) returned false.\n", charIndex)
+            return false;
+        }
+        if (ch > 127)
+        {
+            // Only ASCII is supported.
+            JITDUMP("GetUtf8Bytes: %dth char is not ASCII.\n", charIndex)
+            return false;
+        }
+        // Narrow U16 to U8
+        srcUtf8cns[charIndex] = (BYTE)ch;
+    }
+
+    DebugInfo debugInfo = stmt->GetDebugInfo();
+
+    // Split block right before the call tree (this is a standard pattern we use in helperexpansion.cpp)
+    BasicBlock* prevBb       = block;
+    GenTree**   callUse      = nullptr;
+    Statement*  newFirstStmt = nullptr;
+    block                    = fgSplitBlockBeforeTree(block, stmt, call, &newFirstStmt, &callUse);
+    assert(prevBb != nullptr && block != nullptr);
+
+    // Block ops inserted by the split need to be morphed here since we are after morph.
+    // We cannot morph stmt yet as we may modify it further below, and the morphing
+    // could invalidate callUse
+    while ((newFirstStmt != nullptr) && (newFirstStmt != stmt))
+    {
+        fgMorphStmtBlockOps(block, newFirstStmt);
+        newFirstStmt = newFirstStmt->GetNextStmt();
+    }
+
+    // We don't need this flag anymore.
+    call->gtCallMoreFlags &= ~GTF_CALL_M_SPECIAL_INTRINSIC;
+
+    GenTreeLclVar* resultLcl = nullptr;
+
+    // Grab a temp to store the result (it's assigned from either fastPathBb or fallbackBb)
+    // The result corresponds the number of bytes written to dstPtr (int32).
+    assert(call->TypeIs(TYP_INT));
+    unsigned resultLclNum         = lvaGrabTemp(true DEBUGARG("local for result"));
+    lvaTable[resultLclNum].lvType = TYP_INT;
+    resultLcl                     = gtNewLclvNode(resultLclNum, TYP_INT);
+    *callUse                      = resultLcl;
+    fgMorphStmtBlockOps(block, stmt);
+    gtUpdateStmtSideEffects(stmt);
+
+    // srcLenCns is the length of the string literal in chars (UTF16)
+    // but we're going to use the same value as the "bytesWritten" result in the fast path and in the length check.
+    GenTree* srcLenCnsNode = gtNewIconNode(srcLenCns);
+    fgUpdateConstTreeValueNumber(srcLenCnsNode);
+
+    // We're going to insert the following blocks:
+    //
+    //  prevBb:
+    //
+    //  lengthCheckBb:
+    //      if (lengthCheck)
+    //          goto fastpathBb;
+    //
+    //  fallbackBb:
+    //      result = originalCall();
+    //      goto block;
+    //
+    //  fastpathBb:
+    //      result = unrolled copy;
+    //
+    //  block:
+    //      use(result)
+    //
+
+    //
+    // Block 1: lengthCheckBb (we check that dstLen >= srcLen)
+    //
+    BasicBlock* lengthCheckBb = fgNewBBafter(BBJ_COND, prevBb, true);
+    lengthCheckBb->bbFlags |= BBF_INTERNAL;
+
+    // Spill all original arguments to locals in the lengthCheckBb to preserve all possible side-effects.
+    // We're going to re-morph the original call too.
+    thisArg = SpillExpression(this, thisArg, lengthCheckBb, debugInfo);
+    srcPtr  = SpillExpression(this, srcPtr, lengthCheckBb, debugInfo);
+    srcLen  = SpillExpression(this, srcLen, lengthCheckBb, debugInfo);
+    dstPtr  = SpillExpression(this, dstPtr, lengthCheckBb, debugInfo);
+    dstLen  = SpillExpression(this, dstLen, lengthCheckBb, debugInfo);
+
+    GenTree* lengthCheck = gtNewOperNode(GT_LE, TYP_INT, gtClone(dstLen), srcLenCnsNode);
+    lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
+    Statement* lengthCheckStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, lengthCheck), debugInfo);
+    fgInsertStmtAtEnd(lengthCheckBb, lengthCheckStmt);
+    lengthCheckBb->bbCodeOffs    = block->bbCodeOffsEnd;
+    lengthCheckBb->bbCodeOffsEnd = block->bbCodeOffsEnd;
+
+    //
+    // Block 2: fallbackBb - we just invoke the original method
+    //
+    // We have to re-create the call since we spilled all of its original arguments to lengthCheckBb
+    // and since gtArgs have to care about ABI we cannot just replace them with the locals.
+    GenTree* newCall = gtNewCallNode(CT_USER_FUNC, call->gtCallMethHnd, call->TypeGet(), debugInfo);
+    newCall->AsCall()->gtArgs.PushFront(this,
+                                        NewCallArg::Primitive(thisArg), // should it be wellknown "this"?
+                                        NewCallArg::Primitive(srcPtr), NewCallArg::Primitive(srcLen),
+                                        NewCallArg::Primitive(dstPtr), NewCallArg::Primitive(dstLen));
+    newCall = fgMorphCall(newCall->AsCall());
+    gtSetEvalOrder(newCall);
+
+    // Save its result to the resultLcl temp
+    GenTree*    asgFallbackValue = gtNewAssignNode(gtClone(resultLcl), newCall);
+    BasicBlock* fallbackBb       = fgNewBBFromTreeAfter(BBJ_ALWAYS, lengthCheckBb, asgFallbackValue, debugInfo, true);
+
+    //
+    // Block 3: fastpathBb - unrolled loop that copies the UTF8 const data to the destination
+    //
+    // We're going to emit a series of loads and stores to copy the data.
+    // In theory, we could just emit the const U8 data to the data section and use GT_BLK here
+    // but that would be a bit less efficient since we would have to load the data from memory.
+    //
+    BasicBlock* fastpathBb = fgNewBBafter(BBJ_NONE, fallbackBb, true);
+    fastpathBb->bbFlags |= BBF_INTERNAL;
+
+    // The widest type we can use for loads
+    const var_types maxLoadType = roundDownMaxRegSize(srcLenCns);
+
+    // How many iterations we need to copy UTF8 const data to the destination
+    unsigned iterations = srcLenCns / genTypeSize(maxLoadType);
+
+    // Add one more iteration if we have a remainder
+    iterations += srcLenCns % genTypeSize(maxLoadType) == 0 ? 0 : 1;
+
+    for (unsigned i = 0; i < iterations; i++)
+    {
+        ssize_t offest = (ssize_t)i * genTypeSize(maxLoadType);
+
+        // Last iteration: overlap with previous load if needed
+        if (i == iterations - 1)
+        {
+            offest = (ssize_t)srcLenCns - genTypeSize(maxLoadType);
+        }
+
+        // We're going to emit the following tree:
+
+        // -A-XG------       *  ASG       %maxLoadType% (copy)
+        // D--XG--N---       +--*  IND       %maxLoadType%
+        // -------N---       |  \--*  ADD       byref
+        // -----------       |     +--*  LCL_VAR   byref dstPtr
+        // -----------       |     \--*  CNS_INT   int   %offset%
+        // -----------       \--*  CNS_VEC or CNS_INT representing UTF8 const data chunk
+
+        GenTreeIntCon* offsetNode = gtNewIconNode(offest);
+        fgUpdateConstTreeValueNumber(offsetNode);
+
+        // Grab a chunk from srcUtf8cnsData for the given offset and width
+        GenTree* utf8cnsChunkNode = impImportCnsTreeFromBuffer(srcUtf8cns + offest, maxLoadType);
+        fgUpdateConstTreeValueNumber(utf8cnsChunkNode);
+
+        GenTree*   dstAddOffsetNode = gtNewOperNode(GT_ADD, TYP_BYREF, gtClone(dstPtr), offsetNode);
+        GenTree*   indirNode        = gtNewIndir(maxLoadType, dstAddOffsetNode);
+        GenTreeOp* storeInd         = gtNewAssignNode(indirNode, utf8cnsChunkNode);
+        Statement* storeIndStmt     = fgNewStmtFromTree(storeInd, debugInfo);
+        fgInsertStmtAtEnd(fastpathBb, storeIndStmt);
+        gtUpdateStmtSideEffects(storeIndStmt);
+    }
+
+    // Finally, store the number of bytes written to the resultLcl local
+    Statement* finalStmt =
+        fgNewStmtFromTree(gtNewAssignNode(gtClone(resultLcl), gtCloneExpr(srcLenCnsNode)), debugInfo);
+    fgInsertStmtAtEnd(fastpathBb, finalStmt);
+    fastpathBb->bbCodeOffs    = block->bbCodeOffsEnd;
+    fastpathBb->bbCodeOffsEnd = block->bbCodeOffsEnd;
+
+    gtDispBlockStmts(fastpathBb);
+
+    //
+    // Update preds in all new blocks
+    //
+    // block is no longer a predecessor of prevBb
+    fgRemoveRefPred(block, prevBb);
+    // prevBb flows into lengthCheckBb
+    fgAddRefPred(lengthCheckBb, prevBb);
+    // lengthCheckBb has two successors: prevBb and fallbackBb
+    fgAddRefPred(fastpathBb, lengthCheckBb);
+    fgAddRefPred(fallbackBb, lengthCheckBb);
+    // block has two predecessors: fastpathBb and fallbackBb
+    fgAddRefPred(block, fastpathBb);
+    fgAddRefPred(block, fallbackBb);
+    // lengthCheckBb jumps to fastpathBb (if the length check condition is passed)
+    lengthCheckBb->bbJumpDest = fastpathBb;
+    // fallbackBb always jumps to block (over the fastpathBb)
+    fallbackBb->bbJumpDest = block;
+
+    //
+    // Re-distribute weights
+    //
+    lengthCheckBb->inheritWeight(prevBb);
+    // we don't have any real world data on how often this fallback path is taken so we just assume 20% of the time
+    fallbackBb->inheritWeightPercentage(lengthCheckBb, 20);
+    fastpathBb->inheritWeightPercentage(lengthCheckBb, 80);
+    block->inheritWeight(prevBb);
+
+    //
+    // Update bbNatLoopNum for all new blocks
+    //
+    lengthCheckBb->bbNatLoopNum = prevBb->bbNatLoopNum;
+    fallbackBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
+    fastpathBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
+
+    // All blocks are expected to be in the same EH region
+    assert(BasicBlock::sameEHRegion(prevBb, block));
+    assert(BasicBlock::sameEHRegion(prevBb, lengthCheckBb));
+    assert(BasicBlock::sameEHRegion(prevBb, fallbackBb));
+    assert(BasicBlock::sameEHRegion(prevBb, fastpathBb));
+
+    // Extra step: merge prevBb with lengthCheckBb if possible
+    if (fgCanCompactBlocks(prevBb, lengthCheckBb))
+    {
+        fgCompactBlocks(prevBb, lengthCheckBb);
+    }
+
+    JITDUMP("GetUtf8Bytes: succesfully expanded!\n")
+    return true;
+}
+
+//------------------------------------------------------------------------------
 // fgExpandThreadLocalAccess: Inline the CORINFO_HELP_GETSHARED_NONGCTHREADSTATIC_BASE_NOCTOR_OPTIMIZED
 //      helper. See fgExpandThreadLocalAccessForCall for details.
 //
@@ -683,7 +1054,7 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock* block, Statement* st
 //    true if there was any helper that was expanded.
 //
 template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
+PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks, bool handleIntrinsics)
 {
     PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
     for (BasicBlock* block = fgFirstBB; block != nullptr; block = block->bbNext)
@@ -695,7 +1066,7 @@ PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
         }
 
         // Expand and visit the last block again to find more candidates
-        while (fgExpandHelperForBlock<ExpansionFunction>(block))
+        while (fgExpandHelperForBlock<ExpansionFunction>(block, handleIntrinsics))
         {
             result = PhaseStatus::MODIFIED_EVERYTHING;
         }
@@ -722,7 +1093,7 @@ PhaseStatus Compiler::fgExpandHelper(bool skipRarelyRunBlocks)
 //    true if a helper was expanded
 //
 template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-bool Compiler::fgExpandHelperForBlock(BasicBlock* block)
+bool Compiler::fgExpandHelperForBlock(BasicBlock* block, bool handleIntrinsics)
 {
     for (Statement* const stmt : block->NonPhiStatements())
     {
@@ -734,7 +1105,14 @@ bool Compiler::fgExpandHelperForBlock(BasicBlock* block)
 
         for (GenTree* const tree : stmt->TreeList())
         {
-            if (!tree->IsHelperCall())
+            if (handleIntrinsics)
+            {
+                if (!tree->IsCall() || !(tree->AsCall()->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC))
+                {
+                    continue;
+                }
+            }
+            else if (!tree->IsHelperCall())
             {
                 continue;
             }
