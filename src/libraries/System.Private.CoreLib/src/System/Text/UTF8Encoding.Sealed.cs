@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace System.Text
 {
@@ -147,11 +149,34 @@ namespace System.Text
                 return new string(new ReadOnlySpan<char>(ref *pDestination, charsWritten)); // this overload of ROS ctor doesn't validate length
             }
 
-            // TODO: Make this [Intrinsic] and handle JIT-time UTF8 encoding of literal `chars`.
             /// <inheritdoc/>
             public override unsafe bool TryGetBytes(ReadOnlySpan<char> chars, Span<byte> bytes, out int bytesWritten)
             {
-                return base.TryGetBytes(chars, bytes, out bytesWritten);
+                int written = GetUtf8Bytes(ref MemoryMarshal.GetReference(chars), chars.Length, ref MemoryMarshal.GetReference(bytes), bytes.Length);
+                if (written >= 0)
+                {
+                    bytesWritten = written;
+                    return true;
+                }
+
+                bytesWritten = 0;
+                return false;
+            }
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            [Intrinsic] // May be unrolled for constant input
+            private unsafe int GetUtf8Bytes(ref char chars, int charCount, ref byte bytes, int byteCount)
+            {
+                if ((charCount | byteCount) == 0)
+                {
+                    return 0;
+                }
+
+                fixed (char* pChars = &chars)
+                fixed (byte* pBytes = &bytes)
+                {
+                    return GetBytesCommon(pChars, charCount, pBytes, byteCount, throwForDestinationOverflow: false);
+                }
             }
         }
     }
