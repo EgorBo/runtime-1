@@ -5302,10 +5302,10 @@ public:
     void SplitTreesRemoveCommas();
 
     template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-    PhaseStatus fgExpandHelper(bool skipRarelyRunBlocks);
+    PhaseStatus fgExpandHelper(bool skipRarelyRunBlocks, bool handleIntrinsics = false);
 
     template <bool (Compiler::*ExpansionFunction)(BasicBlock*, Statement*, GenTreeCall*)>
-    bool fgExpandHelperForBlock(BasicBlock* block);
+    bool fgExpandHelperForBlock(BasicBlock* block, bool handleIntrinsics = false);
 
     PhaseStatus fgExpandRuntimeLookups();
     bool fgExpandRuntimeLookupsForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
@@ -5315,6 +5315,10 @@ public:
 
     PhaseStatus fgExpandStaticInit();
     bool fgExpandStaticInitForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
+
+    PhaseStatus fgVNBasedIntrinsicExpansion();
+    bool fgVNBasedIntrinsicExpansionForCall(BasicBlock* block, Statement* stmt, GenTreeCall* call);
+    bool fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block, Statement* stmt, GenTreeCall* call);
 
     PhaseStatus fgInsertGCPolls();
     BasicBlock* fgCreateGCPoll(GCPollType pollType, BasicBlock* block);
@@ -8862,6 +8866,42 @@ private:
         return 0;
     }
 #endif // FEATURE_SIMD
+
+    var_types roundDownMaxRegSize(unsigned size)
+    {
+        assert(size > 0);
+        ssize_t maxRegSize = TARGET_POINTER_SIZE;
+#if defined(FEATURE_SIMD) && defined(TARGET_XARCH)
+        if (IsBaselineSimdIsaSupported())
+        {
+            maxRegSize = max(maxRegSize, roundDownSIMDSize((unsigned)size));
+        }
+#endif
+        int nearestPow2 = 1 << BitOperations::Log2((unsigned)size);
+        switch (min((int)maxRegSize, nearestPow2))
+        {
+            case 1:
+                return TYP_UBYTE;
+            case 2:
+                return TYP_USHORT;
+            case 4:
+                return TYP_INT;
+            case 8:
+                return TYP_LONG;
+#ifdef FEATURE_SIMD
+            case 16:
+                return TYP_SIMD16;
+#ifdef TARGET_XARCH
+            case 32:
+                return TYP_SIMD32;
+            case 64:
+                return TYP_SIMD64;
+#endif
+#endif
+            default:
+                unreached();
+        }
+    }
 
 public:
     enum UnrollKind
