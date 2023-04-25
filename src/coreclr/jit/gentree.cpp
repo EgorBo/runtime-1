@@ -2994,8 +2994,6 @@ bool Compiler::gtHasLocalsWithAddrOp(GenTree* tree)
             DoLclVarsOnly = true,
         };
 
-        bool HasAddrTakenLocal = false;
-
         LocalsWithAddrOpVisitor(Compiler* comp) : GenTreeVisitor(comp)
         {
         }
@@ -3005,7 +3003,6 @@ bool Compiler::gtHasLocalsWithAddrOp(GenTree* tree)
             LclVarDsc* varDsc = m_compiler->lvaGetDesc((*use)->AsLclVarCommon());
             if (varDsc->lvHasLdAddrOp || varDsc->IsAddressExposed())
             {
-                HasAddrTakenLocal = true;
                 return WALK_ABORT;
             }
 
@@ -3014,8 +3011,48 @@ bool Compiler::gtHasLocalsWithAddrOp(GenTree* tree)
     };
 
     LocalsWithAddrOpVisitor visitor(this);
-    visitor.WalkTree(&tree, nullptr);
-    return visitor.HasAddrTakenLocal;
+    return visitor.WalkTree(&tree, nullptr) == WALK_ABORT;
+}
+
+//------------------------------------------------------------------------------
+// gtHasAddressExposedLocal:
+//   Check if this tree contains locals with IsAddressExposed() flags set. Does
+//   a full tree walk.
+//
+// Paramters:
+//   tree - the tree
+//
+// Return Value:
+//    True if any sub tree is such a local.
+//
+bool Compiler::gtHasAddressExposedLocals(GenTree* tree)
+{
+    struct Visitor : GenTreeVisitor<Visitor>
+    {
+        enum
+        {
+            DoPreOrder    = true,
+            DoLclVarsOnly = true,
+        };
+
+        Visitor(Compiler* comp) : GenTreeVisitor(comp)
+        {
+        }
+
+        fgWalkResult PreOrderVisit(GenTree** use, GenTree* user)
+        {
+            LclVarDsc* varDsc = m_compiler->lvaGetDesc((*use)->AsLclVarCommon());
+            if (varDsc->IsAddressExposed())
+            {
+                return WALK_ABORT;
+            }
+
+            return WALK_CONTINUE;
+        }
+    };
+
+    Visitor visitor(this);
+    return visitor.WalkTree(&tree, nullptr) == WALK_ABORT;
 }
 
 #ifdef DEBUG
@@ -16334,7 +16371,17 @@ bool Compiler::gtSplitTree(
 
         bool IsValue(const UseInfo& useInf)
         {
-            GenTree* node = (*useInf.Use)->gtEffectiveVal();
+            GenTree* node = *useInf.Use;
+
+            // Some places create void-typed commas that wrap actual values
+            // (e.g. VN-based dead store removal), so we need the double check
+            // here.
+            if (!node->IsValue())
+            {
+                return false;
+            }
+
+            node = node->gtEffectiveVal();
             if (!node->IsValue())
             {
                 return false;
@@ -19030,6 +19077,18 @@ bool GenTree::isContainableHWIntrinsic() const
             return true;
         }
 
+        case NI_AVX512F_ConvertToVector256Int32:
+        case NI_AVX512F_ConvertToVector256UInt32:
+        case NI_AVX512F_VL_ConvertToVector128UInt32:
+        case NI_AVX512F_VL_ConvertToVector128UInt32WithSaturation:
+        {
+            if (varTypeIsFloating(AsHWIntrinsic()->GetSimdBaseType()))
+            {
+                return false;
+            }
+            FALLTHROUGH;
+        }
+
         case NI_Vector128_GetElement:
         case NI_SSE2_ConvertToInt32:
         case NI_SSE2_ConvertToUInt32:
@@ -19044,18 +19103,38 @@ bool GenTree::isContainableHWIntrinsic() const
         case NI_AVX2_ExtractVector128:
         case NI_AVX512F_ExtractVector128:
         case NI_AVX512F_ExtractVector256:
+        case NI_AVX512F_ConvertToVector128Byte:
+        case NI_AVX512F_ConvertToVector128ByteWithSaturation:
         case NI_AVX512F_ConvertToVector128Int16:
-        case NI_AVX512F_ConvertToVector128Int32:
+        case NI_AVX512F_ConvertToVector128Int16WithSaturation:
+        case NI_AVX512F_ConvertToVector128SByte:
+        case NI_AVX512F_ConvertToVector128SByteWithSaturation:
         case NI_AVX512F_ConvertToVector128UInt16:
-        case NI_AVX512F_ConvertToVector128UInt32:
+        case NI_AVX512F_ConvertToVector128UInt16WithSaturation:
         case NI_AVX512F_ConvertToVector256Int16:
-        case NI_AVX512F_ConvertToVector256Int32:
+        case NI_AVX512F_ConvertToVector256Int16WithSaturation:
+        case NI_AVX512F_ConvertToVector256Int32WithSaturation:
         case NI_AVX512F_ConvertToVector256UInt16:
-        case NI_AVX512F_ConvertToVector256UInt32:
-        case NI_AVX512BW_ConvertToVector128Byte:
-        case NI_AVX512BW_ConvertToVector128SByte:
+        case NI_AVX512F_ConvertToVector256UInt16WithSaturation:
+        case NI_AVX512F_ConvertToVector256UInt32WithSaturation:
+        case NI_AVX512F_VL_ConvertToVector128Byte:
+        case NI_AVX512F_VL_ConvertToVector128ByteWithSaturation:
+        case NI_AVX512F_VL_ConvertToVector128Int16:
+        case NI_AVX512F_VL_ConvertToVector128Int16WithSaturation:
+        case NI_AVX512F_VL_ConvertToVector128Int32:
+        case NI_AVX512F_VL_ConvertToVector128Int32WithSaturation:
+        case NI_AVX512F_VL_ConvertToVector128SByte:
+        case NI_AVX512F_VL_ConvertToVector128SByteWithSaturation:
+        case NI_AVX512F_VL_ConvertToVector128UInt16:
+        case NI_AVX512F_VL_ConvertToVector128UInt16WithSaturation:
         case NI_AVX512BW_ConvertToVector256Byte:
+        case NI_AVX512BW_ConvertToVector256ByteWithSaturation:
         case NI_AVX512BW_ConvertToVector256SByte:
+        case NI_AVX512BW_ConvertToVector256SByteWithSaturation:
+        case NI_AVX512BW_VL_ConvertToVector128Byte:
+        case NI_AVX512BW_VL_ConvertToVector128ByteWithSaturation:
+        case NI_AVX512BW_VL_ConvertToVector128SByte:
+        case NI_AVX512BW_VL_ConvertToVector128SByteWithSaturation:
         case NI_AVX512DQ_ExtractVector128:
         case NI_AVX512DQ_ExtractVector256:
         {
@@ -22707,7 +22786,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512BW_ConvertToVector128SByte;
+                    intrinsicId = NI_AVX512BW_VL_ConvertToVector128SByte;
                 }
 
                 opBaseJitType = CORINFO_TYPE_SHORT;
@@ -22722,7 +22801,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512BW_ConvertToVector128Byte;
+                    intrinsicId = NI_AVX512BW_VL_ConvertToVector128Byte;
                 }
 
                 opBaseJitType = CORINFO_TYPE_USHORT;
@@ -22737,7 +22816,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512F_ConvertToVector128Int16;
+                    intrinsicId = NI_AVX512F_VL_ConvertToVector128Int16;
                 }
 
                 opBaseJitType = CORINFO_TYPE_INT;
@@ -22752,7 +22831,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512F_ConvertToVector128UInt16;
+                    intrinsicId = NI_AVX512F_VL_ConvertToVector128UInt16;
                 }
 
                 opBaseJitType = CORINFO_TYPE_UINT;
@@ -22767,7 +22846,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512F_ConvertToVector128Int32;
+                    intrinsicId = NI_AVX512F_VL_ConvertToVector128Int32;
                 }
 
                 opBaseJitType = CORINFO_TYPE_LONG;
@@ -22782,7 +22861,7 @@ GenTree* Compiler::gtNewSimdNarrowNode(
                 }
                 else
                 {
-                    intrinsicId = NI_AVX512F_ConvertToVector128UInt32;
+                    intrinsicId = NI_AVX512F_VL_ConvertToVector128UInt32;
                 }
 
                 opBaseJitType = CORINFO_TYPE_ULONG;
@@ -25738,7 +25817,7 @@ unsigned GenTreeHWIntrinsic::GetResultOpNumForFMA(GenTree* use, GenTree* op1, Ge
     {
         assert((gtHWIntrinsicId >= NI_AVX512F_FusedMultiplyAdd) &&
                (gtHWIntrinsicId <= NI_AVX512F_FusedMultiplySubtractNegated));
-        assert((NI_AVX512F_FusedMultiplySubtractNegated - NI_AVX512F_FusedMultiplyAdd) == 6);
+        assert((NI_AVX512F_FusedMultiplySubtractNegated - NI_AVX512F_FusedMultiplyAdd) + 1 == 6);
     }
 #endif // DEBUG
 
