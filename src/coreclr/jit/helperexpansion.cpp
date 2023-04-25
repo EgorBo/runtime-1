@@ -506,8 +506,8 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
             return false;
         }
 
-        // TODO: consider supporting any offset if that is a common pattern
-        // or e.g. RVA char[] data
+        // TODO: Consider supporting any offset if that is a common pattern,
+        // also RVA ROS<char> data, also 'static readonly string` (which aren't frozen)
     }
     else
     {
@@ -582,7 +582,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     // Grab a temp to store the result (it's assigned from either fastPathBb or fallbackBb)
     // The result corresponds the number of bytes written to dstPtr (int32).
     assert(call->TypeIs(TYP_INT));
-    unsigned resultLclNum         = lvaGrabTemp(true DEBUGARG("local for result"));
+    const unsigned resultLclNum   = lvaGrabTemp(true DEBUGARG("local for result"));
     lvaTable[resultLclNum].lvType = TYP_INT;
     resultLcl                     = gtNewLclvNode(resultLclNum, TYP_INT);
     *callUse                      = resultLcl;
@@ -619,6 +619,11 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     BasicBlock* lengthCheckBb = fgNewBBafter(BBJ_COND, prevBb, true);
     lengthCheckBb->bbFlags |= BBF_INTERNAL;
 
+    // In 99% cases "this" is expected to be "static readonly UTF8EncodingSealed s_default"
+    // which is a static readonly object that is never null
+    const bool thisIsKnownNonNull =
+        thisArg->gtVNPair.BothEqual() && vnStore->IsKnownNonNull(thisArg->gtVNPair.GetLiberal());
+
     // Spill all original arguments to locals in the lengthCheckBb to preserve all possible side-effects.
     // We're going to re-morph the original call too.
     thisArg = SpillExpression(this, thisArg, lengthCheckBb, debugInfo);
@@ -626,6 +631,14 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     srcLen  = SpillExpression(this, srcLen, lengthCheckBb, debugInfo);
     dstPtr  = SpillExpression(this, dstPtr, lengthCheckBb, debugInfo);
     dstLen  = SpillExpression(this, dstLen, lengthCheckBb, debugInfo);
+
+    // We don't need "this" object in the fast path so insert an explicit null check here.
+    // (after we evaluated all arguments)
+    if (!thisIsKnownNonNull)
+    {
+        GenTree* thisNullcheck = gtNewNullCheck(gtClone(thisArg), lengthCheckBb);
+        fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(thisNullcheck, debugInfo));
+    }
 
     GenTree* lengthCheck = gtNewOperNode(GT_GE, TYP_INT, gtClone(dstLen), srcLenCnsNode);
     lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
@@ -640,8 +653,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
     // We have to re-create the call since we spilled all of its original arguments to lengthCheckBb
     // and since gtArgs have to care about ABI we cannot just replace them with the locals.
     GenTree* newCall = gtNewCallNode(CT_USER_FUNC, call->gtCallMethHnd, call->TypeGet(), debugInfo);
-    newCall->AsCall()->gtArgs.PushFront(this,
-                                        NewCallArg::Primitive(thisArg), // should it be wellknown "this"?
+    newCall->AsCall()->gtArgs.PushFront(this, NewCallArg::Primitive(thisArg).WellKnown(WellKnownArg::ThisPointer),
                                         NewCallArg::Primitive(srcPtr), NewCallArg::Primitive(srcLen),
                                         NewCallArg::Primitive(dstPtr), NewCallArg::Primitive(dstLen));
     newCall = fgMorphCall(newCall->AsCall());
@@ -693,7 +705,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock* block
         fgUpdateConstTreeValueNumber(offsetNode);
 
         // Grab a chunk from srcUtf8cnsData for the given offset and width
-        GenTree* utf8cnsChunkNode = impImportCnsTreeFromBuffer(srcUtf8cns + offest, maxLoadType);
+        GenTree* utf8cnsChunkNode = gtNewCon(maxLoadType, srcUtf8cns + offest);
         fgUpdateConstTreeValueNumber(utf8cnsChunkNode);
 
         GenTree*   dstAddOffsetNode = gtNewOperNode(GT_ADD, TYP_BYREF, gtClone(dstPtr), offsetNode);

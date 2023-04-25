@@ -7557,6 +7557,110 @@ GenTree* Compiler::gtNewOneConNode(var_types type, var_types simdBaseType /* = T
     }
 }
 
+//------------------------------------------------------------------------
+// gtNewCon: read value of the given type from the given buffer to create
+//    a tree representing that constant.
+//
+// Arguments
+//    type      - type of the value
+//    buffer    - array of bytes representing the value
+//
+// Return Value:
+//    The tree representing the constant from the given buffer
+//
+GenTree* Compiler::gtNewCon(var_types type, uint8_t* buffer)
+{
+#if defined(FEATURE_SIMD)
+    if (varTypeIsSIMD(type))
+    {
+        return gtNewVconNode(type, buffer);
+    }
+#endif
+
+    GenTree* tree = nullptr;
+    switch (type)
+    {
+// Use memcpy to read from the buffer and create an Icon/Dcon tree
+#define CreateTreeFromBuffer(typ, treeFactory)                                                                         \
+    typ v##typ;                                                                                                        \
+    memcpy(&v##typ, buffer, sizeof(typ));                                                                              \
+    tree = treeFactory(v##typ);
+
+        case TYP_BOOL:
+        {
+            CreateTreeFromBuffer(bool, gtNewIconNode);
+            break;
+        }
+        case TYP_BYTE:
+        {
+            CreateTreeFromBuffer(int8_t, gtNewIconNode);
+            break;
+        }
+        case TYP_UBYTE:
+        {
+            CreateTreeFromBuffer(uint8_t, gtNewIconNode);
+            break;
+        }
+        case TYP_SHORT:
+        {
+            CreateTreeFromBuffer(int16_t, gtNewIconNode);
+            break;
+        }
+        case TYP_USHORT:
+        {
+            CreateTreeFromBuffer(uint16_t, gtNewIconNode);
+            break;
+        }
+        case TYP_UINT:
+        case TYP_INT:
+        {
+            CreateTreeFromBuffer(int32_t, gtNewIconNode);
+            break;
+        }
+        case TYP_LONG:
+        case TYP_ULONG:
+        {
+            CreateTreeFromBuffer(int64_t, gtNewLconNode);
+            break;
+        }
+        case TYP_FLOAT:
+        {
+            CreateTreeFromBuffer(float, gtNewDconNode);
+            break;
+        }
+        case TYP_DOUBLE:
+        {
+            CreateTreeFromBuffer(double, gtNewDconNode);
+            break;
+        }
+        case TYP_REF:
+        {
+            size_t ptr;
+            memcpy(&ptr, buffer, sizeof(ssize_t));
+
+            if (ptr == 0)
+            {
+                tree = gtNewNull();
+            }
+            else
+            {
+                setMethodHasFrozenObjects();
+                tree         = gtNewIconEmbHndNode((void*)ptr, nullptr, GTF_ICON_OBJ_HDL, nullptr);
+                tree->gtType = TYP_REF;
+                INDEBUG(tree->AsIntCon()->gtTargetHandle = ptr);
+            }
+            break;
+        }
+        default:
+            unreached();
+            break;
+    }
+
+    assert(tree != nullptr);
+    tree->gtType = genActualType(type);
+    return tree;
+}
+
 GenTreeLclVar* Compiler::gtNewStoreLclVar(unsigned dstLclNum, GenTree* src)
 {
     GenTreeLclVar* store = new (this, GT_STORE_LCL_VAR) GenTreeLclVar(GT_STORE_LCL_VAR, src->TypeGet(), dstLclNum);
