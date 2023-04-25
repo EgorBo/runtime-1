@@ -2829,6 +2829,8 @@ public:
 
     GenTreeMDArr* gtNewMDArrLowerBound(GenTree* arrayOp, unsigned dim, unsigned rank, BasicBlock* block);
 
+    void gtInitializeIndirNode(GenTreeIndir* indir, GenTreeFlags indirFlags);
+
     GenTreeBlk* gtNewBlkIndir(ClassLayout* layout, GenTree* addr, GenTreeFlags indirFlags = GTF_EMPTY);
 
     GenTreeIndir* gtNewIndir(var_types typ, GenTree* addr, GenTreeFlags indirFlags = GTF_EMPTY);
@@ -5869,7 +5871,8 @@ private:
     // small; hence the other fields of MorphAddrContext.
     struct MorphAddrContext
     {
-        size_t m_totalOffset = 0; // Sum of offsets between the top-level indirection and here (current context).
+        size_t m_totalOffset = 0;     // Sum of offsets between the top-level indirection and here (current context).
+        bool   m_used        = false; // Whether this context was used to elide a null check.
     };
 
 #ifdef FEATURE_SIMD
