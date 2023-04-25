@@ -4991,7 +4991,8 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
 
             if (doVNBasedIntrinsicExpansion)
             {
-                // Partially inline static initializations
+                // Expand some intrinsics based on VN data
+                //
                 DoPhase(this, PHASE_VN_BASED_INTRINSIC_EXPAND, &Compiler::fgVNBasedIntrinsicExpansion);
             }
 
