@@ -423,9 +423,8 @@ PhaseStatus Compiler::fgVNBasedIntrinsicExpansion()
 {
     PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
 
-    if (opts.OptimizationDisabled())
+    if (!doesMethodHasSpecialIntrinsics() || opts.OptimizationDisabled())
     {
-        JITDUMP("Optimizations aren't allowed - bail out.\n")
         return result;
     }
 

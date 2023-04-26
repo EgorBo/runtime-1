@@ -7054,6 +7054,7 @@ public:
 #define OMF_HAS_MDARRAYREF                     0x00004000 // Method contains multi-dimensional intrinsic array element loads or stores.
 #define OMF_HAS_STATIC_INIT                    0x00008000 // Method has static initializations we might want to partially inline
 #define OMF_HAS_TLS_FIELD                      0x00010000 // Method contains TLS field access
+#define OMF_HAS_SPECIAL_INTRINSICS             0x00020000 // Method contains special intrinsics expanded in late phases
 
     // clang-format on
 
@@ -7112,6 +7113,16 @@ public:
     void setMethodHasTlsFieldAccess()
     {
         optMethodFlags |= OMF_HAS_TLS_FIELD;
+    }
+
+    bool doesMethodHasSpecialIntrinsics()
+    {
+        return (optMethodFlags & OMF_HAS_SPECIAL_INTRINSICS) != 0;
+    }
+
+    void setMethodHasSpecialIntrinsics()
+    {
+        optMethodFlags |= OMF_HAS_SPECIAL_INTRINSICS;
     }
 
     void pickGDV(GenTreeCall*           call,
