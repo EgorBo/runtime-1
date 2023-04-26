@@ -454,11 +454,11 @@ PhaseStatus Compiler::fgVNBasedIntrinsicExpansion()
 bool Compiler::fgVNBasedIntrinsicExpansionForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call)
 {
     assert(call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC);
-    /*NamedIntrinsic ni = lookupNamedIntrinsic(call->gtCallMethHnd);
+    NamedIntrinsic ni = lookupNamedIntrinsic(call->gtCallMethHnd);
     if (ni == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes)
     {
         return fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(pBlock, stmt, call);
-    }*/
+    }
 
     // TODO: Expand IsKnownConstant here
     // Also, move various unrollings here
@@ -513,28 +513,19 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
 
     // We're interested in a case when srcPtr is a string literal and srcLen is a constant
 
-    // Make sure srcPtr is a common string literal shape in VN:
-    CORINFO_OBJECT_HANDLE strObj = nullptr;
-    VNFuncApp             funcApp;
-    if (srcLen->gtVNPair.BothEqual() && vnStore->GetVNFunc(srcPtr->gtVNPair.GetLiberal(), &funcApp) &&
-        funcApp.m_func == (VNFunc)GT_ADD && vnStore->IsVNHandle(funcApp.m_args[0]) &&
-        vnStore->GetHandleFlags(funcApp.m_args[0]) == GTF_ICON_OBJ_HDL && vnStore->IsVNConstant(funcApp.m_args[1]) &&
-        vnStore->CoercedConstantValue<ssize_t>(funcApp.m_args[1]) == OFFSETOF__CORINFO_String__chars)
+    ssize_t               strObjOffset = 0;
+    CORINFO_OBJECT_HANDLE strObj       = nullptr;
+    if (!GetObjectHandleAndOffset(srcPtr, &strObjOffset, &strObj) || (strObjOffset != OFFSETOF__CORINFO_String__chars))
     {
-        // srcPtr is ADD(strFrozenObj, OFFSETOF__CORINFO_String__chars))
-        strObj = (CORINFO_OBJECT_HANDLE)vnStore->CoercedConstantValue<ssize_t>(funcApp.m_args[0]);
-        if (info.compCompHnd->getObjectType(strObj) != impGetStringClass())
-        {
-            JITDUMP("GetUtf8Bytes: srcPtr looked like a string but it is not?\n");
-            return false;
-        }
-
-        // TODO: Consider supporting any offset if that is a common pattern,
-        // also RVA ROS<char> data, also 'static readonly string` (which aren't frozen)
-    }
-    else
-    {
+        // TODO: Consider supporting any offset if that is a common pattern, also
+        // static readonly fields (RVA ROS<char> or non-frozen string objects)
         JITDUMP("GetUtf8Bytes: srcPtr is not a string literal\n")
+        return false;
+    }
+
+    if (info.compCompHnd->getObjectType(strObj) != impGetStringClass())
+    {
+        JITDUMP("GetUtf8Bytes: srcPtr is not a string object\n")
         return false;
     }
 
@@ -544,22 +535,21 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
         return false;
     }
 
-    // TODO: have a smarter way to determine the unrollable range, let's limit it to 128 chars for now since the
-    // API is new and we don't have a good idea of the typical string length.
-    const int MaxCharLenght = 128;
-    unsigned  srcLenCns     = (unsigned)vnStore->GetConstantInt32(srcLen->gtVNPair.GetLiberal());
-    if (srcLenCns == 0 || srcLenCns > MaxCharLenght)
+    // Do we need to care if srcLenCns is larger than the actual string literal length? It's a faulty case anyway.
+
+    const int      MaxPossibleUnrollThreshold = 256;
+    const unsigned unrollThreshold            = min(getUnrollThreshold(UnrollKind::Memcpy), MaxPossibleUnrollThreshold);
+    const unsigned srcLenCns                  = (unsigned)vnStore->GetConstantInt32(srcLen->gtVNPair.GetLiberal());
+    if (srcLenCns == 0 || srcLenCns > unrollThreshold)
     {
         // TODO: handle srcLenCns == 0 if it's a common case
         JITDUMP("GetUtf8Bytes: srcLenCns is out of unrollable range\n")
         return false;
     }
 
-    // Do we need to care if srcLenCns is larger than the actual string literal length? It's a faulty case anyway.
-
     // Read the string literal (UTF16) into a local buffer (UTF8)
     assert(strObj != nullptr);
-    BYTE srcUtf8cns[MaxCharLenght] = {}; // same length since we're narrowing U16 to U8
+    BYTE srcUtf8cns[MaxPossibleUnrollThreshold] = {}; // same length since we're narrowing U16 to U8
     for (unsigned charIndex = 0; charIndex < srcLenCns; charIndex++)
     {
         uint16_t ch = 0;
