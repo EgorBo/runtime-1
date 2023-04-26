@@ -7766,7 +7766,8 @@ GenTree* Compiler::fgMorphCall(GenTreeCall* call)
 
     if (call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC)
     {
-        if (lookupNamedIntrinsic(call->AsCall()->gtCallMethHnd) == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes)
+        if (lookupNamedIntrinsic(call->AsCall()->gtCallMethHnd) ==
+            NI_System_Text_UTF8Encoding_UTF8EncodingSealed_GetUtf8Bytes)
         {
             // Expanded in fgVNBasedIntrinsicExpansion
             setMethodHasSpecialIntrinsics();
