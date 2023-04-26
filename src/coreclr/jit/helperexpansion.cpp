@@ -474,15 +474,11 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall(BasicBlock** pBlock, Statement
 //
 //    becomes:
 //
+//      bytesWritten = 0; // default value
 //      if (buffer.Length >= str.Length) // *might* be folded if buffer.Length is a constant
 //      {
 //          memcpy(buffer, "Hello, world!"u8, str.Length); // note the u8 suffix
 //          bytesWritten = str.Length;
-//      }
-//      else
-//      {
-//          // fallback to the original call
-//          bytesWritten = GetUtf8Bytes(ref str[0], str.Length, buffer, buffer.Length);
 //      }
 //
 // Arguments:
@@ -544,6 +540,15 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
         // TODO: handle srcLenCns == 0 if it's a common case
         JITDUMP("GetUtf8Bytes: srcLenCns is out of unrollable range\n")
         return false;
+    }
+
+    // We don't need the length condition if we know that the destination buffer is large enough
+    bool noSizeCheck = false;
+    if (dstLen->gtVNPair.BothEqual() && vnStore->IsVNInt32Constant(dstLen->gtVNPair.GetLiberal()))
+    {
+        const int dstLenCns = vnStore->GetConstantInt32(dstLen->gtVNPair.GetLiberal());
+        noSizeCheck         = dstLenCns >= (int)srcLenCns;
+        assert(dstLenCns > 0);
     }
 
     // Read the string literal (UTF16) into a local buffer (UTF8)
@@ -612,24 +617,38 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
     //  prevBb:
     //
     //  lengthCheckBb:
-    //      if (dstLen >= srcLen)
-    //          goto fastpathBb;
-    //
-    //  fallbackBb:
-    //      result = originalCall();
-    //      goto block;
+    //      <side-effects>
+    //      bytesWritten = 0;
+    //      if (dstLen <srcLen)
+    //          goto block;
     //
     //  fastpathBb:
-    //      result = unrolled copy;
+    //      bytesWritten = unrolled copy;
     //
     //  block:
-    //      use(result)
+    //      use(bytesWritten)
+    //
+
+    // or in case if noSizeCheck is true:
+
+    //  prevBb:
+    //
+    //  lengthCheckBb:
+    //      <side-effects>
+    //
+    //  fastpathBb:
+    //      bytesWritten = unrolled copy;
+    //
+    //  block:
+    //      use(bytesWritten)
     //
 
     //
-    // Block 1: lengthCheckBb (we check that dstLen >= srcLen)
+    // Block 1: lengthCheckBb (we check that dstLen < srcLen)
+    //  In case if destIsKnownToFit is true we'll use this block to keep side-effects of the original arguments.
+    //  and it will be a fall-through block.
     //
-    BasicBlock* lengthCheckBb = fgNewBBafter(BBJ_COND, prevBb, true);
+    BasicBlock* lengthCheckBb = fgNewBBafter(noSizeCheck ? BBJ_NONE : BBJ_COND, prevBb, true);
     lengthCheckBb->bbFlags |= BBF_INTERNAL;
 
     // In 99% cases "this" is expected to be "static readonly UTF8EncodingSealed s_default"
@@ -638,12 +657,18 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
         thisArg->gtVNPair.BothEqual() && vnStore->IsKnownNonNull(thisArg->gtVNPair.GetLiberal());
 
     // Spill all original arguments to locals in the lengthCheckBb to preserve all possible side-effects.
-    // We're going to re-morph the original call too.
     thisArg = SpillExpression(this, thisArg, lengthCheckBb, debugInfo);
     srcPtr  = SpillExpression(this, srcPtr, lengthCheckBb, debugInfo);
     srcLen  = SpillExpression(this, srcLen, lengthCheckBb, debugInfo);
     dstPtr  = SpillExpression(this, dstPtr, lengthCheckBb, debugInfo);
     dstLen  = SpillExpression(this, dstLen, lengthCheckBb, debugInfo);
+
+    if (!noSizeCheck)
+    {
+        // Zero bytesWritten local, if the fast path is not taken we'll return it as the result.
+        GenTree* bytesWrittenDefaultVal = gtNewAssignNode(gtClone(resultLcl), gtNewZeroConNode(TYP_INT));
+        fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(bytesWrittenDefaultVal, debugInfo));
+    }
 
     // We don't need "this" object in the fast path so insert an explicit null check here.
     // (after we evaluated all arguments)
@@ -653,37 +678,24 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
         fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(thisNullcheck, debugInfo));
     }
 
-    GenTree* lengthCheck = gtNewOperNode(GT_GE, TYP_INT, gtClone(dstLen), srcLenCnsNode);
-    lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
-    Statement* lengthCheckStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, lengthCheck), debugInfo);
-    fgInsertStmtAtEnd(lengthCheckBb, lengthCheckStmt);
-    lengthCheckBb->bbCodeOffs    = block->bbCodeOffsEnd;
-    lengthCheckBb->bbCodeOffsEnd = block->bbCodeOffsEnd;
+    if (!noSizeCheck)
+    {
+        GenTree* lengthCheck = gtNewOperNode(GT_LT, TYP_INT, gtClone(dstLen), srcLenCnsNode);
+        lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
+        Statement* lengthCheckStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, lengthCheck), debugInfo);
+        fgInsertStmtAtEnd(lengthCheckBb, lengthCheckStmt);
+        lengthCheckBb->bbCodeOffs    = block->bbCodeOffsEnd;
+        lengthCheckBb->bbCodeOffsEnd = block->bbCodeOffsEnd;
+    }
 
     //
-    // Block 2: fallbackBb - we just invoke the original method
-    //
-    // We have to re-create the call since we spilled all of its original arguments to lengthCheckBb
-    // and since gtArgs have to care about ABI we cannot just replace them with the locals.
-    GenTree* newCall = gtNewCallNode(CT_USER_FUNC, call->gtCallMethHnd, call->TypeGet(), debugInfo);
-    newCall->AsCall()->gtArgs.PushFront(this, NewCallArg::Primitive(thisArg).WellKnown(WellKnownArg::ThisPointer),
-                                        NewCallArg::Primitive(srcPtr), NewCallArg::Primitive(srcLen),
-                                        NewCallArg::Primitive(dstPtr), NewCallArg::Primitive(dstLen));
-    newCall = fgMorphCall(newCall->AsCall());
-    gtSetEvalOrder(newCall);
-
-    // Save its result to the resultLcl temp
-    GenTree*    asgFallbackValue = gtNewAssignNode(gtClone(resultLcl), newCall);
-    BasicBlock* fallbackBb       = fgNewBBFromTreeAfter(BBJ_ALWAYS, lengthCheckBb, asgFallbackValue, debugInfo, true);
-
-    //
-    // Block 3: fastpathBb - unrolled loop that copies the UTF8 const data to the destination
+    // Block 2: fastpathBb - unrolled loop that copies the UTF8 const data to the destination
     //
     // We're going to emit a series of loads and stores to copy the data.
     // In theory, we could just emit the const U8 data to the data section and use GT_BLK here
     // but that would be a bit less efficient since we would have to load the data from memory.
     //
-    BasicBlock* fastpathBb = fgNewBBafter(BBJ_NONE, fallbackBb, true);
+    BasicBlock* fastpathBb = fgNewBBafter(BBJ_NONE, lengthCheckBb, true);
     fastpathBb->bbFlags |= BBF_INTERNAL;
 
     // The widest type we can use for loads
@@ -743,37 +755,34 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
     fgRemoveRefPred(block, prevBb);
     // prevBb flows into lengthCheckBb
     fgAddRefPred(lengthCheckBb, prevBb);
-    // lengthCheckBb has two successors: prevBb and fallbackBb
+    // lengthCheckBb has two successors: block and fastpathBb (if !destIsKnownToFit)
     fgAddRefPred(fastpathBb, lengthCheckBb);
-    fgAddRefPred(fallbackBb, lengthCheckBb);
-    // block has two predecessors: fastpathBb and fallbackBb
+    if (!noSizeCheck)
+    {
+        fgAddRefPred(block, lengthCheckBb);
+    }
+    // fastpathBb flows into block
     fgAddRefPred(block, fastpathBb);
-    fgAddRefPred(block, fallbackBb);
-    // lengthCheckBb jumps to fastpathBb (if the length check condition is passed)
-    lengthCheckBb->bbJumpDest = fastpathBb;
-    // fallbackBb always jumps to block (over the fastpathBb)
-    fallbackBb->bbJumpDest = block;
+    // lengthCheckBb jumps to block if condition is met
+    lengthCheckBb->bbJumpDest = block;
 
     //
     // Re-distribute weights
     //
     lengthCheckBb->inheritWeight(prevBb);
     // we don't have any real world data on how often this fallback path is taken so we just assume 20% of the time
-    fallbackBb->inheritWeightPercentage(lengthCheckBb, 20);
-    fastpathBb->inheritWeightPercentage(lengthCheckBb, 80);
+    fastpathBb->inheritWeightPercentage(lengthCheckBb, noSizeCheck ? 100 : 80);
     block->inheritWeight(prevBb);
 
     //
     // Update bbNatLoopNum for all new blocks
     //
     lengthCheckBb->bbNatLoopNum = prevBb->bbNatLoopNum;
-    fallbackBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
     fastpathBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
 
     // All blocks are expected to be in the same EH region
     assert(BasicBlock::sameEHRegion(prevBb, block));
     assert(BasicBlock::sameEHRegion(prevBb, lengthCheckBb));
-    assert(BasicBlock::sameEHRegion(prevBb, fallbackBb));
     assert(BasicBlock::sameEHRegion(prevBb, fastpathBb));
 
     // Extra step: merge prevBb with lengthCheckBb if possible
