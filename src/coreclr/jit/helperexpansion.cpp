@@ -597,7 +597,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
 
     GenTreeLclVar* resultLcl = nullptr;
 
-    // Grab a temp to store the result (it's assigned from either fastPathBb or fallbackBb)
+    // Grab a temp to store the result.
     // The result corresponds the number of bytes written to dstPtr (int32).
     assert(call->TypeIs(TYP_INT));
     const unsigned resultLclNum   = lvaGrabTemp(true DEBUGARG("local for result"));
@@ -618,7 +618,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
     //
     //  lengthCheckBb:
     //      <side-effects>
-    //      bytesWritten = 0;
+    //      bytesWritten = -1;
     //      if (dstLen <srcLen)
     //          goto block;
     //
@@ -665,8 +665,8 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
 
     if (!noSizeCheck)
     {
-        // Zero bytesWritten local, if the fast path is not taken we'll return it as the result.
-        GenTree* bytesWrittenDefaultVal = gtNewAssignNode(gtClone(resultLcl), gtNewZeroConNode(TYP_INT));
+        // Set bytesWritten -1 by default, if the fast path is not taken we'll return it as the result.
+        GenTree* bytesWrittenDefaultVal = gtNewAssignNode(gtClone(resultLcl), gtNewIconNode(-1));
         fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(bytesWrittenDefaultVal, debugInfo));
     }
 
@@ -681,7 +681,7 @@ bool Compiler::fgVNBasedIntrinsicExpansionForCall_GetUtf8Bytes(BasicBlock** pBlo
     if (!noSizeCheck)
     {
         GenTree* lengthCheck = gtNewOperNode(GT_LT, TYP_INT, gtClone(dstLen), srcLenCnsNode);
-        lengthCheck->gtFlags |= (GTF_RELOP_JMP_USED | GTF_UNSIGNED);
+        lengthCheck->gtFlags |= GTF_RELOP_JMP_USED;
         Statement* lengthCheckStmt = fgNewStmtFromTree(gtNewOperNode(GT_JTRUE, TYP_VOID, lengthCheck), debugInfo);
         fgInsertStmtAtEnd(lengthCheckBb, lengthCheckStmt);
         lengthCheckBb->bbCodeOffs    = block->bbCodeOffsEnd;

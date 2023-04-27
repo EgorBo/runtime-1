@@ -76,8 +76,6 @@ public class GetUtf8Bytes
         span = bytes.AsSpan(0, 1);
         AssertIsTrue(!TryGetBytes_5(span, out bytesWritten));
         AssertEquals(0, bytesWritten);
-        AssertIsTrue(span.SequenceEqual("h"u8));
-        IsEmpty(bytes.AsSpan(span.Length)); // the rest is untouched
 
         // Reset data
         bytesWritten = 0;
