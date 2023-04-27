@@ -9775,6 +9775,10 @@ void cTreeFlags(Compiler* comp, GenTree* tree)
                 {
                     chars += printf("[IND_NONNULL]");
                 }
+                if (tree->gtFlags & GTF_IND_INITCLASS)
+                {
+                    chars += printf("[IND_INITCLASS]");
+                }
                 break;
 
             case GT_MUL:
