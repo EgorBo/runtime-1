@@ -4990,6 +4990,14 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 DoPhase(this, PHASE_ASSERTION_PROP_MAIN, &Compiler::optAssertionPropMain);
             }
 
+            if (doSsa && doValueNum)
+            {
+                // Replace normal object allocators with the their alternatives to, hopefully,
+                // allocate objects on frozen segments.
+                //
+                DoPhase(this, PHASE_FREEZE_ALLOCATORS, &Compiler::fgFreezeAllocators);
+            }
+
             if (doRangeAnalysis)
             {
                 // Bounds check elimination via range analysis

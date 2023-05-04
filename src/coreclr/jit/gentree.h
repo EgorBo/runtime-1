@@ -5324,6 +5324,12 @@ struct GenTreeCall final : public GenTree
             gtCallMoreFlags |= GTF_CALL_M_R2R_REL_INDIRECT;
         }
     }
+    void clearEntryPoint()
+    {
+        gtEntryPoint.accessType = IAT_VALUE;
+        gtEntryPoint.addr       = nullptr;
+        gtCallMoreFlags &= ~GTF_CALL_M_R2R_REL_INDIRECT;
+    }
 #endif // FEATURE_READYTORUN
 
     bool IsVarargs() const

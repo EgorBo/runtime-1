@@ -1064,3 +1064,182 @@ bool Compiler::fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, G
     call->gtInitClsHnd = NO_CLASS_HANDLE;
     return true;
 }
+
+//------------------------------------------------------------------------------
+// fgFreezeAllocators: replace normal heap allocators with _MAYBEFROZEN ones in
+//    static constructors if optimizations are allowed for them. The idea is to
+//    move "static readonly <gc>" fields to the frozen segments so JIT then can
+//    benefit from that in their consumers.
+//
+// Returns:
+//    It always returns MODIFIED_NOTHING.
+//
+PhaseStatus Compiler::fgFreezeAllocators()
+{
+    // We're not going to change layout
+    const PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+
+    if ((info.compFlags & FLG_CCTOR) != FLG_CCTOR)
+    {
+        // We only do this for static constructors.
+        return result;
+    }
+
+    if (opts.OptimizationDisabled())
+    {
+        // We rely on optimizations here.
+        return result;
+    }
+
+    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_FROZEN_ALLOC_ALLOWED))
+    {
+        // VM doesn't allow us to do this - bail out.
+        return result;
+    }
+
+    if (compHasBackwardJump || (compHndBBtabCount != 0))
+    {
+        // Ignore CCTORs with backward jumps or EH due to complex control flow.
+        return result;
+    }
+
+    typedef SmallHashTable<ssize_t, GenTree*> FieldStoreMap;
+    FieldStoreMap fieldsStores(getAllocator());
+
+    for (const BasicBlock* const block : Blocks())
+    {
+        if (!block->KindIs(BBJ_NONE, BBJ_ALWAYS, BBJ_RETURN))
+        {
+            // Non-linear control flow - bail out.
+            return result;
+        }
+
+        if (block->KindIs(BBJ_ALWAYS) && (block->bbJumpDest != block->bbNext))
+        {
+            // Non-linear control flow - bail out.
+            return result;
+        }
+
+        for (const Statement* const stmt : block->NonPhiStatements())
+        {
+            for (GenTree* const tree : stmt->TreeList())
+            {
+                if (tree->IsCall() && !tree->IsHelperCall())
+                {
+                    // Conservatively bail out on any non-helper call.
+                    return result;
+                }
+
+                // We're looking for static field assignments:
+                //
+                //  *  ASG       ref    $VN.Void
+                //  +--*  IND       ref    $VN.Void
+                //  |  \--*  CNS_INT(h) long   0x26fd3c01d08 static Fseq[fieldName]
+                //  \--*  LCL_VAR   ref    V01 tmp1         u:1 (last use)
+                //
+                // where tmp1 points to a newobj/newarr helper
+                //
+                FieldSeq* fldSeq     = nullptr;
+                GenTree*  fieldValue = nullptr;
+                if (tree->OperIs(GT_ASG) && tree->gtGetOp1()->OperIs(GT_IND) && tree->gtGetOp1()->TypeIs(TYP_REF))
+                {
+                    GenTree* fieldAddress   = tree->gtGetOp1()->gtGetOp1();
+                    ValueNum fieldAddressVN = vnStore->VNNormalValue(fieldAddress->gtVNPair.GetLiberal());
+                    if (vnStore->IsVNHandle(fieldAddressVN) &&
+                        (vnStore->GetHandleFlags(fieldAddressVN) == GTF_ICON_STATIC_HDL))
+                    {
+                        fldSeq = vnStore->GetFieldSeqFromAddress(fieldAddressVN);
+                        // if (fldSeq != nullptr)
+                        //{
+
+                        //}
+                    }
+                    else if (fieldAddress->OperIs(GT_ADD) && fieldAddress->gtGetOp2()->IsCnsIntOrI())
+                    {
+                        fldSeq = fieldAddress->gtGetOp2()->AsIntCon()->gtFieldSeq;
+                    }
+
+                    fieldValue = tree->gtGetOp2();
+                }
+
+                if (fldSeq != nullptr)
+                {
+                    CORINFO_FIELD_HANDLE handle = fldSeq->GetFieldHandle();
+                    if ((handle != nullptr) && info.compCompHnd->isFieldStatic(handle))
+                    {
+                        // TODO: check that the field is readonly
+
+                        // Save this field store information. We intentionally overwrite previous stores
+                        // to the same fields, e.g.:
+                        //
+                        //   field1 = newobj();
+                        //   field1 = newobj();
+                        //
+                        // in this case we only want to freeze the last store.
+                        //
+                        fieldsStores.AddOrUpdate((ssize_t)handle, fieldValue);
+                    }
+                }
+            }
+        }
+
+        // We have a unique list of field-value pairs
+        for (HashTableBase<ssize_t, GenTree*>::KeyValuePair kvp : fieldsStores)
+        {
+            GenTree* fieldStoreValue = kvp.Value();
+
+            // fieldStoreValue is a value we save to a static readonly field. If that value is a newobj/newarr helper
+            // we can patch it to be _MAYBEFROZEN.
+            GenTreeCall* helperCall = nullptr;
+            if (fieldStoreValue->IsHelperCall())
+            {
+                helperCall = fieldStoreValue->AsCall();
+            }
+            else if (fieldStoreValue->OperIs(GT_LCL_VAR))
+            {
+                // Use SSA data to get the definition of the local (should we handle chains of assignments here?)
+                const GenTreeLclVar* local = fieldStoreValue->AsLclVar();
+                if (local->HasSsaName())
+                {
+                    const LclSsaVarDsc* ssaData = lvaGetDesc(local)->GetPerSsaData(local->GetSsaNum());
+                    if (ssaData->GetAssignment()->gtGetOp2()->IsHelperCall())
+                    {
+                        helperCall = ssaData->GetAssignment()->gtGetOp2()->AsCall();
+                    }
+                }
+            }
+
+            if (helperCall != nullptr)
+            {
+                switch (eeGetHelperNum(helperCall->gtCallMethHnd))
+                {
+                    case CORINFO_HELP_NEWSFAST:
+                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
+                        break;
+
+                    case CORINFO_HELP_NEWARR_1_DIRECT:
+                    case CORINFO_HELP_NEWARR_1_VC:
+                    case CORINFO_HELP_NEWARR_1_OBJ:
+                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_MAYBEFROZEN);
+                        break;
+
+#ifdef FEATURE_READYTORUN
+                    case CORINFO_HELP_READYTORUN_NEW:
+                        helperCall->clearEntryPoint();
+                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
+                        break;
+
+                    case CORINFO_HELP_READYTORUN_NEWARR_1:
+                        helperCall->clearEntryPoint();
+                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_MAYBEFROZEN);
+                        break;
+#endif
+
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+    return result;
+}
