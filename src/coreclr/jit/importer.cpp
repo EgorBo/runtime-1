@@ -1598,16 +1598,9 @@ GenTreeCall* Compiler::impReadyToRunHelperToTree(CORINFO_RESOLVED_TOKEN* pResolv
     }
 
     GenTreeCall* op1 = gtNewHelperCallNode(helper, type, arg1);
-
     op1->setEntryPoint(lookup);
-
-    if (IsStaticHelperEligibleForExpansion(op1))
-    {
-        // Keep class handle attached to the helper call since it's difficult to restore it
-        // Keep class handle attached to the helper call since it's difficult to restore it.
-        op1->gtInitClsHnd = pResolvedToken->hClass;
-    }
-
+    // Keep class handle attached to the helper call since it's difficult to restore it
+    op1->gtInitClsHnd = pResolvedToken->hClass;
     return op1;
 }
 #endif

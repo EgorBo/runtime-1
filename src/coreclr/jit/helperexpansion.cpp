@@ -1225,13 +1225,26 @@ PhaseStatus Compiler::fgFreezeAllocators()
 
 #ifdef FEATURE_READYTORUN
                     case CORINFO_HELP_READYTORUN_NEW:
-                        helperCall->clearEntryPoint();
-                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
+                       // helperCall->clearEntryPoint();
+                       // helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
                         break;
 
                     case CORINFO_HELP_READYTORUN_NEWARR_1:
-                        helperCall->clearEntryPoint();
-                        helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_MAYBEFROZEN);
+                        /*if (helperCall->gtInitClsHnd != NO_CLASS_HANDLE)
+                        {
+                            CORINFO_RESOLVED_TOKEN resolvedToken;
+                            resolvedToken.tokenContext = MAKE_METHODCONTEXT(info.compMethodHnd);
+                            resolvedToken.tokenScope = info.compScopeHnd;
+                            resolvedToken.hClass = helperCall->gtInitClsHnd;
+                            resolvedToken.tokenType = CORINFO_TOKENKIND_Class;
+                            info.compCompHnd->resolveToken(&resolvedToken);
+
+                            auto newCall = impTokenToHandle(&resolvedToken, nullptr, true /*mustRestoreHandle*/);
+                            newCall = gtNewHelperCallNode(CORINFO_HELP_NEWARR_1_MAYBEFROZEN, TYP_REF, newCall,
+                                gtCloneExpr(helperCall->gtArgs.GetUserArgByIndex(0)->GetNode()));
+                            helperCall->ReplaceWith(newCall, this);
+                            
+                        }*/
                         break;
 #endif
 
