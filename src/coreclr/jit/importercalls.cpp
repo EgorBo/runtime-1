@@ -3097,18 +3097,17 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
 
                 // Try to avoid ClsHandle -> Type object -> ClsHandle roundtrip:
                 GenTree* op1 = impStackTop(0).val;
-                if (op1->IsHelperCall() && gtIsTypeHandleToRuntimeTypeHelper(op1->AsCall()) && callvirt)
+                if (op1->IsHelperCall() && eeFindHelper(op1->AsCall()) == CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPE && callvirt)
                 {
-                    // struct RuntimeTypeHandle { IntPtr _value; }
-                    assert(info.compCompHnd->getClassNumInstanceFields(sig->retTypeClass) == 1);
-
-                    unsigned structLcl = lvaGrabTemp(true DEBUGARG("RuntimeTypeHandle"));
-                    lvaSetStruct(structLcl, sig->retTypeClass, false);
-                    GenTree*       realHandle   = op1->AsCall()->gtArgs.GetUserArgByIndex(0)->GetNode();
-                    GenTreeLclFld* handleFld    = gtNewLclFldNode(structLcl, realHandle->TypeGet(), 0);
-                    GenTree*       asgHandleFld = gtNewAssignNode(handleFld, realHandle);
-                    impAppendTree(asgHandleFld, CHECK_SPILL_NONE, impCurStmtDI);
-                    retNode = impCreateLocalNode(structLcl DEBUGARG(0));
+                    GenTree*     typeHandle = op1->AsCall()->gtArgs.GetUserArgByIndex(0)->GetNode();
+                    GenTreeCall* result =
+                        gtNewHelperCallNode(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPEHANDLE, TYP_STRUCT, typeHandle);
+                    result->gtReturnType = GetRuntimeHandleUnderlyingType();
+                    result->gtRetClsHnd  = impGetTypeHandleClass();
+#if FEATURE_MULTIREG_RET
+                    result->InitializeStructReturnType(this, result->gtRetClsHnd, result->GetUnmanagedCallConv());
+#endif
+                    retNode = result;
                     impPopStack();
                 }
                 break;

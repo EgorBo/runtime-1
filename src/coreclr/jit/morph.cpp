@@ -7820,6 +7820,23 @@ GenTree* Compiler::fgMorphCall(GenTreeCall* call)
         }
     }
 
+    // Expand CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPEHANDLE to RuntimeTypeHandle struct instance
+    // on NativeAOT it is just a wrapper around type handle. For CoreCLR it is a wrapper on RuntimeType object
+    // so we can only do this if we have a frozen object. That pattern didn't show up in SPMI so we don't do it.
+    CORINFO_CLASS_HANDLE typeHnd = NO_CLASS_HANDLE;
+    if (IsTargetAbi(CORINFO_NATIVEAOT_ABI) && fgGlobalMorph &&
+        call->IsHelperCall() && eeFindHelper(CORINFO_HELP_TYPEHANDLE_TO_RUNTIMETYPEHANDLE) == call->gtCallMethHnd)
+    {
+        unsigned structLcl = lvaGrabTemp(true DEBUGARG("RuntimeTypeHandle"));
+        lvaSetStruct(structLcl, call->gtRetClsHnd, false);
+        GenTree* realHandle = call->gtArgs.GetUserArgByIndex(0)->GetNode();
+        GenTreeLclFld* handleFld = gtNewLclFldNode(structLcl, realHandle->TypeGet(), 0);
+        GenTree* asgHandleFld = gtNewAssignNode(handleFld, realHandle);
+        auto xx = gtNewOperNode(GT_COMMA, call->TypeGet(), asgHandleFld, gtNewLclvNode(structLcl, call->TypeGet()));
+        INDEBUG(xx->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED);
+        return xx;
+    }
+
     // Assign DEF flags if it produces a definition from "return buffer".
     fgAssignSetVarDef(call);
     if (call->OperRequiresAsgFlag())
