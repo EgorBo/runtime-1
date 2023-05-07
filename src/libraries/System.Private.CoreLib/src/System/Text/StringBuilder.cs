@@ -2116,7 +2116,7 @@ namespace System.Text
                 if (((uint)chunkLength + (uint)valueCount) <= (uint)chunkChars.Length)
                 {
                     ref char destination = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(chunkChars), chunkLength);
-                    if (valueCount <= 2)
+                    if (valueCount <= 2 && !RuntimeHelpers.IsKnownConstant(valueCount))
                     {
                         destination = value;
                         if (valueCount == 2)
