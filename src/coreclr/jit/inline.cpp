@@ -1066,7 +1066,7 @@ int InlineStrategy::EstimateTime(InlineContext* context)
 
 int InlineStrategy::EstimateRootTime(unsigned ilSize)
 {
-    return 60 + 3 * ilSize;
+    return 1000;
 }
 
 //------------------------------------------------------------------------
@@ -1085,7 +1085,7 @@ int InlineStrategy::EstimateRootTime(unsigned ilSize)
 
 int InlineStrategy::EstimateInlineTime(unsigned ilSize)
 {
-    return -14 + 2 * ilSize;
+    return (int)(-ALWAYS_INLINE_SIZE + 1.5 * ilSize);
 }
 
 //------------------------------------------------------------------------
