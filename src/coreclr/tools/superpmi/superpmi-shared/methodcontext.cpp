@@ -792,6 +792,28 @@ bool MethodContext::repIsIntrinsic(CORINFO_METHOD_HANDLE ftn)
     return value != 0;
 }
 
+void MethodContext::recIsPinvoke(CORINFO_METHOD_HANDLE ftn, bool result)
+{
+    if (IsPinvoke == nullptr)
+        IsPinvoke = new LightWeightMap<DWORDLONG, DWORD>();
+
+    DWORDLONG key = CastHandle(ftn);
+    DWORD value = result ? 1 : 0;
+    IsPinvoke->Add(key, value);
+    DEBUG_REC(dmpIsPinvoke(key, value));
+}
+void MethodContext::dmpIsPinvoke(DWORDLONG key, DWORD value)
+{
+    printf("IsPinvoke key ftn-%016" PRIX64 ", value res-%u", key, value);
+}
+bool MethodContext::repIsPinvoke(CORINFO_METHOD_HANDLE ftn)
+{
+    DWORDLONG key = CastHandle(ftn);
+    DWORD value = LookupByKeyOrMiss(IsPinvoke, key, ": key %016" PRIX64 "", key);
+    DEBUG_REP(dmpIsPinvoke(key, value));
+    return value != 0;
+}
+
 void MethodContext::recGetMethodAttribs(CORINFO_METHOD_HANDLE methodHandle, DWORD attribs)
 {
     if (GetMethodAttribs == nullptr)

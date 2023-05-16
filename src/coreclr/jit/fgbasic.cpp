@@ -905,9 +905,16 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
         compInlineResult->NoteInt(InlineObservation::CALLEE_IL_CODE_SIZE, codeSize);
 
         // Determine if call site is within a try.
-        if (isInlining && impInlineInfo->iciBlock->hasTryIndex())
+        if (isInlining)
         {
-            compInlineResult->Note(InlineObservation::CALLSITE_IN_TRY_REGION);
+            if (impInlineInfo->iciBlock->hasTryIndex())
+            {
+                compInlineResult->Note(InlineObservation::CALLSITE_IN_TRY_REGION);
+            }
+            if (impInlineInfo->iciBlock->hasHndIndex())
+            {
+                compInlineResult->Note(InlineObservation::CALLSITE_IN_EH_REGION);
+            }
         }
 
         // Determine if the call site is in a no-return block
@@ -1097,6 +1104,11 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
                     impResolveToken(codeAddr, &resolvedToken, CORINFO_TOKENKIND_Method);
                     methodHnd   = resolvedToken.hMethod;
                     isIntrinsic = eeIsIntrinsic(methodHnd);
+
+                    if (info.compCompHnd->isPinvoke(methodHnd))
+                    {
+                        compInlineResult->Note(InlineObservation::CALLEE_HAS_PINVOKE);
+                    }
                 }
 
                 if (isIntrinsic)

@@ -28,6 +28,14 @@ bool interceptor_ICJI::isIntrinsic(CORINFO_METHOD_HANDLE ftn)
     return temp;
 }
 
+bool interceptor_ICJI::isPinvoke(CORINFO_METHOD_HANDLE ftn)
+{
+    mc->cr->AddCall("isPinvoke");
+    bool temp = original_ICorJitInfo->isPinvoke(ftn);
+    mc->recIsPinvoke(ftn, temp);
+    return temp;
+}
+
 // return flags (defined above, CORINFO_FLG_PUBLIC ...)
 uint32_t interceptor_ICJI::getMethodAttribs(CORINFO_METHOD_HANDLE ftn /* IN */)
 {

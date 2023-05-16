@@ -6481,6 +6481,29 @@ bool CEEInfo::isIntrinsic(CORINFO_METHOD_HANDLE ftn)
 }
 
 /*********************************************************************/
+bool CEEInfo::isPinvoke(CORINFO_METHOD_HANDLE ftn)
+{
+    CONTRACTL {
+        NOTHROW;
+        GC_NOTRIGGER;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    bool ret = false;
+
+    JIT_TO_EE_TRANSITION_LEAF();
+
+    _ASSERTE(ftn);
+
+    MethodDesc* pMD = (MethodDesc*)ftn;
+    ret = pMD->IsNDirect();
+
+    EE_TO_JIT_TRANSITION_LEAF();
+
+    return ret;
+}
+
+/*********************************************************************/
 uint32_t CEEInfo::getMethodAttribs (CORINFO_METHOD_HANDLE ftn)
 {
     CONTRACTL {

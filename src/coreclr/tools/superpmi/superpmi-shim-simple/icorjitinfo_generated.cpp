@@ -18,6 +18,12 @@ bool interceptor_ICJI::isIntrinsic(
     return original_ICorJitInfo->isIntrinsic(ftn);
 }
 
+bool interceptor_ICJI::isPinvoke(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    return original_ICorJitInfo->isPinvoke(ftn);
+}
+
 uint32_t interceptor_ICJI::getMethodAttribs(
           CORINFO_METHOD_HANDLE ftn)
 {

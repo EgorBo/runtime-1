@@ -306,6 +306,10 @@ void DefaultPolicy::NoteBool(InlineObservation obs, bool value)
                 m_CallsiteIsInTryRegion = value;
                 break;
 
+            case InlineObservation::CALLSITE_IN_EH_REGION:
+                m_CallsiteIsInEHRegion = value;
+                break;
+
             case InlineObservation::CALLEE_HAS_SIMD:
                 m_HasSimd = value;
                 break;
@@ -1249,6 +1253,10 @@ void ExtendedDefaultPolicy::NoteBool(InlineObservation obs, bool value)
             m_NonGenericCallsGeneric = value;
             break;
 
+        case InlineObservation::CALLEE_HAS_PINVOKE:
+            m_HasPinvokes = value;
+            break;
+
         case InlineObservation::CALLEE_BINARY_EXRP_WITH_CNS:
             m_BinaryExprWithCns++;
             break;
@@ -1802,6 +1810,41 @@ double ExtendedDefaultPolicy::DetermineMultiplier()
         JITDUMP("\nCallsite is in a no-return region.  Multiplier limited to %g.", multiplier);
     }
 
+    if (m_HasPinvokes)
+    {
+        // We have pinvoke call(s) in the inlinee. It means that if we inline the callee we'll inject a lot of code
+        // into the caller's prolog/epilog (SuppressGCTransition pinvokes won't do it, but those are rare), unless
+        // it already contains pinvokes.
+
+        // So, first of all, let's avoid inlining methods with pinvokes to cold sections
+        // we don't want to introduce overhead in the caller's prolog for rarely executed pinvokes.
+        if (m_HasProfileWeights && m_ProfileFrequency < 0.2)
+        {
+            multiplier = 1.0;
+            JITDUMP("\nCallsite has profile data and is cold, Callee has pinvoke(s).  Multiplier limited to %g.",
+                    multiplier);
+        }
+        else if (m_CallsiteIsInEHRegion)
+        {
+            // Also, we should avoid inlining methods with pinvokes into EH blocks at the callsite, because we won't
+            // be able to inline the transition machinery and will have to generate a dynamic stub instead.
+            // That might be fixed in future.
+            multiplier = 1.0;
+            JITDUMP("\nCallsite is in a try region, Callee has pinvoke(s).  Multiplier limited to %g.", multiplier);
+        }
+        else
+        {
+            // In all other cases let's decrease the multiplier:
+            multiplier /= 2.0;
+            JITDUMP("\nCallee has pinvoke(s).  Multiplier decreased to %g.", multiplier);
+        }
+
+        // TODO: if caller already have pinvokes we might want to share the transition machinery.
+    }
+
+// TODO: if callsite in an EH finally region we need to be careful since the finally block is clonned,
+// so we might want to lower the multiplier.
+
 #ifdef DEBUG
 
     int additionalMultiplier = JitConfig.JitInlineAdditionalMultiplier();
@@ -1858,6 +1901,7 @@ void ExtendedDefaultPolicy::OnDumpXml(FILE* file, unsigned indent) const
     XATTR_B(m_ReturnsStructByValue)
     XATTR_B(m_IsFromValueClass)
     XATTR_B(m_NonGenericCallsGeneric)
+    XATTR_B(m_HasPinvokes)
     XATTR_B(m_IsCallsiteInNoReturnRegion)
     XATTR_B(m_HasProfileWeights)
     XATTR_B(m_InsideThrowBlock)

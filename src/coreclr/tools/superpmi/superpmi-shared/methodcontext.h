@@ -137,6 +137,10 @@ public:
     void dmpIsIntrinsic(DWORDLONG key, DWORD value);
     bool repIsIntrinsic(CORINFO_METHOD_HANDLE ftn);
 
+    void recIsPinvoke(CORINFO_METHOD_HANDLE ftn, bool result);
+    void dmpIsPinvoke(DWORDLONG key, DWORD value);
+    bool repIsPinvoke(CORINFO_METHOD_HANDLE ftn);
+
     void recGetMethodAttribs(CORINFO_METHOD_HANDLE methodHandle, DWORD attribs);
     void dmpGetMethodAttribs(DWORDLONG key, DWORD value);
     DWORD repGetMethodAttribs(CORINFO_METHOD_HANDLE methodHandle);
@@ -1184,6 +1188,7 @@ enum mcPackets
     Packet_GetThreadLocalStaticBlocksInfo = 208,
     Packet_GetRISCV64PassStructInRegisterFlags = 209,
     Packet_GetObjectContent = 210,
+    Packet_IsPinvoke = 211,
 };
 
 void SetDebugDumpVariables();

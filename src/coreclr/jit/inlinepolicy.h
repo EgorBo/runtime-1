@@ -107,6 +107,7 @@ public:
         , m_LooksLikeWrapperMethod(false)
         , m_MethodIsMostlyLoadStore(false)
         , m_CallsiteIsInTryRegion(false)
+        , m_CallsiteIsInEHRegion(false)
         , m_CallsiteIsInLoop(false)
         , m_IsNoReturn(false)
         , m_IsNoReturnKnown(false)
@@ -183,6 +184,7 @@ protected:
     bool                    m_LooksLikeWrapperMethod : 1;
     bool                    m_MethodIsMostlyLoadStore : 1;
     bool                    m_CallsiteIsInTryRegion : 1;
+    bool                    m_CallsiteIsInEHRegion : 1;
     bool                    m_CallsiteIsInLoop : 1;
     bool                    m_IsNoReturn : 1;
     bool                    m_IsNoReturnKnown : 1;
@@ -222,6 +224,7 @@ public:
         , m_ReturnsStructByValue(false)
         , m_IsFromValueClass(false)
         , m_NonGenericCallsGeneric(false)
+        , m_HasPinvokes(false)
         , m_IsCallsiteInNoReturnRegion(false)
         , m_HasProfileWeights(false)
     {
@@ -275,6 +278,7 @@ protected:
     bool     m_ReturnsStructByValue : 1;
     bool     m_IsFromValueClass : 1;
     bool     m_NonGenericCallsGeneric : 1;
+    bool     m_HasPinvokes : 1;
     bool     m_IsCallsiteInNoReturnRegion : 1;
     bool     m_HasProfileWeights : 1;
 };

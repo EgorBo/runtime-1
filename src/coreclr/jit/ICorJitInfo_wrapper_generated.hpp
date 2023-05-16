@@ -21,6 +21,15 @@ bool WrapICorJitInfo::isIntrinsic(
     return temp;
 }
 
+bool WrapICorJitInfo::isPinvoke(
+          CORINFO_METHOD_HANDLE ftn)
+{
+    API_ENTER(isPinvoke);
+    bool temp = wrapHnd->isPinvoke(ftn);
+    API_LEAVE(isPinvoke);
+    return temp;
+}
+
 uint32_t WrapICorJitInfo::getMethodAttribs(
           CORINFO_METHOD_HANDLE ftn)
 {
