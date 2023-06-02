@@ -456,7 +456,7 @@ private:
     {
     public:
         GuardedDevirtualizationTransformer(Compiler* compiler, BasicBlock* block, Statement* stmt)
-            : Transformer(compiler, block, stmt), returnTemp(BAD_VAR_NUM)
+            : Transformer(compiler, block, stmt), returnTemp(BAD_VAR_NUM), objTypeLcl(nullptr)
         {
         }
 
@@ -650,9 +650,28 @@ private:
             GenTree* compare;
             if (guardedInfo->guardedClassHandle != NO_CLASS_HANDLE)
             {
+                GenTree* methodTable = nullptr;
+                if (GetChecksCount() == 1)
+                {
+                    // We have just one check so no need to spill methodTable indir to a temp
+                    methodTable = compiler->gtNewMethodTableLookup(thisTree);
+                }
+                else if (objTypeLcl == nullptr)
+                {
+                    // Spill methodTable indir to a temp
+                    methodTable = compiler->gtNewMethodTableLookup(thisTree);
+                    objTypeLcl  = compiler->fgMakeMultiUse(&methodTable)->AsLclVar();
+                }
+                else
+                {
+                    // Use methodTable indir from a temp we spilled before
+                    methodTable = compiler->gtCloneExpr(objTypeLcl);
+                }
+
+                assert(methodTable != nullptr);
+
                 // Find target method table
                 //
-                GenTree*             methodTable       = compiler->gtNewMethodTableLookup(thisTree);
                 CORINFO_CLASS_HANDLE clsHnd            = guardedInfo->guardedClassHandle;
                 GenTree*             targetMethodTable = compiler->gtNewIconEmbClsHndNode(clsHnd);
 
@@ -1241,8 +1260,9 @@ private:
         }
 
     private:
-        unsigned   returnTemp;
-        Statement* lastStmt;
+        unsigned       returnTemp;
+        GenTreeLclVar* objTypeLcl;
+        Statement*     lastStmt;
 
         //------------------------------------------------------------------------
         // CreateTreeForLookup: Create a tree representing a lookup of a method address.
