@@ -12337,6 +12337,11 @@ void Compiler::fgValueNumberCall(GenTreeCall* call)
             fgMutateGcHeap(call DEBUGARG("HELPER - modifies heap"));
         }
     }
+    else if (((call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC) != 0) && fgValueNumberIntrinsicCall(call))
+    {
+        // VN is already set inside fgValueNumberIntrinsicCall.
+        return;
+    }
     else
     {
         if (call->TypeGet() == TYP_VOID)
@@ -12364,6 +12369,85 @@ void Compiler::fgValueNumberCall(GenTreeCall* call)
 
         fgValueNumberLocalStore(call, lclVarTree, offset, storeSize, storeValue);
     }
+}
+
+bool Compiler::fgValueNumberIntrinsicCall(GenTreeCall* call)
+{
+    assert((call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC) != 0);
+
+    const NamedIntrinsic ni = lookupNamedIntrinsic(call->gtCallMethHnd);
+    if (ni == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetAsciiConstData)
+    {
+        JITDUMP("Trying to special-case UTF8EncodingSealed.TryGetAsciiConstData...\n")
+        assert(call->gtArgs.CountUserArgs() == 2);
+        GenTree* pSrcArg = call->gtArgs.GetUserArgByIndex(0)->GetNode();
+        GenTree* pLenArg = call->gtArgs.GetUserArgByIndex(1)->GetNode();
+
+        if (!pSrcArg->gtVNPair.BothEqual() || !pLenArg->gtVNPair.BothEqual())
+        {
+            // Conservatively require VNs to be equal.
+            JITDUMP(" input VNs are not 'Equal' - returns null\n")
+            call->gtVNPair.SetBoth(vnStore->VNForNull());
+            return true;
+        }
+
+        ValueNum srcVN = pSrcArg->gtVNPair.GetLiberal();
+        ValueNum lenVN = pLenArg->gtVNPair.GetLiberal();
+
+        // Now we expect that srcVN points to a constant string and lenVN is either the length of that string
+        // or a constant that is smaller than that length.
+        // srcVN is expected to be ADD(objHandle, OFFSETOF__CORINFO_String__chars), although, we're fine
+        // with any offset as long as getObjectContent returns true for it.
+        //
+        VNFuncApp srcFuncApp;
+        if (vnStore->IsVNConstant(lenVN) && vnStore->GetVNFunc(srcVN, &srcFuncApp) &&
+            (srcFuncApp.m_func == (VNFunc)GT_ADD) && vnStore->IsVNObjHandle(srcFuncApp.m_args[0]) &&
+            vnStore->IsVNConstant(srcFuncApp.m_args[1]))
+        {
+            CORINFO_OBJECT_HANDLE objHandle = vnStore->ConstantObjHandle(srcFuncApp.m_args[0]);
+            ssize_t               offset    = vnStore->CoercedConstantValue<ssize_t>(srcFuncApp.m_args[1]);
+            ssize_t               len       = vnStore->CoercedConstantValue<ssize_t>(lenVN);
+
+            // At some point the overhead from saving too big ASCII strings may outweigh the benefit
+            // so for now we limit it to 1024 bytes.
+            // NOTE: Consider special-casing len = 0 if it's a common case.
+            //
+            const int maxLen = 1024;
+            if ((len > 0) && (len * sizeof(uint16_t) < maxLen) && ((size_t)offset < INT_MAX))
+            {
+                uint8_t buffer[maxLen];
+
+                // getObjectContent is expected to validate the input and return false if something is wrong.
+                if (info.compCompHnd->getObjectContent(objHandle, buffer, (int)len * sizeof(uint16_t), (int)offset))
+                {
+                    // Convert buffer (UTF16 data) to ASCII
+                    for (int i = 0; i < (int)len; i++)
+                    {
+                        uint16_t ch = ((uint16_t*)buffer)[i];
+                        if (ch > 127)
+                        {
+                            JITDUMP("... contains non-ASCII chararacters - returns null\n")
+                            call->gtVNPair.SetBoth(vnStore->VNForNull());
+                            return true;
+                        }
+
+                        // Use the same buffer to store the UTF8 representation.
+                        buffer[i] = (uint8_t)ch;
+                    }
+                    JITDUMP("Success!\n")
+
+                    // TODO: either emit buffer to the data section or ask VM to save it somewhere and return a pointer
+                    // the latter has an advantage of not having to save the same ASCII data multiple times if that's
+                    // actually a problem.
+
+                    // return null for now
+                    call->gtVNPair.SetBoth(vnStore->VNForNull());
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 void Compiler::fgValueNumberCastHelper(GenTreeCall* call)

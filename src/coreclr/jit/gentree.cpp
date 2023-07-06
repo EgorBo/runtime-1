@@ -2094,10 +2094,6 @@ regMaskTP GenTreeCall::GetOtherRegMask() const
 //    have other global side effects (e.g. class constructors, finalizers),
 //    but is allowed to throw an exception.
 //
-//    NOTE: this call currently only returns true if the call target is a
-//    helper method that is known to be pure. No other analysis is
-//    performed.
-//
 // Arguments:
 //    compiler - the compiler context.
 //
@@ -2106,8 +2102,24 @@ regMaskTP GenTreeCall::GetOtherRegMask() const
 //
 bool GenTreeCall::IsPure(Compiler* compiler) const
 {
-    return (gtCallType == CT_HELPER) &&
-           compiler->s_helperCallProperties.IsPure(compiler->eeGetHelperNum(gtCallMethHnd));
+    if (gtCallType == CT_HELPER)
+    {
+        return compiler->s_helperCallProperties.IsPure(compiler->eeGetHelperNum(gtCallMethHnd));
+    }
+    else if ((gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC) != 0)
+    {
+        // TryGetAsciiConstData is guaranteed to be pure because it always returns either
+        // null or a hand-crafted global pointer to const ASCII data.
+        // And we know that even if it may require CCTOR we're fine folding it.
+        // It might not be the case for other intrinsics so be careful allowing them here.
+        const NamedIntrinsic ni = compiler->lookupNamedIntrinsic(gtCallMethHnd);
+        if (ni == NI_System_Text_UTF8Encoding_UTF8EncodingSealed_TryGetAsciiConstData)
+        {
+            return true;
+        }
+        // Perhaps, some other intrinsics are 100% pure as well.
+    }
+    return false;
 }
 
 //------------------------------------------------------------------------------
@@ -2290,6 +2302,13 @@ bool GenTreeCall::HasSideEffects(Compiler* compiler, bool ignoreExceptions, bool
     // calls that can prove them side-effect-free.
     if (gtCallType != CT_HELPER)
     {
+        // Tricky special case: If non-helper call still states it's pure then we can consider it as side-effect free
+        // see IsPure impl.
+        if (IsPure(compiler))
+        {
+            assert((gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC) != 0);
+            return false;
+        }
         return true;
     }
 

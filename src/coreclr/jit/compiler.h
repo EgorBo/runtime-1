@@ -3805,6 +3805,8 @@ public:
 
     GDVProbeType compClassifyGDVProbeType(GenTreeCall* call);
 
+    NamedIntrinsic lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method);
+
     //=========================================================================
     //                          PROTECTED
     //=========================================================================
@@ -3964,7 +3966,6 @@ protected:
                                 bool                  isMax,
                                 bool                  isMagnitude,
                                 bool                  isNumber);
-    NamedIntrinsic lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method);
     NamedIntrinsic lookupPrimitiveFloatNamedIntrinsic(CORINFO_METHOD_HANDLE method, const char* methodName);
     NamedIntrinsic lookupPrimitiveIntNamedIntrinsic(CORINFO_METHOD_HANDLE method, const char* methodName);
     GenTree* impUnsupportedNamedIntrinsic(unsigned              helper,
@@ -5124,6 +5125,9 @@ public:
 
     // Does value-numbering for a call.  We interpret some helper calls.
     void fgValueNumberCall(GenTreeCall* call);
+
+    // Does value-numbering for a call with [Intrinsic].
+    bool fgValueNumberIntrinsicCall(GenTreeCall* call);
 
     // Does value-numbering for a helper representing a cast operation.
     void fgValueNumberCastHelper(GenTreeCall* call);

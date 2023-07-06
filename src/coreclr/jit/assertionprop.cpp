@@ -2659,9 +2659,9 @@ GenTree* Compiler::optVNConstantPropOnTree(BasicBlock* block, GenTree* tree)
 
         case TYP_REF:
         {
-            if (tree->TypeGet() == TYP_REF)
+            if (tree->TypeIs(TYP_REF, TYP_BYREF))
             {
-                conValTree = gtNewIconNode(vnStore->ConstantValue<size_t>(vnCns), TYP_REF);
+                conValTree = gtNewIconNode(vnStore->ConstantValue<size_t>(vnCns), tree->TypeGet());
             }
         }
         break;

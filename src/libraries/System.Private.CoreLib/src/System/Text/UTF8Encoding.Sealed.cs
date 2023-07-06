@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace System.Text
 {
@@ -147,12 +149,63 @@ namespace System.Text
                 return new string(new ReadOnlySpan<char>(ref *pDestination, charsWritten)); // this overload of ROS ctor doesn't validate length
             }
 
-            // TODO: Make this [Intrinsic] and handle JIT-time UTF8 encoding of literal `chars`.
+#if !MONO
             /// <inheritdoc/>
-            public override unsafe bool TryGetBytes(ReadOnlySpan<char> chars, Span<byte> bytes, out int bytesWritten)
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public override bool TryGetBytes(ReadOnlySpan<char> chars, Span<byte> bytes, out int bytesWritten)
             {
-                return base.TryGetBytes(chars, bytes, out bytesWritten);
+                ref char pSrc = ref MemoryMarshal.GetReference(chars);
+                ref byte pDst = ref MemoryMarshal.GetReference(bytes);
+                int srcLength = chars.Length;
+                int dstLength = bytes.Length;
+
+                // If JIT sees that "chars" is effectively a constant utf16 string and all
+                // characters are in the ASCII range, it will fold TryGetAsciiConstData call to
+                // return an non-null pointer to a pre-saved UTF8 representation of that string.
+                ref byte pAsciiSrc = ref TryGetAsciiConstData(ref pSrc, srcLength);
+                if (!Unsafe.IsNullRef(ref pAsciiSrc) && dstLength >= srcLength)
+                {
+                    // CopyBlockUnaligned is expected to be unrolled and vectorized
+                    Unsafe.CopyBlockUnaligned(ref pDst, ref pAsciiSrc, (uint)srcLength);
+
+                    bytesWritten = srcLength;
+                    return true;
+                }
+
+                // Fallback. NoInlining slightly regresses its performance for non-constant data, but the
+                // potential benefits outweigh the cost since this API will be frequently used under the
+                // hood of UTF8 string interpolation.
+                return TryGetBytesFallback(ref pSrc, srcLength, ref pDst, dstLength, out bytesWritten);
+
+                [MethodImpl(MethodImplOptions.NoInlining)]
+                unsafe bool TryGetBytesFallback(ref char pSrc, int srcLen, ref byte pDst, int dstLen, out int bytesWritten)
+                {
+                    fixed (char* charsPtr = &pSrc)
+                    fixed (byte* bytesPtr = &pDst)
+                    {
+                        int written = GetBytesCommon(charsPtr, srcLen, bytesPtr, dstLen, throwForDestinationOverflow: false);
+                        if (written >= 0)
+                        {
+                            bytesWritten = written;
+                            return true;
+                        }
+
+                        bytesWritten = 0;
+                        return false;
+                    }
+                }
             }
+
+            [Intrinsic]
+            [MethodImpl(MethodImplOptions.NoInlining)]
+#pragma warning disable IDE0060 // Remove unused parameter
+            private static ref byte TryGetAsciiConstData(ref char pSrc, int length)
+#pragma warning restore IDE0060
+            {
+                // Intrinsified in JIT
+                return ref Unsafe.NullRef<byte>();
+            }
+#endif
         }
     }
 }
