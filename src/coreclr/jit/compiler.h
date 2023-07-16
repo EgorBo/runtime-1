@@ -5337,6 +5337,12 @@ public:
     template <bool (Compiler::*ExpansionFunction)(BasicBlock**, Statement*, GenTreeCall*)>
     bool fgExpandHelperForBlock(BasicBlock** pBlock);
 
+    template <bool (Compiler::* ExpansionFunction)(BasicBlock**, Statement*, GenTreeIntrinsic*)>
+    PhaseStatus fgExpandIntrinsic(bool skipRarelyRunBlocks);
+
+    template <bool (Compiler::* ExpansionFunction)(BasicBlock**, Statement*, GenTreeIntrinsic*)>
+    bool fgExpandIntrinsicForBlock(BasicBlock** pBlock);
+
     PhaseStatus fgExpandRuntimeLookups();
     bool fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call);
 
@@ -5345,6 +5351,9 @@ public:
 
     PhaseStatus fgExpandStaticInit();
     bool fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call);
+
+    PhaseStatus fgExpandIntrinsics();
+    bool fgExpandIntrinsicsForIntrinsic(BasicBlock** pBlock, Statement* stmt, GenTreeIntrinsic* intrinsic);
 
     PhaseStatus fgInsertGCPolls();
     BasicBlock* fgCreateGCPoll(GCPollType pollType, BasicBlock* block);

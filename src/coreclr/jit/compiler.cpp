@@ -5023,6 +5023,9 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     // Partially inline static initializations
     DoPhase(this, PHASE_EXPAND_STATIC_INIT, &Compiler::fgExpandStaticInit);
 
+    // Partially inline static initializations
+    DoPhase(this, PHASE_EXPAND_INTRINSICS, &Compiler::fgExpandIntrinsics);
+
     // Expand thread local access
     DoPhase(this, PHASE_EXPAND_TLS, &Compiler::fgExpandThreadLocalAccess);
 

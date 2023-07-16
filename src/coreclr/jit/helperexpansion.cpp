@@ -657,7 +657,7 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock** pBlock, Statement* 
         //
         //      mrs xt, tpidr_elf0
         //      mov xd, [xt+cns]
-        tlsValue = gtNewIconHandleNode(0, GTF_ICON_TLS_HDL);
+        tlsValue                  = gtNewIconHandleNode(0, GTF_ICON_TLS_HDL);
 #elif defined(TARGET_LOONGARCH64)
         // Code sequence to access thread local variable on linux/loongarch64:
         //
@@ -880,6 +880,78 @@ bool Compiler::fgExpandHelperForBlock(BasicBlock** pBlock)
             }
 
             if ((this->*ExpansionFunction)(pBlock, stmt, tree->AsCall()))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+//------------------------------------------------------------------------------
+// fgExpandIntrinsic: Expand the helper using ExpansionFunction.
+//
+// Returns:
+//    true if there was any helper that was expanded.
+//
+template <bool (Compiler::*ExpansionFunction)(BasicBlock**, Statement*, GenTreeIntrinsic*)>
+PhaseStatus Compiler::fgExpandIntrinsic(bool skipRarelyRunBlocks)
+{
+    PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+    for (BasicBlock* block = fgFirstBB; block != nullptr; block = block->bbNext)
+    {
+        if (skipRarelyRunBlocks && block->isRunRarely())
+        {
+            // It's just an optimization - don't waste time on rarely executed blocks
+            continue;
+        }
+
+        // Expand and visit the last block again to find more candidates
+        INDEBUG(BasicBlock* origBlock = block);
+        while (fgExpandIntrinsicForBlock<ExpansionFunction>(&block))
+        {
+            result = PhaseStatus::MODIFIED_EVERYTHING;
+#ifdef DEBUG
+            assert(origBlock != block);
+            origBlock = block;
+#endif
+        }
+    }
+
+    if ((result == PhaseStatus::MODIFIED_EVERYTHING) && opts.OptimizationEnabled())
+    {
+        fgReorderBlocks(/* useProfileData */ false);
+        fgUpdateChangedFlowGraph(FlowGraphUpdates::COMPUTE_BASICS);
+    }
+
+    return result;
+}
+
+//------------------------------------------------------------------------------
+// fgExpandIntrinsicForBlock: Scans through all the statements of the `block` and
+//    invoke `fgExpand` if any of the tree node was a helper call.
+//
+// Arguments:
+//    pBlock   - Block containing the helper call to expand. If expansion is performed,
+//               this is updated to the new block that was an outcome of block splitting.
+//    fgExpand - function that expands the helper call
+//
+// Returns:
+//    true if a helper was expanded
+//
+template <bool (Compiler::*ExpansionFunction)(BasicBlock**, Statement*, GenTreeIntrinsic*)>
+bool Compiler::fgExpandIntrinsicForBlock(BasicBlock** pBlock)
+{
+    for (Statement* const stmt : (*pBlock)->NonPhiStatements())
+    {
+        for (GenTree* const tree : stmt->TreeList())
+        {
+            if (!tree->OperIs(GT_INTRINSIC))
+            {
+                continue;
+            }
+
+            if ((this->*ExpansionFunction)(pBlock, stmt, tree->AsIntrinsic()))
             {
                 return true;
             }
@@ -1175,5 +1247,143 @@ bool Compiler::fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, G
 
     // Clear gtInitClsHnd as a mark that we've already visited this call
     call->gtInitClsHnd = NO_CLASS_HANDLE;
+    return true;
+}
+
+PhaseStatus Compiler::fgExpandIntrinsics()
+{
+    PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+
+    if (opts.OptimizationDisabled())
+    {
+        JITDUMP("Optimizations aren't allowed - bail out.\n")
+        return result;
+    }
+
+    // TODO: remove these conditions
+    if (opts.IsReadyToRun() || TARGET_POINTER_SIZE == 4)
+    {
+        return result;
+    }
+
+    if (opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT))
+    {
+        // The optimization comes with a codegen size increase
+        JITDUMP("Optimized for size - bail out.\n")
+        return result;
+    }
+
+    return fgExpandIntrinsic<&Compiler::fgExpandIntrinsicsForIntrinsic>(true);
+}
+
+bool Compiler::fgExpandIntrinsicsForIntrinsic(BasicBlock** pBlock, Statement* stmt, GenTreeIntrinsic* intrinsic)
+{
+    BasicBlock* block = *pBlock;
+    if (intrinsic->gtIntrinsicName != NI_System_Object_GetType)
+    {
+        return false;
+    }
+
+    DebugInfo debugInfo = stmt->GetDebugInfo();
+
+    // Split block right before the call tree
+    BasicBlock* prevBb       = block;
+    GenTree**   callUse      = nullptr;
+    Statement*  newFirstStmt = nullptr;
+    block                    = fgSplitBlockBeforeTree(block, stmt, intrinsic, &newFirstStmt, &callUse);
+    *pBlock                  = block;
+    assert(prevBb != nullptr && block != nullptr);
+
+    while ((newFirstStmt != nullptr) && (newFirstStmt != stmt))
+    {
+        fgMorphStmtBlockOps(block, newFirstStmt);
+        newFirstStmt = newFirstStmt->GetNextStmt();
+    }
+
+    unsigned resultLclNum         = lvaGrabTemp(true DEBUGARG("GetType result"));
+    lvaTable[resultLclNum].lvType = TYP_REF;
+
+    *callUse = gtClone(gtNewLclVarNode(resultLclNum, TYP_REF));
+
+    fgMorphStmtBlockOps(block, stmt);
+    gtUpdateStmtSideEffects(stmt);
+
+    unsigned exposedObjLclNum         = lvaGrabTemp(true DEBUGARG("exposed obj"));
+    lvaTable[exposedObjLclNum].lvType = TYP_I_IMPL;
+
+    BasicBlock* isInitedBlock = fgNewBBafter(BBJ_COND, prevBb, true);
+    isInitedBlock->bbFlags |= BBF_INTERNAL;
+
+    GenTree* objOp = intrinsic->gtGetOp1();
+    if (!objOp->IsLocal())
+    {
+        objOp = SpillExpression(this, objOp, isInitedBlock, debugInfo);
+    }
+
+// hard-coded offsets (x64 only) - to be queried from VM:
+#if _DEBUG
+    const int writeableDataOffset = 40;
+#else
+    const int writeableDataOffset = 32;
+#endif
+    const int exposedManagedObjOffset = 8;
+
+    GenTreeIndir* objClsHandle  = gtNewMethodTableLookup(gtClone(objOp));
+    GenTreeIndir* writeableData = gtNewIndir(TYP_I_IMPL, gtNewOperNode(GT_ADD, TYP_I_IMPL, objClsHandle,
+                                                                       gtNewIconNode(writeableDataOffset, TYP_I_IMPL)));
+    GenTreeIndir* exposedObjHandle =
+        gtNewIndir(TYP_I_IMPL, gtNewOperNode(GT_ADD, TYP_I_IMPL, writeableData,
+                                             gtNewIconNode(exposedManagedObjOffset, TYP_I_IMPL)));
+
+    // Save exposed object to a temp - we're going to use it twice.
+    fgInsertStmtAtEnd(isInitedBlock,
+                      fgNewStmtFromTree(gtNewStoreLclVarNode(exposedObjLclNum, exposedObjHandle), debugInfo));
+    isInitedBlock->bbCodeOffs    = block->bbCodeOffsEnd;
+    isInitedBlock->bbCodeOffsEnd = block->bbCodeOffsEnd;
+    fgInsertStmtAtEnd(isInitedBlock,
+                      fgNewStmtFromTree(
+                          gtNewOperNode(GT_JTRUE, TYP_VOID,
+                                        gtNewOperNode(GT_EQ, TYP_INT,
+                                                      gtNewOperNode(GT_AND, TYP_I_IMPL,
+                                                                    gtNewLclVarNode(exposedObjLclNum, TYP_I_IMPL),
+                                                                    gtNewIconNode(1, TYP_I_IMPL)),
+                                                      gtNewIconNode(0, TYP_I_IMPL)))));
+
+    // Fallback basic block
+    BasicBlock* fallbackBb =
+        fgNewBBFromTreeAfter(BBJ_NONE, isInitedBlock, gtNewStoreLclVarNode(resultLclNum, intrinsic), debugInfo, true);
+
+    // Fast-path basic block
+    GenTree* exposedObjCleaned =
+        gtNewOperNode(GT_SUB, TYP_I_IMPL, gtNewLclVarNode(exposedObjLclNum, TYP_I_IMPL), gtNewIconNode(1, TYP_I_IMPL));
+    GenTree*    fastpathValueDef = gtNewStoreLclVarNode(resultLclNum, exposedObjCleaned);
+    BasicBlock* fastPathBb       = fgNewBBFromTreeAfter(BBJ_ALWAYS, isInitedBlock, fastpathValueDef, debugInfo);
+
+    isInitedBlock->bbJumpDest = fallbackBb;
+    fastPathBb->bbJumpDest    = block;
+    fgRemoveRefPred(block, prevBb);
+    fgAddRefPred(isInitedBlock, prevBb);
+    fgAddRefPred(block, fallbackBb);
+    fgAddRefPred(block, fastPathBb);
+    fgAddRefPred(fallbackBb, isInitedBlock);
+    fgAddRefPred(fastPathBb, isInitedBlock);
+    block->inheritWeight(prevBb);
+    isInitedBlock->inheritWeight(prevBb);
+    fastPathBb->inheritWeight(prevBb);
+    fallbackBb->bbSetRunRarely();
+
+    //
+    // Update loop info if loop table is known to be valid
+    //
+    fastPathBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
+    fallbackBb->bbNatLoopNum    = prevBb->bbNatLoopNum;
+    isInitedBlock->bbNatLoopNum = prevBb->bbNatLoopNum;
+
+    // Extra step: merge prevBb with isInitedBb if possible
+    if (fgCanCompactBlocks(prevBb, isInitedBlock))
+    {
+        fgCompactBlocks(prevBb, isInitedBlock);
+    }
+
     return true;
 }
