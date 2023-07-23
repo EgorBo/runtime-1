@@ -1177,3 +1177,174 @@ bool Compiler::fgExpandStaticInitForCall(BasicBlock** pBlock, Statement* stmt, G
     call->gtInitClsHnd = NO_CLASS_HANDLE;
     return true;
 }
+
+//------------------------------------------------------------------------------
+// fgFreezeAllocators: replace normal heap allocators with _MAYBEFROZEN ones in
+//    static constructors if optimizations are allowed for them. The idea is to
+//    move "static readonly <gc>" fields to the frozen segments so JIT then can
+//    benefit from that in their consumers.
+//
+// Returns:
+//    Layout is never changed, hence, it's always MODIFIED_NOTHING.
+//
+PhaseStatus Compiler::fgFreezeAllocators()
+{
+    // We're not going to change layout
+    const PhaseStatus nothing = PhaseStatus::MODIFIED_NOTHING;
+
+    if ((info.compFlags & FLG_CCTOR) != FLG_CCTOR)
+    {
+        JITDUMP("Not a cctor.\n")
+        return nothing;
+    }
+
+    if (opts.OptimizationDisabled())
+    {
+        JITDUMP("Requires optimizations enabled\n")
+        return nothing;
+    }
+
+    if (!opts.jitFlags->IsSet(JitFlags::JIT_FLAG_FROZEN_ALLOC_ALLOWED))
+    {
+        JITDUMP("JIT_FLAG_FROZEN_ALLOC_ALLOWED is not set\n")
+        return nothing;
+    }
+
+    if (compHasBackwardJump || (compHndBBtabCount != 0))
+    {
+        JITDUMP("Layout is too complex (loops/EH)\n")
+        return nothing;
+    }
+
+    if (strcmp(info.compClassName, "Program") != 0)
+    {
+        return nothing;
+    }
+
+    fgDispBasicBlocks(true);
+
+    typedef SmallHashTable<ssize_t, GenTree*> FieldStoreMap;
+    FieldStoreMap fieldsStores(getAllocator());
+
+    // Step 1: we need to find all STOREINDs to static readonly fields
+    // and remember their values. We use a hash table to overwrite possible multiple stores and only
+    // respect the last one (we have a sort of execution-order walk here)
+    for (const BasicBlock* const block : Blocks())
+    {
+        for (const Statement* const stmt : block->NonPhiStatements())
+        {
+            for (GenTree* tree : stmt->TreeList())
+            {
+                if (tree != nullptr && tree->OperIs(GT_STOREIND) && tree->gtGetOp2()->TypeIs(TYP_REF))
+                {
+                    FieldSeq* fldSeq = nullptr;
+                    GenTree*  addr   = tree->gtGetOp1();
+                    if (addr->IsIconHandle(GTF_ICON_STATIC_HDL))
+                    {
+                        fldSeq = addr->AsIntCon()->gtFieldSeq;
+                    }
+                    else if (addr->OperIs(GT_ADD) && addr->gtGetOp2()->IsCnsIntOrI())
+                    {
+                        fldSeq = addr->gtGetOp2()->AsIntCon()->gtFieldSeq;
+                    }
+
+                    if ((fldSeq != nullptr) && (fldSeq->IsStaticField()))
+                    {
+                        const CORINFO_FIELD_HANDLE handle = fldSeq->GetFieldHandle();
+                        // TODO: add pIsReadOnly flag to isFieldStatic JIT-EE API, we don't want to use frozen
+                        // allocators
+                        // for non-readonly fields.
+                        bool isStatic = info.compCompHnd->isFieldStatic(handle);
+                        assert(isStatic);
+                        fieldsStores.AddOrUpdate(reinterpret_cast<ssize_t>(handle), tree->gtGetOp2());
+                    }
+                }
+            }
+        }
+    }
+
+    for (HashTableBase<ssize_t, GenTree*>::KeyValuePair kvp : fieldsStores)
+    {
+        GenTree* fieldStoreValue = kvp.Value();
+
+        if (fieldStoreValue->OperIs(GT_BOX))
+        {
+            // Box(Allocator)
+            fieldStoreValue = fieldStoreValue->gtGetOp1();
+        }
+
+        // fieldStoreValue is a value we save to a static readonly field. If that value is a newobj/newarr helper
+        // we can patch it to be _MAYBEFROZEN.
+        GenTreeCall* helperCall = nullptr;
+        if (fieldStoreValue->IsHelperCall())
+        {
+            // Allocator is right here
+            helperCall = fieldStoreValue->AsCall();
+        }
+        else if (fieldStoreValue->OperIs(GT_LCL_VAR))
+        {
+            // Use SSA data to get the definition of the local
+            const GenTreeLclVar* local = fieldStoreValue->AsLclVar();
+            if (local->HasSsaName())
+            {
+                const LclSsaVarDsc*  ssaData = lvaGetDesc(local)->GetPerSsaData(local->GetSsaNum());
+                GenTreeLclVarCommon* defNode = ssaData->GetDefNode();
+                if (defNode->OperIs(GT_STORE_LCL_VAR))
+                {
+                    if (defNode->gtGetOp1()->IsHelperCall())
+                    {
+                        helperCall = defNode->gtGetOp1()->AsCall();
+                    }
+                    else
+                    {
+                        // We might want to handle chains of assignments here if it's beneficial.
+                    }
+                }
+            }
+        }
+
+        if (helperCall != nullptr)
+        {
+            switch (eeGetHelperNum(helperCall->gtCallMethHnd))
+            {
+                // For nonR2R helpers it's simple - we just replace gtCallMethHnd
+
+                case CORINFO_HELP_NEWSFAST:
+                    helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
+                    break;
+
+                case CORINFO_HELP_NEWARR_1_DIRECT:
+                case CORINFO_HELP_NEWARR_1_VC:
+                case CORINFO_HELP_NEWARR_1_OBJ:
+                    helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWARR_1_MAYBEFROZEN);
+                    break;
+
+#ifdef FEATURE_READYTORUN
+                case CORINFO_HELP_READYTORUN_NEW:
+                {
+                    CORINFO_CLASS_HANDLE cls = helperCall->gtInitClsHnd;
+                    if (cls != NO_CLASS_HANDLE)
+                    {
+                        auto newCall =
+                            gtNewHelperCallNode(CORINFO_HELP_NEWFAST_MAYBEFROZEN, TYP_REF, gtNewIconEmbClsHndNode(cls));
+                        fgMorphCall(newCall);
+                        gtSetEvalOrder(newCall);
+
+                        gtDispTree(newCall);
+                        helperCall->ReplaceWith(newCall, this);
+                        gtUpdateTreeAncestorsSideEffects(helperCall);
+                    }
+                    printf("");
+                    // helperCall->gtCallMethHnd = eeFindHelper(CORINFO_HELP_NEWFAST_MAYBEFROZEN);
+                }
+                break;
+#endif
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    return PhaseStatus::MODIFIED_EVERYTHING;
+}

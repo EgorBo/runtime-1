@@ -2434,12 +2434,6 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     {
         opts.compFlags = CLFLG_MINOPT;
     }
-    // Don't optimize .cctors (except prejit) or if we're an inlinee
-    else if (!jitFlags->IsSet(JitFlags::JIT_FLAG_PREJIT) && ((info.compFlags & FLG_CCTOR) == FLG_CCTOR) &&
-             !compIsForInlining())
-    {
-        opts.compFlags = CLFLG_MINOPT;
-    }
 
     // Default value is to generate a blend of size and speed optimizations
     //
@@ -2448,7 +2442,7 @@ void Compiler::compInitOptions(JitFlags* jitFlags)
     // If the EE sets SIZE_OPT or if we are compiling a Class constructor
     // we will optimize for code size at the expense of speed
     //
-    if (jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT) || ((info.compFlags & FLG_CCTOR) == FLG_CCTOR))
+    if (jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT))
     {
         opts.compCodeOpt = SMALL_CODE;
     }
@@ -4980,6 +4974,14 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 DoPhase(this, PHASE_OPTIMIZE_INDEX_CHECKS, &Compiler::rangeCheckPhase);
             }
 
+            if (doValueNum)
+            {
+                // Replace normal object allocators with the their alternatives to, hopefully,
+                // allocate objects on frozen segments.
+                //
+                DoPhase(this, PHASE_FREEZE_ALLOCATORS, &Compiler::fgFreezeAllocators);
+            }
+
             if (doVNBasedDeadStoreRemoval)
             {
                 // Note: this invalidates SSA and value numbers on tree nodes.
@@ -6956,6 +6958,11 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         else if (compHasBackwardJump && ((info.compFlags & CORINFO_FLG_DISABLE_TIER0_FOR_LOOPS) != 0))
         {
             reason = "loop";
+        }
+
+        if (ISMETHOD(".cctor"))
+        {
+            reason = "cctor";
         }
 
         if (compHasBackwardJump && (reason == nullptr) && (JitConfig.TC_OnStackReplacement() > 0))

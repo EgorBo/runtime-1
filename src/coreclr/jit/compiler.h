@@ -5360,6 +5360,8 @@ public:
     PhaseStatus fgInsertGCPolls();
     BasicBlock* fgCreateGCPoll(GCPollType pollType, BasicBlock* block);
 
+    PhaseStatus fgFreezeAllocators();
+
     // Requires that "block" is a block that returns from
     // a finally.  Returns the number of successors (jump targets of
     // of blocks in the covered "try" that did a "LEAVE".)
