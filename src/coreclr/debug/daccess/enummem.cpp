@@ -18,6 +18,7 @@
 #include "typestring.h"
 #include "daccess.h"
 #include "binder.h"
+#include "frozenobjectheap.h"
 #include "runtimeinfo.h"
 
 #ifdef FEATURE_COMWRAPPERS
@@ -213,6 +214,8 @@ HRESULT ClrDataAccess::EnumMemCLRStatic(IN CLRDataEnumMemoryFlags flags)
         //
         ReportMem(m_dacGlobals.SystemDomain__m_pSystemDomain, sizeof(SystemDomain));
 
+        ReportMem(m_dacGlobals.SystemDomain__m_pFrozenObjectHeapManager, sizeof(FrozenObjectHeapManager));
+
         // We need IGCHeap pointer to make EEVersion work
         ReportMem(m_dacGlobals.dac__g_pGCHeap, sizeof(IGCHeap *));
 
@@ -344,6 +347,12 @@ HRESULT ClrDataAccess::EnumMemoryRegionsWorkerHeap(IN CLRDataEnumMemoryFlags fla
 
     // Dump the Debugger object data needed
     CATCH_ALL_EXCEPT_RETHROW_COR_E_OPERATIONCANCELLED( g_pDebugger->EnumMemoryRegions(flags); )
+
+    //PTR_FrozenObjectHeapManager fohManager = SystemDomain::GetFrozenObjectHeapManager();
+    //if (fohManager != NULL)
+    //{
+    //    CATCH_ALL_EXCEPT_RETHROW_COR_E_OPERATIONCANCELLED(fohManager->EnumMemoryRegions(flags); )
+    //}
 
     // now dump the memory get dragged in by using DAC API implicitly.
     m_dumpStats.m_cbImplicitly = m_instances.DumpAllInstances(m_enumMemCb);

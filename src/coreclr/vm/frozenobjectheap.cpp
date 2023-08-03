@@ -4,6 +4,7 @@
 #include "common.h"
 #include "frozenobjectheap.h"
 
+#ifndef DACCESS_COMPILE
 // Default size to reserve for a frozen segment
 #define FOH_SEGMENT_DEFAULT_SIZE (4 * 1024 * 1024)
 // Size to commit on demand in that reserved space
@@ -146,6 +147,8 @@ FrozenObjectSegment::FrozenObjectSegment(size_t sizeHint) :
     si.ibCommit = FOH_COMMIT_SIZE;
     si.ibReserved = m_Size;
 
+    printf("[FOH]: %p\n", committedAlloc);
+
     m_SegmentHandle = GCHeapUtilities::GetGCHeap()->RegisterFrozenSegment(&si);
     if (m_SegmentHandle == nullptr)
     {
@@ -233,3 +236,35 @@ Object* FrozenObjectSegment::GetNextObject(Object* obj) const
     // Current object is the last one in the segment
     return nullptr;
 }
+
+#else // !DACCESS_COMPILE
+void FrozenObjectHeapManager::EnumMemoryRegions(CLRDataEnumMemoryFlags flags)
+{
+    SUPPORTS_DAC;
+    DAC_ENUM_DTHIS();
+
+    FILE* f = fopen("C:\\prj\\egor\\tt.txt", "a");
+    fprintf(f, "hey\n");
+    fclose(f);
+
+    if (m_CurrentSegment != NULL)
+    {
+        m_CurrentSegment->EnumMemoryRegions(flags);
+    }
+
+    //unsigned count = m_FrozenSegments.GetCount();
+    //PTR_FrozenObjectSegment *segments = m_FrozenSegments.GetElements();
+    //for (unsigned segId = 0; segId < count; count++)
+    //{
+    //    segments[segId]->EnumMemoryRegions(flags);
+    //}
+}
+
+void FrozenObjectSegment::EnumMemoryRegions(CLRDataEnumMemoryFlags flags)
+{
+    SUPPORTS_DAC;
+    DAC_ENUM_DTHIS();
+
+    DacEnumMemoryRegion(dac_cast<TADDR>(m_pStart), m_pCurrent - m_pStart);
+}
+#endif // DACCESS_COMPILE
