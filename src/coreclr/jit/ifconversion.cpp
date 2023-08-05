@@ -706,9 +706,70 @@ bool OptIfConversionDsc::optIfConvert()
         selectType       = genActualType(m_thenOperation.node);
     }
 
-    // Create a select node.
-    GenTreeConditional* select =
-        m_comp->gtNewConditionalNode(GT_SELECT, m_cond, selectTrueInput, selectFalseInput, selectType);
+    GenTree* select = nullptr;
+#if defined(FEATURE_HW_INTRINSICS)
+    auto isSimdEqOper = [](GenTree* tree) -> bool {
+        if (!tree->OperIsHWIntrinsic())
+        {
+            return false;
+        }
+        switch (tree->AsHWIntrinsic()->GetHWIntrinsicId())
+        {
+            case NI_Vector128_EqualsAll:
+            case NI_Vector128_op_Equality:
+#if defined(TARGET_XARCH)
+            case NI_Vector256_EqualsAll:
+            case NI_Vector256_op_Equality:
+            case NI_Vector512_EqualsAll:
+            case NI_Vector512_op_Equality:
+#endif
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    // Convert
+    //   select = (vec1 == vec2) == false ? false : vec3 == vec4
+    //
+    // to
+    //
+    //   select = ((v1 ^ v2) | (v3 ^ v4)) == zero-vector
+    //
+    // There can be other SIMD shapes we might want to handle here in future
+    if (m_cond->OperIs(GT_EQ) && selectTrueInput->IsIntegralConst(0) && isSimdEqOper(selectFalseInput))
+    {
+        GenTree* condOp1 = m_cond->gtGetOp1();
+        GenTree* condOp2 = m_cond->gtGetOp2();
+        if (isSimdEqOper(condOp1) && condOp2->IsIntegralConst(0))
+        {
+            GenTree* v1 = condOp1->AsHWIntrinsic()->Op(1);
+            GenTree* v2 = condOp1->AsHWIntrinsic()->Op(2);
+            GenTree* v3 = selectFalseInput->AsHWIntrinsic()->Op(1);
+            GenTree* v4 = selectFalseInput->AsHWIntrinsic()->Op(2);
+
+            assert(v1->TypeIs(v2->TypeGet()) && v3->TypeIs(v4->TypeGet()) && v1->TypeIs(v3->TypeGet()));
+
+            const var_types   type     = v1->TypeGet();
+            const unsigned    simdSize = genTypeSize(type);
+            const CorInfoType baseType = CORINFO_TYPE_INT;
+
+            // baseJitType doesn't matter here so we use CORINFO_TYPE_INT
+            // We don't have to check any ISAs here because we've already seen the SIMD equality intrinsic
+            GenTree* xor1 = m_comp->gtNewSimdBinOpNode(GT_XOR, type, v1, v2, baseType, simdSize);
+            GenTree* xor2 = m_comp->gtNewSimdBinOpNode(GT_XOR, type, v3, v4, baseType, simdSize);
+            GenTree* orr  = m_comp->gtNewSimdBinOpNode(GT_OR, type, xor1, xor2, baseType, simdSize);
+            select =
+                m_comp->gtNewSimdCmpOpAllNode(GT_EQ, TYP_BOOL, orr, m_comp->gtNewZeroConNode(type), baseType, simdSize);
+        }
+    }
+#endif
+
+    if (select == nullptr)
+    {
+        // Create a select node.
+        select = m_comp->gtNewConditionalNode(GT_SELECT, m_cond, selectTrueInput, selectFalseInput, selectType);
+    }
     m_thenOperation.node->AddAllEffectsFlags(select);
 
     // Use the select as the source of the Then operation.
