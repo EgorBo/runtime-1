@@ -300,15 +300,15 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
         //         goto fallbackBb;
         //     ...
         //
-        // nullcheckBb(BBJ_COND):               [weight: 0.8]
+        // nullcheckBb(BBJ_COND):               [weight: 1.0]
         //     if (*fastPathValue == null)
         //         goto fallbackBb;
         //
-        // fastPathBb(BBJ_ALWAYS):              [weight: 0.64]
+        // fastPathBb(BBJ_ALWAYS):              [weight: 1.0]
         //     rtLookupLcl = *fastPathValue;
         //     goto block;
         //
-        // fallbackBb(BBJ_NONE):                [weight: 0.36]
+        // fallbackBb(BBJ_NONE):                [weight: 0.0]
         //     rtLookupLcl = HelperCall();
         //
         // block(...):                          [weight: 1.0]
@@ -371,21 +371,10 @@ bool Compiler::fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stm
     if (needsSizeCheck)
     {
         sizeCheckBb->inheritWeight(prevBb);
-        // 80% chance we pass nullcheck
-        nullcheckBb->inheritWeightPercentage(sizeCheckBb, 80);
-        // 64% (0.8 * 0.8) chance we pass both nullcheck and sizecheck
-        fastPathBb->inheritWeightPercentage(nullcheckBb, 80);
-        // 100-64=36% chance we fail either nullcheck or sizecheck
-        fallbackBb->inheritWeightPercentage(sizeCheckBb, 36);
     }
-    else
-    {
-        nullcheckBb->inheritWeight(prevBb);
-        // 80% chance we pass nullcheck
-        fastPathBb->inheritWeightPercentage(nullcheckBb, 80);
-        // 20% chance we fail nullcheck (TODO: Consider making it cold (0%))
-        fallbackBb->inheritWeightPercentage(nullcheckBb, 20);
-    }
+    nullcheckBb->inheritWeight(prevBb);
+    fastPathBb->inheritWeight(prevBb);
+    fallbackBb->bbSetRunRarely();
 
     //
     // Update loop info
