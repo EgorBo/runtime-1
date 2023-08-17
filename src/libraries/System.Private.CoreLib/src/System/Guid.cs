@@ -1418,75 +1418,15 @@ namespace System
             return true;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#pragma warning disable IDE0060
+        [MethodImpl(MethodImplOptions.NoInlining)]
         [CompExactlyDependsOn(typeof(Ssse3))]
         [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
         private static (Vector128<byte>, Vector128<byte>, Vector128<byte>) FormatGuidVector128Utf8(Guid value, bool useDashes)
         {
-            Debug.Assert((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && BitConverter.IsLittleEndian);
-            // Vectorized implementation for D, N, P and B formats:
-            // [{|(]dddddddd[-]dddd[-]dddd[-]dddd[-]dddddddddddd[}|)]
-
-            Vector128<byte> hexMap = Vector128.Create(
-                (byte)'0', (byte)'1', (byte)'2', (byte)'3',
-                (byte)'4', (byte)'5', (byte)'6', (byte)'7',
-                (byte)'8', (byte)'9', (byte)'a', (byte)'b',
-                (byte)'c', (byte)'d', (byte)'e', (byte)'f');
-
-            Vector128<byte> srcVec = Unsafe.As<Guid, Vector128<byte>>(ref value);
-            (Vector128<byte> hexLow, Vector128<byte> hexHigh) =
-                HexConverter.AsciiToHexVector128(srcVec, hexMap);
-
-            // because of Guid's layout (int _a, short _b, _c, <8 byte fields>)
-            // we have to shuffle some bytes for _a, _b and _c
-            hexLow = Vector128.Shuffle(hexLow.AsInt16(), Vector128.Create(3, 2, 1, 0, 5, 4, 7, 6)).AsByte();
-
-            if (useDashes)
-            {
-                // We divide 32 bytes into 3 x Vector128<byte>:
-                //
-                // ________-____-____-____-____________
-                // xxxxxxxxxxxxxxxx
-                //                     yyyyyyyyyyyyyyyy
-                //         zzzzzzzzzzzzzzzz
-                //
-                // Vector "x" - just one dash, shift all elements after it.
-                Vector128<byte> vecX = Vector128.Shuffle(hexLow,
-                    Vector128.Create(0x706050403020100, 0xD0CFF0B0A0908FF).AsByte());
-
-                // Vector "y" - same here.
-                Vector128<byte> vecY = Vector128.Shuffle(hexHigh,
-                    Vector128.Create(0x7060504FF030201, 0xF0E0D0C0B0A0908).AsByte());
-
-                // Vector "z" - we need to merge some elements of hexLow with hexHigh and add 4 dashes.
-                Vector128<byte> vecZ;
-                Vector128<byte> dashesMask = Vector128.Create(0x00002D000000002D, 0x2D000000002D0000).AsByte();
-                if (AdvSimd.Arm64.IsSupported)
-                {
-                    // Arm64 allows shuffling values using a 32-byte wide look-up table consisting of two 128-bit registers.
-                    // Each byte in the second arg represents a value between 0 to 31 that acts as an index in the look-up table.
-                    // Now we can create a "z" vector by selecting 12 values starting from the 9th element (index 0x08) and
-                    // leaving gaps for dashes. Thus, the wider look-up table allows combining two shuffles, as used in the
-                    // generic else-case, into a single instruction on Arm64.
-                    Vector128<byte> mid = AdvSimd.Arm64.VectorTableLookup((hexLow, hexHigh),
-                        Vector128.Create(0x0D0CFF0B0A0908FF, 0xFF13121110FF0F0E).AsByte());
-                    vecZ = (mid | dashesMask);
-                }
-                else
-                {
-                    Vector128<byte> mid1 = Vector128.Shuffle(hexLow,
-                        Vector128.Create(0x0D0CFF0B0A0908FF, 0xFFFFFFFFFFFF0F0E).AsByte());
-                    Vector128<byte> mid2 = Vector128.Shuffle(hexHigh,
-                        Vector128.Create(0xFFFFFFFFFFFFFFFF, 0xFF03020100FFFFFF).AsByte());
-                    vecZ = (mid1 | mid2 | dashesMask);
-                }
-
-                return (vecX, vecY, vecZ);
-            }
-
-            // N format - no dashes.
-            return (hexLow, hexHigh, default);
+            return (Vector128<byte>.Zero, Vector128<byte>.Zero, Vector128<byte>.Zero);
         }
+#pragma warning restore IDE0060
 
         //
         // IComparisonOperators

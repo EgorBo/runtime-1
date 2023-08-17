@@ -414,7 +414,7 @@ namespace ILCompiler
 
             if (canInline)
             {
-                if (CorInfoImpl.ShouldCodeNotBeCompiledIntoFinalImage(_instructionSetSupport, calleeMethod))
+                if (CorInfoImpl.ShouldCodeNotBeCompiledIntoFinalImage(_instructionSetSupport, calleeMethod, out _))
                     canInline = false;
             }
 

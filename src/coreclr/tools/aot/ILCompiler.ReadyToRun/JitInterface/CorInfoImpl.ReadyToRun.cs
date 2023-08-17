@@ -536,7 +536,7 @@ namespace Internal.JitInterface
                 // Special methods on delegate types
                 return true;
             }
-            if (ShouldCodeNotBeCompiledIntoFinalImage(instructionSetSupport, methodNeedingCode))
+            if (ShouldCodeNotBeCompiledIntoFinalImage(instructionSetSupport, methodNeedingCode, out _))
             {
                 return true;
             }
@@ -544,13 +544,12 @@ namespace Internal.JitInterface
             return false;
         }
 
-        public static bool ShouldCodeNotBeCompiledIntoFinalImage(InstructionSetSupport instructionSetSupport, MethodDesc method)
+        public static bool ShouldCodeNotBeCompiledIntoFinalImage(InstructionSetSupport instructionSetSupport, MethodDesc method, out InstructionSet[] opportunisticIsas)
         {
             EcmaMethod ecmaMethod = method.GetTypicalMethodDefinition() as EcmaMethod;
 
+            opportunisticIsas = Array.Empty<InstructionSet>();
             var metadataReader = ecmaMethod.MetadataReader;
-            var stringComparer = metadataReader.StringComparer;
-
             var handle = ecmaMethod.Handle;
 
             List<TypeDesc> compExactlyDependsOnList = null;
@@ -581,19 +580,17 @@ namespace Internal.JitInterface
                         TypeDesc typeForBypass = fixedArguments[0].Value as TypeDesc;
                         if (typeForBypass != null)
                         {
-                            if (compExactlyDependsOnList == null)
-                                compExactlyDependsOnList = new List<TypeDesc>();
-
+                            compExactlyDependsOnList ??= new List<TypeDesc>();
                             compExactlyDependsOnList.Add(typeForBypass);
                         }
                     }
                 }
             }
 
+            List<InstructionSet> opportunisticIsaList = null;
             if (compExactlyDependsOnList != null && compExactlyDependsOnList.Count > 0)
             {
-                // Default to true, and set to false if at least one of the types is actually supported in the current environment, and none of the
-                // intrinsic types are in an opportunistic state.
+                // Default to true, and set to false if at least one of the types is actually supported in the current environment
                 bool doBypass = true;
 
                 foreach (var intrinsicType in compExactlyDependsOnList)
@@ -604,15 +601,32 @@ namespace Internal.JitInterface
                         // This instruction set isn't supported on the current platform at all.
                         continue;
                     }
-                    if (instructionSetSupport.IsInstructionSetSupported(instructionSet) || instructionSetSupport.IsInstructionSetExplicitlyUnsupported(instructionSet))
+
+                    if (instructionSetSupport.IsInstructionSetSupported(instructionSet) ||
+                        instructionSetSupport.IsInstructionSetExplicitlyUnsupported(instructionSet))
                     {
                         doBypass = false;
                     }
                     else
                     {
-                        // If we reach here this is an instruction set generally supported on this platform, but we don't know what the behavior will be at runtime
-                        return true;
+                        if (instructionSetSupport.IsInstructionSetOptimisticallySupported(instructionSet))
+                        {
+                            opportunisticIsaList ??= new List<InstructionSet>();
+                            opportunisticIsaList.Add(instructionSet);
+                            doBypass = false;
+                        }
+                        else
+                        {
+                            // If we reach here this is an instruction set generally supported on this platform, but we don't know what the behavior will be at runtime
+                            return true;
+                        }
                     }
+                }
+
+                if (opportunisticIsaList?.Count > 0)
+                {
+                    // Method has opportunistic ISA dependencies.
+                    opportunisticIsas = opportunisticIsaList.ToArray();
                 }
 
                 return doBypass;

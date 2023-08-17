@@ -538,6 +538,18 @@ namespace Internal.JitInterface
                 }
             }
 
+            // Now check if the method has any opportunistic instruction defined via the [CompExactlyDependsOn] attribute
+            ShouldCodeNotBeCompiledIntoFinalImage(baselineSupport, _methodCodeNode.Method, out InstructionSet[] opportunisticIsas);
+
+            if (opportunisticIsas.Length > 0)
+            {
+                needPerMethodInstructionSetFixup = true;
+                foreach (InstructionSet opportunisticIsa in opportunisticIsas)
+                {
+                    _actualInstructionSetSupported.AddInstructionSet(opportunisticIsa);
+                }
+            }
+
             if (needPerMethodInstructionSetFixup)
             {
                 TargetArchitecture architecture = _compilation.TypeSystemContext.Target.Architecture;
