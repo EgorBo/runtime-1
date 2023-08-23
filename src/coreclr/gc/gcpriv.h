@@ -2380,7 +2380,8 @@ private:
 #ifdef FEATURE_BASICFREEZE
     PER_HEAP_METHOD BOOL insert_ro_segment (heap_segment* seg);
     PER_HEAP_METHOD void remove_ro_segment (heap_segment* seg);
-    PER_HEAP_METHOD void update_ro_segment (heap_segment* seg, uint8_t* allocated, uint8_t* committed);
+    PER_HEAP_METHOD void begin_updating_frozen_segments ();
+    PER_HEAP_METHOD void end_updating_frozen_segments ();
 #endif //FEATURE_BASICFREEZE
     PER_HEAP_METHOD BOOL set_ro_segment_in_range (heap_segment* seg);
 #ifndef USE_REGIONS

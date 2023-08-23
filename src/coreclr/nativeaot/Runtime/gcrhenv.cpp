@@ -380,7 +380,12 @@ GcSegmentHandle RedhawkGCInterface::RegisterFrozenSegment(void * pSection, size_
     seginfo.ibCommit        = seginfo.ibAllocated;
     seginfo.ibReserved      = seginfo.ibAllocated;
 
-    return (GcSegmentHandle)GCHeapUtilities::GetGCHeap()->RegisterFrozenSegment(&seginfo);
+    IGCHeap* heap = GCHeapUtilities::GetGCHeap();
+    heap->BeginUpdatingFrozenSegments();
+    GcSegmentHandle retVal = (GcSegmentHandle)heap->RegisterFrozenSegment(&seginfo);
+    heap->EndUpdatingFrozenSegments();
+
+    return retVal;
 #else // FEATURE_BASICFREEZE
     return NULL;
 #endif // FEATURE_BASICFREEZE

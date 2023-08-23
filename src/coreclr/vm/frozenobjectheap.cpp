@@ -11,7 +11,6 @@
 
 FrozenObjectHeapManager::FrozenObjectHeapManager():
     m_Crst(CrstFrozenObjectHeap, CRST_UNSAFE_ANYMODE),
-    m_SegmentRegistrationCrst(CrstFrozenObjectHeap, CRST_UNSAFE_ANYMODE),
     m_CurrentSegment(nullptr)
 {
 }
@@ -40,7 +39,6 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
     size_t curSegSizeCommitted = 0;
 
     {
-        GCX_PREEMP();
         {
             CrstHolder ch(&m_Crst);
 
@@ -96,13 +94,7 @@ Object* FrozenObjectHeapManager::TryAllocateObject(PTR_MethodTable type, size_t 
         } // end of m_Crst lock
 
         // Let GC know about the new segment or changes in it.
-        // We do it under a new lock because the main one (m_Crst) can be used by Profiler in a GC's thread
-        // and that might cause deadlocks since RegisterFrozenSegment may stuck on GC's lock.
-        {
-            CrstHolder regLock(&m_SegmentRegistrationCrst);
-            curSeg->RegisterOrUpdate(curSegmentCurrent, curSegSizeCommitted);
-        }
-
+        curSeg->RegisterOrUpdate(curSegmentCurrent, curSegSizeCommitted);
     } // end of GCX_PREEMP
 
     if (publish)
@@ -166,6 +158,9 @@ FrozenObjectSegment::FrozenObjectSegment(size_t sizeHint) :
 
 void FrozenObjectSegment::RegisterOrUpdate(uint8_t* current, size_t sizeCommited)
 {
+    IGCHeap* heap = GCHeapUtilities::GetGCHeap();
+    heap->BeginUpdatingFrozenSegments();
+
     if (!IsRegistered())
     {
         // Other threads won't touch these fields until we set m_IsRegistered to true
@@ -180,7 +175,7 @@ void FrozenObjectSegment::RegisterOrUpdate(uint8_t* current, size_t sizeCommited
         si.ibReserved = m_Size;
 
         // NOTE: RegisterFrozenSegment may take a GC lock inside.
-        m_SegmentHandle = GCHeapUtilities::GetGCHeap()->RegisterFrozenSegment(&si);
+        m_SegmentHandle = heap->RegisterFrozenSegment(&si);
         if (m_SegmentHandle == nullptr)
         {
             ThrowOutOfMemory();
@@ -191,8 +186,7 @@ void FrozenObjectSegment::RegisterOrUpdate(uint8_t* current, size_t sizeCommited
     {
         if (current > VolatileLoad(&m_pCurrentRegistered))
         {
-            GCHeapUtilities::GetGCHeap()->UpdateFrozenSegment(
-                m_SegmentHandle, current, m_pStart + sizeCommited);
+            heap->UpdateFrozenSegment(m_SegmentHandle, current, m_pStart + sizeCommited);
 
             // Profiler thread won't hold the registration lock, but, presumably, it won't see these values randomly
             // because UpdateFrozenSegment will stuck in GC's lock while profiler is enumerating frozen segments
@@ -207,6 +201,7 @@ void FrozenObjectSegment::RegisterOrUpdate(uint8_t* current, size_t sizeCommited
             // Some other thread already advanced it.
         }
     }
+    heap->EndUpdatingFrozenSegments();
 }
 
 Object* FrozenObjectSegment::TryAllocateObject(PTR_MethodTable type, size_t objectSize)

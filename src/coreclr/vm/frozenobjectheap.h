@@ -31,7 +31,6 @@ public:
 
 private:
     Crst m_Crst;
-    Crst m_SegmentRegistrationCrst;
     SArray<FrozenObjectSegment*> m_FrozenSegments;
     FrozenObjectSegment* m_CurrentSegment;
 

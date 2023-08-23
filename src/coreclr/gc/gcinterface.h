@@ -1008,6 +1008,12 @@ public:
     // Updates given frozen segment
     virtual void UpdateFrozenSegment(segment_handle seg, uint8_t* allocated, uint8_t* committed) PURE_VIRTUAL
 
+    // Notifies GC that changes to frozen segments will be made
+    virtual void BeginUpdatingFrozenSegments() PURE_VIRTUAL
+
+    // Notifies GC that changes to frozen segments are done.
+    virtual void EndUpdatingFrozenSegments() PURE_VIRTUAL
+
     // Refresh the memory limit
     virtual int RefreshMemoryLimit() PURE_VIRTUAL
 

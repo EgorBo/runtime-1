@@ -1062,7 +1062,10 @@ extern "C" void* QCALLTYPE GCInterface_RegisterFrozenSegment(void* pSection, SIZ
     seginfo.ibCommit        = seginfo.ibAllocated;
     seginfo.ibReserved      = seginfo.ibAllocated;
 
-    retVal = (void*)GCHeapUtilities::GetGCHeap()->RegisterFrozenSegment(&seginfo);
+    IGCHeap* heap = GCHeapUtilities::GetGCHeap();
+    heap->BeginUpdatingFrozenSegments();
+    retVal = (void*)heap->RegisterFrozenSegment(&seginfo);
+    heap->EndUpdatingFrozenSegments();
 
     END_QCALL;
 

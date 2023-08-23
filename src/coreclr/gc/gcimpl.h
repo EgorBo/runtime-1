@@ -250,6 +250,8 @@ public:	// FIX
     virtual void UnregisterFrozenSegment(segment_handle seg);
     virtual bool IsInFrozenSegment(Object *object);
     virtual void UpdateFrozenSegment(segment_handle seg, uint8_t* allocated, uint8_t* committed);
+    virtual void BeginUpdatingFrozenSegments();
+    virtual void EndUpdatingFrozenSegments();
 
     // Event control functions
     void ControlEvents(GCEventKeyword keyword, GCEventLevel level);

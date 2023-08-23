@@ -9911,15 +9911,12 @@ BOOL gc_heap::insert_ro_segment (heap_segment* seg)
         use_frozen_segments_p = true;
 #endif //FEATURE_EVENT_TRACE
 
-    enter_spin_lock (&gc_heap::gc_lock);
-
     if (!gc_heap::seg_table->ensure_space_for_insert ()
 #ifdef BACKGROUND_GC
         || (is_bgc_in_progress() && !commit_mark_array_new_seg(__this, seg))
 #endif //BACKGROUND_GC
         )
     {
-        leave_spin_lock(&gc_heap::gc_lock);
         return FALSE;
     }
 
@@ -9951,19 +9948,16 @@ BOOL gc_heap::insert_ro_segment (heap_segment* seg)
 
     FIRE_EVENT(GCCreateSegment_V1, heap_segment_mem(seg), (size_t)(heap_segment_reserved (seg) - heap_segment_mem(seg)), gc_etw_segment_read_only_heap);
 
-    leave_spin_lock (&gc_heap::gc_lock);
     return TRUE;
 }
 
-void gc_heap::update_ro_segment (heap_segment* seg, uint8_t* allocated, uint8_t* committed)
+void gc_heap::begin_updating_frozen_segments ()
 {
     enter_spin_lock (&gc_heap::gc_lock);
+}
 
-    assert (use_frozen_segments_p);
-    assert (heap_segment_read_only_p(seg));
-    heap_segment_allocated (seg) = allocated;
-    heap_segment_committed (seg) = committed;
-
+void gc_heap::end_updating_frozen_segments ()
+{
     leave_spin_lock (&gc_heap::gc_lock);
 }
 
@@ -48346,7 +48340,11 @@ HRESULT GCHeap::Initialize()
             seg_info.ibCommit = ro_seg_size;
             seg_info.ibReserved = seg_info.ibCommit;
 
-            if (!RegisterFrozenSegment(&seg_info))
+            BeginUpdatingFrozenSegments();
+            segment_handle ro_seg = RegisterFrozenSegment(&seg_info);
+            EndUpdatingFrozenSegments();
+
+            if (!ro_seg)
             {
                 GCToEEInterface::LogErrorToHost("STRESS_REGIONS failed to RegisterFrozenSegment");
                 hr = E_FAIL;
