@@ -97,7 +97,6 @@ FCFuncStart(gDiagnosticsStackTrace)
 FCFuncEnd()
 
 FCFuncStart(gEnvironmentFuncs)
-    FCFuncElement("get_CurrentManagedThreadId", JIT_GetCurrentManagedThreadId)
     FCFuncElement("get_TickCount", SystemNative::GetTickCount)
     FCFuncElement("get_TickCount64", SystemNative::GetTickCount64)
     FCFuncElement("set_ExitCode", SystemNative::SetExitCode)

@@ -60,11 +60,7 @@ namespace System.Threading
 
         private Thread() { }
 
-        public int ManagedThreadId
-        {
-            [Intrinsic]
-            get => _managedThreadId;
-        }
+        public int ManagedThreadId => _managedThreadId;
 
         /// <summary>Returns handle for interop with EE. The handle is guaranteed to be non-null.</summary>
         internal ThreadHandle GetNativeHandle()

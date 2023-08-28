@@ -2360,6 +2360,9 @@ PhaseStatus Compiler::fgPrepareToInstrumentMethod()
             case NI_System_MemoryExtensions_SequenceEqual:
             case NI_System_MemoryExtensions_StartsWith:
 
+            // We want to still profile Thread.CurrentThread when it's not folded
+            case NI_System_Threading_Thread_get_CurrentThread:
+
             // Same here, these are only folded when JIT knows the exact types
             case NI_System_Type_IsAssignableFrom:
             case NI_System_Type_IsAssignableTo:

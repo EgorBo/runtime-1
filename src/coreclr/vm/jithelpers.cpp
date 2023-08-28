@@ -5113,19 +5113,6 @@ HCIMPL0(VOID, JIT_StressGC)
 HCIMPLEND
 
 
-
-FCIMPL0(INT32, JIT_GetCurrentManagedThreadId)
-{
-    FCALL_CONTRACT;
-
-    FC_GC_POLL_NOT_NEEDED();
-
-    Thread * pThread = GetThread();
-    return pThread->GetThreadId();
-}
-FCIMPLEND
-
-
 /*********************************************************************/
 /* we don't use HCIMPL macros because we don't want the overhead even in debug mode */
 
