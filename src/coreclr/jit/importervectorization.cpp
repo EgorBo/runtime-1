@@ -440,6 +440,7 @@ GenTree* Compiler::impExpandHalfConstEquals(GenTreeLclVarCommon* data,
                                             GenTree*             lengthFld,
                                             bool                 checkForNull,
                                             bool                 startsWith,
+                                            bool                 isStringObject,
                                             WCHAR*               cnsData,
                                             int                  len,
                                             int                  dataOffset,
@@ -465,6 +466,23 @@ GenTree* Compiler::impExpandHalfConstEquals(GenTreeLclVarCommon* data,
         //
         lenCheckNode = gtNewOperNode(cmpOp, TYP_INT, lengthFld, elementsCount);
     }
+#ifdef TARGET_64BIT
+    else if ((len == 1) && (!startsWith) && (cmpMode == Ordinal) && isStringObject)
+    {
+        // For single-char comparisons against real string objects we can combine length check with data[0] check
+        // It is based on the assumption that even an empty string has zero 4 bytes after the length field.
+        // E.g. the layout of the empty string looks as follows:
+        //
+        //   [8b header][8b pMT][2b len][2b '\0'][4b padding]
+        //
+        // since MIN_OBJECT_SIZE is 24 bytes and we can assume that the padding is always zeroed out.
+        //
+        GenTree* lengthFldClone = gtCloneExpr(lengthFld);
+        lengthFldClone->gtType  = TYP_LONG;
+        lenCheckNode            = gtNewOperNode(cmpOp, TYP_LONG, lengthFldClone,
+                                     gtNewIconNode((static_cast<ssize_t>(cnsData[0]) << 32) | 1, TYP_LONG));
+    }
+#endif
     else
     {
         assert(cnsData != nullptr);
@@ -682,8 +700,8 @@ GenTree* Compiler::impStringEqualsOrStartsWith(bool startsWith, CORINFO_SIG_INFO
     GenTree* lenNode      = gtNewArrLen(TYP_INT, varStrLcl, strLenOffset, compCurBB);
     varStrLcl             = gtClone(varStrLcl)->AsLclVar();
 
-    GenTree* unrolled = impExpandHalfConstEquals(varStrLcl, lenNode, needsNullcheck, startsWith, (WCHAR*)str, cnsLength,
-                                                 strLenOffset + sizeof(int), cmpMode);
+    GenTree* unrolled = impExpandHalfConstEquals(varStrLcl, lenNode, needsNullcheck, startsWith, true, (WCHAR*)str,
+                                                 cnsLength, strLenOffset + sizeof(int), cmpMode);
     if (unrolled != nullptr)
     {
         impStoreTemp(varStrTmp, varStr, CHECK_SPILL_NONE);
@@ -835,7 +853,7 @@ GenTree* Compiler::impSpanEqualsOrStartsWith(bool startsWith, CORINFO_SIG_INFO* 
 
     GenTreeLclFld* spanReferenceFld = gtNewLclFldNode(spanLclNum, TYP_BYREF, OFFSETOF__CORINFO_Span__reference);
     GenTreeLclFld* spanLengthFld    = gtNewLclFldNode(spanLclNum, TYP_INT, OFFSETOF__CORINFO_Span__length);
-    GenTree*       unrolled = impExpandHalfConstEquals(spanReferenceFld, spanLengthFld, false, startsWith, (WCHAR*)str,
+    GenTree* unrolled = impExpandHalfConstEquals(spanReferenceFld, spanLengthFld, false, false, startsWith, (WCHAR*)str,
                                                  cnsLength, 0, cmpMode);
 
     if (unrolled != nullptr)

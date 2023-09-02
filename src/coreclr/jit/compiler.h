@@ -3933,6 +3933,7 @@ protected:
                                       GenTree*         lengthFld,
                                       bool             checkForNull,
                                       bool             startsWith,
+                                      bool             isStringObject,
                                       WCHAR*           cnsData,
                                       int              len,
                                       int              dataOffset,
