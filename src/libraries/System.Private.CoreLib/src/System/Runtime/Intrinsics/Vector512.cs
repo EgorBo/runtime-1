@@ -1177,6 +1177,45 @@ namespace System.Runtime.Intrinsics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector512<ulong> Create(Vector256<ulong> lower, Vector256<ulong> upper) => Create<ulong>(lower, upper);
 
+        /// <summary>Creates a new <see cref="Vector512{T}" /> instance with all 64-bit elements initialized to the specified <see cref="Vector64{T}" /> value.</summary>
+        /// <typeparam name="T">The type of the elements in the vector.</typeparam>
+        /// <param name="value">The <see cref="Vector64{T}" /> value that all 64-bit elements will be initialized to.</param>
+        /// <returns>A new <see cref="Vector512{T}" /> with all 64-bit elements initialized to <paramref name="value" />.</returns>
+        /// <exception cref="NotSupportedException">The type of <paramref name="value" /> (<typeparamref name="T" />) is not supported.</exception>
+        /// <remarks>This method is not accelerated and is added for consistency</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector512<T> Create<T>(Vector64<T> value)
+        {
+            Vector128<T> vec128 = Vector128.Create(value, value);
+            Vector256<T> vec256 = Vector256.Create(vec128, vec128);
+            return Vector512.Create(vec256, vec256);
+        }
+
+        /// <summary>Creates a new <see cref="Vector512{T}" /> instance with all 128-bit elements initialized to the specified <see cref="Vector128{T}" /> value.</summary>
+        /// <typeparam name="T">The type of the elements in the vector.</typeparam>
+        /// <param name="value">The <see cref="Vector128{T}" /> value that all 128-bit elements will be initialized to.</param>
+        /// <returns>A new <see cref="Vector512{T}" /> with all 128-bit elements initialized to <paramref name="value" />.</returns>
+        /// <exception cref="NotSupportedException">The type of <paramref name="value" /> (<typeparamref name="T" />) is not supported.</exception>
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector512<T> Create<T>(Vector128<T> value)
+        {
+            Vector256<T> vec256 = Vector256.Create(value, value);
+            return Vector512.Create(vec256, vec256);
+        }
+
+        /// <summary>Creates a new <see cref="Vector512{T}" /> instance with all 256-bit elements initialized to the specified <see cref="Vector256{T}" /> value.</summary>
+        /// <typeparam name="T">The type of the elements in the vector.</typeparam>
+        /// <param name="value">The <see cref="Vector256{T}" /> value that all 256-bit elements will be initialized to.</param>
+        /// <returns>A new <see cref="Vector512{T}" /> with all 256-bit elements initialized to <paramref name="value" />.</returns>
+        /// <exception cref="NotSupportedException">The type of <paramref name="value" /> (<typeparamref name="T" />) is not supported.</exception>
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector512<T> Create<T>(Vector256<T> value)
+        {
+            return Vector512.Create(value, value);
+        }
+
         /// <summary>Creates a new <see cref="Vector512{T}" /> instance with the first element initialized to the specified value and the remaining elements initialized to zero.</summary>
         /// <typeparam name="T">The type of the elements in the vector.</typeparam>
         /// <param name="value">The value that element 0 will be initialized to.</param>

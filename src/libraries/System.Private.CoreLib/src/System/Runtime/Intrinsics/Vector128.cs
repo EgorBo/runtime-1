@@ -1050,6 +1050,19 @@ namespace System.Runtime.Intrinsics
             }
         }
 
+        /// <summary>Creates a new <see cref="Vector128{T}" /> instance with all 64-bit elements initialized to the specified <see cref="Vector64{T}" /> value.</summary>
+        /// <typeparam name="T">The type of the elements in the vector.</typeparam>
+        /// <param name="value">The <see cref="Vector64{T}" /> value that all 64-bit elements will be initialized to.</param>
+        /// <returns>A new <see cref="Vector128{T}" /> with all 64-bit elements initialized to <paramref name="value" />.</returns>
+        /// <exception cref="NotSupportedException">The type of <paramref name="value" /> (<typeparamref name="T" />) is not supported.</exception>
+        /// <remarks>On x86, this method is not accelerated</remarks>
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector128<T> Create<T>(Vector64<T> value)
+        {
+            return Vector128.Create(value, value);
+        }
+
         /// <summary>Creates a new <see cref="Vector128{Byte}" /> instance from two <see cref="Vector64{Byte}" /> instances.</summary>
         /// <param name="lower">The value that the lower 64-bits will be initialized to.</param>
         /// <param name="upper">The value that the upper 64-bits will be initialized to.</param>
