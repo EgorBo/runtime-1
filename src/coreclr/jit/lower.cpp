@@ -7833,7 +7833,8 @@ static bool GetStoreCoalescingData(Compiler* comp, GenTreeStoreInd* ind, StoreCo
         return false;
     }
 
-    // Data has to be INT_CNS, can be also VEC_CNS in future.
+    // Data has to be an intergral constant.
+    // TODO-CQ: support locals as well (which we can broadcast into a vector).
     if (!ind->Data()->IsCnsIntOrI())
     {
         return false;
@@ -7935,7 +7936,7 @@ void Lowering::LowerStoreIndirCoalescing(GenTreeStoreInd* ind)
     do
     {
         // This check is not really needed, just for better throughput.
-        if (!ind->TypeIs(TYP_BYTE, TYP_UBYTE, TYP_SHORT, TYP_USHORT, TYP_INT))
+        if (!varTypeIsIntegralOrI(ind))
         {
             return;
         }
@@ -8022,6 +8023,35 @@ void Lowering::LowerStoreIndirCoalescing(GenTreeStoreInd* ind)
             case TYP_INT:
                 newType = TYP_LONG;
                 break;
+
+            // Conservatively enable this for ARM64 only, per "Arm Architecture Reference Manual":
+            //   * Writes from SIMD and floating-point registers of a 128-bit value that is 64-bit aligned in memory
+            //     are treated as a pair of single - copy atomic 64 - bit writes.
+            //
+            // Since GC objects are guaranteed to be 8-byte aligned (on 64bit), we can safely use SIMD16 stores for them.
+            // x86 doesn't give us the same premise.
+            // We can enable this for x86 when target is known to be pointing to a stack or a native memory without GC handles.
+#if defined(TARGET_ARM64) && defined(FEATURE_HW_INTRINSICS)
+            case TYP_REF:
+            case TYP_LONG:
+                if (comp->IsBaselineSimdIsaSupported())
+                {
+                    if ((oldType == TYP_REF) && (!prevData.value->IsIntegralConst(0) || !currData.value->IsIntegralConst(0)))
+                    {
+                        // For REF we only support null. In theory, we can also support e.g.:
+                        //
+                        //   a[1] = "frozen obj 1";
+                        //   a[2] = "frozen obj 2";
+                        //
+                        // to use a single SIMD16 store, but we should not put GC objects into SIMD registers
+                        // (we can only do it in nongc regions which we can't issue here).
+                        return;
+                    }
+                    newType = TYP_SIMD16;
+                    break;
+                }
+                return;
+#endif // TARGET_ARM64 && FEATURE_HW_INTRINSICS
 #endif // TARGET_64BIT
 
             // TYP_FLOAT and TYP_DOUBLE aren't needed here - they're expected to
@@ -8037,6 +8067,10 @@ void Lowering::LowerStoreIndirCoalescing(GenTreeStoreInd* ind)
             default:
                 return;
         }
+
+        // We should not be here for stores requiring write barriers.
+        assert(!comp->codeGen->gcInfo.gcIsWriteBarrierStoreIndNode(ind));
+        assert(!comp->codeGen->gcInfo.gcIsWriteBarrierStoreIndNode(prevInd));
 
         // Delete previous STOREIND entirely
         BlockRange().Remove(std::move(prevIndRange));
@@ -8063,18 +8097,37 @@ void Lowering::LowerStoreIndirCoalescing(GenTreeStoreInd* ind)
             std::swap(lowerCns, upperCns);
         }
 
-        // Trim the constants to the size of the type, e.g. for TYP_SHORT and TYP_USHORT
-        // the mask will be 0xFFFF, for TYP_INT - 0xFFFFFFFF.
-        size_t mask = ~(size_t(0)) >> (sizeof(size_t) - genTypeSize(oldType)) * BITS_IN_BYTE;
-        lowerCns &= mask;
-        upperCns &= mask;
+#if defined(FEATURE_HW_INTRINSICS)
+        if (newType == TYP_SIMD16)
+        {
+            assert(sizeof(ssize_t) == 8);
 
-        size_t val = (lowerCns | (upperCns << (genTypeSize(oldType) * BITS_IN_BYTE)));
-        JITDUMP("Coalesced two stores into a single store with value %lld\n", (int64_t)val);
+            // Replace two 64bit constants with a single 128bit constant
+            int8_t val[16];
+            memcpy(val, &lowerCns, 8);
+            memcpy(val + 8, &upperCns, 8);
 
-        // It's not expected to be contained yet, but just in case...
-        ind->Data()->ClearContained();
-        ind->Data()->AsIntCon()->gtIconVal = (ssize_t)val;
+            GenTreeVecCon* vecCns = comp->gtNewVconNode(newType, &val);
+            BlockRange().InsertAfter(ind->Data(), vecCns);
+            BlockRange().Remove(ind->Data());
+            ind->gtOp2 = vecCns;
+        }
+        else
+#endif
+        {
+            // Trim the constants to the size of the type, e.g. for TYP_SHORT and TYP_USHORT
+            // the mask will be 0xFFFF, for TYP_INT - 0xFFFFFFFF.
+            size_t mask = ~(size_t(0)) >> (sizeof(size_t) - genTypeSize(oldType)) * BITS_IN_BYTE;
+            lowerCns &= mask;
+            upperCns &= mask;
+
+            size_t val = (lowerCns | (upperCns << (genTypeSize(oldType) * BITS_IN_BYTE)));
+            JITDUMP("Coalesced two stores into a single store with value %lld\n", (int64_t)val);
+
+            // It's not expected to be contained yet, but just in case...
+            ind->Data()->ClearContained();
+            ind->Data()->AsIntCon()->gtIconVal = (ssize_t)val;
+        }
         ind->gtFlags |= GTF_IND_UNALIGNED;
 
     } while (true);
