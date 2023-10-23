@@ -3698,6 +3698,62 @@ bool Compiler::fgBlockIsGoodTailDuplicationCandidate(BasicBlock* target, unsigne
     return true;
 }
 
+bool Compiler::fgConvertReturnCmpToCondBlock(BasicBlock* block)
+{
+    assert(block->KindIs(BBJ_RETURN));
+    if (info.compRetType != TYP_UBYTE)
+    {
+        // Early out, we're only interested in methods returning bool.
+        return false;
+    }
+
+    BasicBlock* nextBb = block->Next();
+
+    bool nextRetBoolVal;
+    // Next block has to be "return true/false"
+    if ((nextBb != nullptr) && BasicBlock::sameEHRegion(block, nextBb) &&
+        fgIsReturnTrueFalseBlock(nextBb, &nextRetBoolVal))
+    {
+        // For now, we only see improvements when we merge with a following "return true" block
+        if (nextRetBoolVal && (block->lastStmt() != nullptr))
+        {
+            // Check that the current block ends with GT_RETURN(CMP)
+            GenTree* rootNode = block->lastStmt()->GetRootNode();
+            if (rootNode->OperIs(GT_RETURN) && rootNode->TypeIs(TYP_INT) && rootNode->gtGetOp1()->OperIsCompare())
+            {
+                // Convert GT_RETURN to GT_JTRUE
+                rootNode->gtGetOp1()->gtFlags |= GTF_RELOP_JMP_USED;
+                rootNode->ChangeOper(GT_JTRUE);
+
+                // We have:
+                //
+                // block:    return cmp;
+                // nextBb:   return true;
+                //
+                // convert it to:
+                //
+                // block:    jtrue(cmp) -> nextBb
+                // newBlock: return false;
+                // nextBb:   return true;
+                //
+                DebugInfo dbgInfo = block->lastStmt()->GetDebugInfo();
+
+                // Actually, we don't even need to create a new "return false" block if there is already one anywhere
+                // (in the same EH region)
+                // but we rely on tail-merge to handle it.
+                BasicBlock* newBlock =
+                    fgNewBBFromTreeAfter(BBJ_RETURN, block, gtNewOperNode(GT_RETURN, TYP_INT, gtNewFalse()), dbgInfo);
+                block->SetJumpDest(nextBb);
+                block->SetJumpKind(BBJ_COND);
+                fgAddRefPred(newBlock, block);
+                fgAddRefPred(nextBb, block);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //-------------------------------------------------------------
 // fgOptimizeUncondBranchToSimpleCond:
 //    For a block which has an unconditional branch, look to see if its target block
@@ -6112,6 +6168,14 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication, bool isPhase)
                     bDest    = block->GetJumpDest();
                     bNext    = block->Next();
                 }
+            }
+
+            if (block->KindIs(BBJ_RETURN) && fgConvertReturnCmpToCondBlock(block))
+            {
+                change   = true;
+                modified = true;
+                bDest    = block->GetJumpDest();
+                bNext    = block->Next();
             }
 
             if (block->KindIs(BBJ_NONE))

@@ -3120,6 +3120,24 @@ inline bool Compiler::fgIsThrowHlpBlk(BasicBlock* block)
     return false;
 }
 
+inline bool Compiler::fgIsReturnTrueFalseBlock(BasicBlock* block, bool* value)
+{
+    if (block->KindIs(BBJ_RETURN) && block->hasSingleStmt())
+    {
+        const GenTree* rootNode = block->lastStmt()->GetRootNode();
+        if (rootNode->OperIs(GT_RETURN) && rootNode->TypeIs(TYP_INT) && rootNode->gtGetOp1()->IsCnsIntOrI())
+        {
+            const ssize_t val = rootNode->gtGetOp1()->AsIntCon()->IconValue();
+            if ((val == 0) || (val == 1))
+            {
+                *value = val == 1;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 #if !FEATURE_FIXED_OUT_ARGS
 
 /*****************************************************************************

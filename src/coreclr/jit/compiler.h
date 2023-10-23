@@ -5564,6 +5564,8 @@ public:
 
     bool fgOptimizeUncondBranchToSimpleCond(BasicBlock* block, BasicBlock* target);
 
+    bool fgConvertReturnCmpToCondBlock(BasicBlock* block);
+
     bool fgBlockEndFavorsTailDuplication(BasicBlock* block, unsigned lclNum);
 
     bool fgBlockIsGoodTailDuplicationCandidate(BasicBlock* block, unsigned* lclNum);
@@ -6138,6 +6140,7 @@ public:
 
 private:
     bool fgIsThrowHlpBlk(BasicBlock* block);
+    bool fgIsReturnTrueFalseBlock(BasicBlock* block, bool* value);
 
 #if !FEATURE_FIXED_OUT_ARGS
     unsigned fgThrowHlpBlkStkLevel(BasicBlock* block);
