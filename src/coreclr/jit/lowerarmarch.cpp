@@ -615,7 +615,7 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
         else
         {
             // CI Test
-            assert(!blkNode->ContainsReferences());
+            assert(!blkNode->IsOnHeapAndContainsReferences());
             blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindHelper;
         }
     }
