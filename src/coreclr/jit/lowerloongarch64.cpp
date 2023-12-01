@@ -296,8 +296,9 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             src = src->AsUnOp()->gtGetOp1();
         }
 
-        if (!blkNode->OperIs(GT_STORE_DYN_BLK) && (size <= comp->getUnrollThreshold(Compiler::UnrollKind::Memset)) &&
-            src->OperIs(GT_CNS_INT))
+        const bool shouldBeUnrolled = blkNode->IsOnHeapAndContainsReferences() ||
+                                      (size <= comp->getUnrollThreshold(Compiler::UnrollKind::Memset));
+        if (!blkNode->OperIs(GT_STORE_DYN_BLK) && shouldBeUnrolled && src->OperIs(GT_CNS_INT))
         {
             blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
 

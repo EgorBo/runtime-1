@@ -8867,6 +8867,13 @@ void Lowering::LowerBlockStoreCommon(GenTreeBlk* blkNode)
 {
     assert(blkNode->OperIs(GT_STORE_BLK, GT_STORE_DYN_BLK));
 
+    if (blkNode->OperIs(GT_STORE_DYN_BLK))
+    {
+        // CI Test: make sure we don't use GT_STORE_DYN_BLK
+        // for blocks with GC references.
+        assert(!blkNode->ContainsReferences());
+    }
+
     // Lose the type information stored in the source - we no longer need it.
     if (blkNode->Data()->OperIs(GT_BLK))
     {

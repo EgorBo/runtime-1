@@ -338,10 +338,15 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
             src = src->AsUnOp()->gtGetOp1();
         }
 
-        if (!blkNode->OperIs(GT_STORE_DYN_BLK) && (size <= comp->getUnrollThreshold(Compiler::UnrollKind::Memset)))
+        const bool shouldBeUnrolled = blkNode->IsOnHeapAndContainsReferences() ||
+                                      (size <= comp->getUnrollThreshold(Compiler::UnrollKind::Memset));
+        if (!blkNode->OperIs(GT_STORE_DYN_BLK) && shouldBeUnrolled)
         {
             if (!src->OperIs(GT_CNS_INT))
             {
+                // CI Test: Hopefully, we won't see anything but GT_CNS_INT(0) here for blocks with GC pointers.
+                assert(!blkNode->ContainsReferences());
+
                 // TODO-CQ: We could unroll even when the initialization value is not a constant
                 // by inserting a MUL init, 0x01010101 instruction. We need to determine if the
                 // extra latency that MUL introduces isn't worse that rep stosb. Likely not.
@@ -357,9 +362,15 @@ void Lowering::LowerBlockStore(GenTreeBlk* blkNode)
                 // the largest width store of the desired inline expansion.
 
                 ssize_t fill = src->AsIntCon()->IconValue() & 0xFF;
+                if (blkNode->ContainsReferences())
+                {
+                    // CI Test: it's a bad idea to use non-zero here
+                    assert(fill == 0);
+                }
 
                 const bool canUseSimd = !blkNode->IsOnHeapAndContainsReferences() && comp->IsBaselineSimdIsaSupported();
-                if (size > comp->getUnrollThreshold(Compiler::UnrollKind::Memset, canUseSimd))
+                if (!blkNode->IsOnHeapAndContainsReferences() &&
+                    (size > comp->getUnrollThreshold(Compiler::UnrollKind::Memset, canUseSimd)))
                 {
                     // It turns out we can't use SIMD so the default threshold is too big
                     goto TOO_BIG_TO_UNROLL;
