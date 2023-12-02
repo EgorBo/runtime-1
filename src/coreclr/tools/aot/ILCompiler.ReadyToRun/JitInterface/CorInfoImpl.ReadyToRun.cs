@@ -1028,6 +1028,9 @@ namespace Internal.JitInterface
                 case CorInfoHelpFunc.CORINFO_HELP_MEMSET:
                     id = ReadyToRunHelper.MemSet;
                     break;
+                case CorInfoHelpFunc.CORINFO_HELP_MEMSET_GC:
+                    id = ReadyToRunHelper.MemSetGc;
+                    break;
                 case CorInfoHelpFunc.CORINFO_HELP_MEMCPY:
                     id = ReadyToRunHelper.MemCpy;
                     break;

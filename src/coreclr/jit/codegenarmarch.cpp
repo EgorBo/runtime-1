@@ -3232,7 +3232,9 @@ void CodeGen::genCodeForInitBlkHelper(GenTreeBlk* initBlkNode)
 {
     // Size goes in arg2, source address goes in arg1, and size goes in arg2.
     // genConsumeBlockOp takes care of this for us.
-    genConsumeBlockOp(initBlkNode, REG_ARG_0, REG_ARG_1, REG_ARG_2);
+    // NOTE: CORINFO_HELP_MEMSET_GC only zeroes memory so it doesn't need source arg.
+    const bool gcAware = initBlkNode->IsOnHeapAndContainsReferences();
+    genConsumeBlockOp(initBlkNode, REG_ARG_0, gcAware ? REG_NA : REG_ARG_1, REG_ARG_2);
 
     if (initBlkNode->IsVolatile())
     {
@@ -3240,7 +3242,7 @@ void CodeGen::genCodeForInitBlkHelper(GenTreeBlk* initBlkNode)
         instGen_MemoryBarrier();
     }
 
-    genEmitHelperCall(CORINFO_HELP_MEMSET, 0, EA_UNKNOWN);
+    genEmitHelperCall(gcAware ? CORINFO_HELP_MEMSET_GC : CORINFO_HELP_MEMSET, 0, EA_UNKNOWN);
 }
 
 //------------------------------------------------------------------------

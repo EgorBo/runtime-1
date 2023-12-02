@@ -344,6 +344,7 @@ namespace Internal.ReadyToRunConstants
         StackProbe                  = 0x111,
 
         GetCurrentManagedThreadId   = 0x112,
+        MemSetGc                    = 0x115,
 
         // **********************************************************************************************
         //

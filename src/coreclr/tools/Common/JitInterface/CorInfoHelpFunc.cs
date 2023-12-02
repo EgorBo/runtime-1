@@ -214,6 +214,7 @@ namespace Internal.JitInterface
         CORINFO_HELP_INIT_PINVOKE_FRAME,   // initialize an inlined PInvoke Frame for the JIT-compiler
 
         CORINFO_HELP_MEMSET,                // Init block of memory
+        CORINFO_HELP_MEMSET_GC,             // Init block of memory (with GC pointers)
         CORINFO_HELP_MEMCPY,                // Copy block of memory
 
         CORINFO_HELP_RUNTIMEHANDLE_METHOD,  // determine a type/field/method handle at run-time

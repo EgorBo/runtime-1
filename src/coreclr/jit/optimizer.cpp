@@ -5577,6 +5577,7 @@ PhaseStatus Compiler::optFindLoopsPhase()
 
         case CORINFO_HELP_ASSIGN_STRUCT: // Not strictly needed as we don't use this
         case CORINFO_HELP_MEMSET:        // Not strictly needed as we don't make a GT_CALL with this
+        case CORINFO_HELP_MEMSET_GC:     // Not strictly needed as we don't make a GT_CALL with this
         case CORINFO_HELP_MEMCPY:        // Not strictly needed as we don't make a GT_CALL with this
         case CORINFO_HELP_SETFIELDSTRUCT:
 

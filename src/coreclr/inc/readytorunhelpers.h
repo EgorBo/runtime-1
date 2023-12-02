@@ -29,6 +29,7 @@ HELPER(READYTORUN_HELPER_Stelem_Ref,                CORINFO_HELP_ARRADDR_ST,    
 HELPER(READYTORUN_HELPER_Ldelema_Ref,               CORINFO_HELP_LDELEMA_REF,                       )
 
 HELPER(READYTORUN_HELPER_MemSet,                    CORINFO_HELP_MEMSET,                            )
+HELPER(READYTORUN_HELPER_MemSetGc,                  CORINFO_HELP_MEMSET_GC,                         )
 HELPER(READYTORUN_HELPER_MemCpy,                    CORINFO_HELP_MEMCPY,                            )
 
 HELPER(READYTORUN_HELPER_LogMethodEnter,            CORINFO_HELP_BBT_FCN_ENTER,                     )

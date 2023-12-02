@@ -1684,6 +1684,9 @@ namespace ILCompiler.Reflection.ReadyToRun
                 case ReadyToRunHelper.MemSet:
                     builder.Append("MEM_SET");
                     break;
+                case ReadyToRunHelper.MemSetGc:
+                    builder.Append("MEM_SET_GC");
+                    break;
 
                 case ReadyToRunHelper.MemCpy:
                     builder.Append("MEM_CPY");

@@ -5114,6 +5114,16 @@ FCIMPL0(INT32, JIT_GetCurrentManagedThreadId)
 }
 FCIMPLEND
 
+HCIMPL2(void, JIT_MemSetGc, intptr_t* dest, size_t count)
+{
+    const size_t numOfPointers = count / sizeof(intptr_t);
+    _ASSERT(count % sizeof(intptr_t) == 0);
+    for (size_t i = 0; i < numOfPointers; i++)
+    {
+        dest[i] = 0;
+    }
+}
+HCIMPLEND
 
 /*********************************************************************/
 /* we don't use HCIMPL macros because we don't want the overhead even in debug mode */

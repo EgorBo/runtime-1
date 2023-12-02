@@ -903,6 +903,7 @@ enum ReadyToRunHelper
 
     // JIT32 x86-specific exception handling
     READYTORUN_HELPER_EndCatch                  = 0x110,
+    READYTORUN_HELPER_MemSetGc                  = 0x115,
 };
 ```
 

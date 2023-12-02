@@ -278,6 +278,17 @@ namespace System.Runtime
             }
         }
 
+        [RuntimeExport("MemSetGc")]
+        public static unsafe void MemSetGc(nuint* dest, nuint size)
+        {
+            nuint numOfPointers = size / (nuint)sizeof(nuint);
+            Debug.Assert(size % (nuint)sizeof(nuint) == 0);
+            for (nuint i = 0; i < numOfPointers; i++)
+            {
+                dest[i] = 0;
+            }
+        }
+
         [RuntimeExport("RhGetCurrentThreadStackTrace")]
         [MethodImpl(MethodImplOptions.NoInlining)] // Ensures that the RhGetCurrentThreadStackTrace frame is always present
         public static unsafe int RhGetCurrentThreadStackTrace(IntPtr[] outputBuffer)

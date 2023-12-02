@@ -2050,7 +2050,10 @@ void CodeGen::genConsumeBlockOp(GenTreeBlk* blkNode, regNumber dstReg, regNumber
 
     // Next, perform any necessary moves.
     genCopyRegIfNeeded(dstAddr, dstReg);
-    genSetBlockSrc(blkNode, srcReg);
+    if (srcReg != REG_NA)
+    {
+        genSetBlockSrc(blkNode, srcReg);
+    }
     genSetBlockSize(blkNode, sizeReg);
 }
 
