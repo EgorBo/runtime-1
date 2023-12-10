@@ -321,7 +321,7 @@ private:
     void MarkTree(GenTree* root);
     void UnmarkTree(GenTree* root);
     void LowerStoreIndir(GenTreeStoreInd* node);
-    void LowerStoreIndirCoalescing(GenTreeStoreInd* node);
+    void LowerStoreIndirCoalescing(GenTree* node);
     GenTree* LowerAdd(GenTreeOp* node);
     GenTree* LowerMul(GenTreeOp* mul);
     bool TryLowerAndNegativeOne(GenTreeOp* node, GenTree** nextNode);
