@@ -4363,11 +4363,21 @@ void CodeGen::genLockedInstructions(GenTreeOp* node)
 
     genConsumeOperands(node);
 
-    // If the destination register is different from the data register then we need
-    // to first move the data to the target register. Make sure we don't overwrite
-    // the address, the register allocator should have taken care of this.
-    assert((node->GetRegNum() != addr->GetRegNum()) || (node->GetRegNum() == data->GetRegNum()));
-    GetEmitter()->emitIns_Mov(INS_mov, size, node->GetRegNum(), data->GetRegNum(), /* canSkip */ true);
+    regNumber dataReg;
+    if (!node->OperIs(GT_XORR, GT_XAND))
+    {
+        // If the destination register is different from the data register then we need
+        // to first move the data to the target register. Make sure we don't overwrite
+        // the address, the register allocator should have taken care of this.
+        // NOTE: XORR and XAND don't use targetReg.
+        assert((node->GetRegNum() != addr->GetRegNum()) || (node->GetRegNum() == data->GetRegNum()));
+        GetEmitter()->emitIns_Mov(INS_mov, size, node->GetRegNum(), data->GetRegNum(), /* canSkip */ true);
+        dataReg = node->GetRegNum();
+    }
+    else
+    {
+        dataReg = data->GetRegNum();
+    }
 
     instruction ins = INS_xchg;
     if (node->OperIs(GT_XADD))
@@ -4389,7 +4399,7 @@ void CodeGen::genLockedInstructions(GenTreeOp* node)
         instGen(INS_lock);
     }
 
-    GetEmitter()->emitIns_AR_R(ins, size, node->GetRegNum(), addr->GetRegNum(), 0);
+    GetEmitter()->emitIns_AR_R(ins, size, dataReg, addr->GetRegNum(), 0);
     genProduceReg(node);
 }
 
