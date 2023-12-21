@@ -642,6 +642,8 @@ GenTree* Lowering::LowerNode(GenTree* node)
 #elif defined(TARGET_XARCH)
         case GT_XORR:
         case GT_XAND:
+            assert(node->IsUnusedValue());
+            break;
         case GT_XADD:
             if (node->IsUnusedValue())
             {

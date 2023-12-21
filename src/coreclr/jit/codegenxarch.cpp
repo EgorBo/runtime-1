@@ -2047,12 +2047,9 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
 
         case GT_XCHG:
         case GT_XADD:
-            genLockedInstructions(treeNode->AsOp());
-            break;
-
         case GT_XORR:
         case GT_XAND:
-            NYI("Interlocked.Or and Interlocked.And aren't implemented for x86 yet.");
+            genLockedInstructions(treeNode->AsOp());
             break;
 
         case GT_MEMORYBARRIER:
@@ -4354,7 +4351,7 @@ void CodeGen::genCodeForLockAdd(GenTreeOp* node)
 //
 void CodeGen::genLockedInstructions(GenTreeOp* node)
 {
-    assert(node->OperIs(GT_XADD, GT_XCHG));
+    assert(node->OperIs(GT_XADD, GT_XORR, GT_XAND, GT_XCHG));
 
     GenTree* addr = node->gtGetOp1();
     GenTree* data = node->gtGetOp2();
@@ -4372,7 +4369,19 @@ void CodeGen::genLockedInstructions(GenTreeOp* node)
     assert((node->GetRegNum() != addr->GetRegNum()) || (node->GetRegNum() == data->GetRegNum()));
     GetEmitter()->emitIns_Mov(INS_mov, size, node->GetRegNum(), data->GetRegNum(), /* canSkip */ true);
 
-    instruction ins = node->OperIs(GT_XADD) ? INS_xadd : INS_xchg;
+    instruction ins = INS_xchg;
+    if (node->OperIs(GT_XADD))
+    {
+        ins = INS_xadd;
+    }
+    else if (node->OperIs(GT_XORR))
+    {
+        ins = INS_or;
+    }
+    else if (node->OperIs(GT_XAND))
+    {
+        ins = INS_and;
+    }
 
     // XCHG has an implied lock prefix when the first operand is a memory operand.
     if (ins != INS_xchg)

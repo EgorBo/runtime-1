@@ -14,6 +14,7 @@
 //    prefixFlags               - IL prefix flags for the call
 //    callInfo                  - EE supplied info for the call
 //    rawILOffset               - IL offset of the opcode, used for guarded devirtualization.
+//    followedByPop             - call is followed by POP instruction (return value is not used)
 //
 // Returns:
 //    Type of the call's return value.
@@ -38,7 +39,8 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
                                   GenTree*                newobjThis,
                                   int                     prefixFlags,
                                   CORINFO_CALL_INFO*      callInfo,
-                                  IL_OFFSET               rawILOffset)
+                                  IL_OFFSET               rawILOffset,
+                                  bool                    followedByPop)
 {
     assert(opcode == CEE_CALL || opcode == CEE_CALLVIRT || opcode == CEE_NEWOBJ || opcode == CEE_CALLI);
 
@@ -111,7 +113,8 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
             if (info.compCompHnd->convertPInvokeCalliToCall(pResolvedToken, !impCanPInvokeInlineCallSite(block)))
             {
                 eeGetCallInfo(pResolvedToken, nullptr, CORINFO_CALLINFO_ALLOWINSTPARAM, callInfo);
-                return impImportCall(CEE_CALL, pResolvedToken, nullptr, nullptr, prefixFlags, callInfo, rawILOffset);
+                return impImportCall(CEE_CALL, pResolvedToken, nullptr, nullptr, prefixFlags, callInfo, rawILOffset,
+                                     followedByPop);
             }
         }
 
@@ -225,8 +228,8 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
             const bool isTailCall = canTailCall && (tailCallFlags != 0);
 
             call = impIntrinsic(newobjThis, clsHnd, methHnd, sig, mflags, pResolvedToken, isReadonlyCall, isTailCall,
-                                opcode == CEE_CALLVIRT, pConstrainedResolvedToken, callInfo->thisTransform, &ni,
-                                &isSpecialIntrinsic);
+                                opcode == CEE_CALLVIRT, pConstrainedResolvedToken, callInfo->thisTransform,
+                                followedByPop, &ni, &isSpecialIntrinsic);
 
             if (compDonotInline())
             {
@@ -2238,6 +2241,7 @@ GenTree* Compiler::impCreateSpanIntrinsic(CORINFO_SIG_INFO* sig)
 //    pConstrainedResolvedToken -- resolved token for constrained call, or nullptr
 //       if call is not constrained
 //    constraintCallThisTransform -- this transform to apply for a constrained call
+//    followedByPop - call is followed by POP instruction (return value is not used)
 //    pIntrinsicName [OUT] -- intrinsic name (see enumeration in namedintrinsiclist.h)
 //       for "traditional" jit intrinsics
 //    isSpecialIntrinsic [OUT] -- set true if intrinsic expansion is a call
@@ -2280,6 +2284,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                                 bool                    callvirt,
                                 CORINFO_RESOLVED_TOKEN* pConstrainedResolvedToken,
                                 CORINFO_THIS_TRANSFORM  constraintCallThisTransform,
+                                bool                    followedByPop,
                                 NamedIntrinsic*         pIntrinsicName,
                                 bool*                   isSpecialIntrinsic)
 {
@@ -3222,12 +3227,27 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
                 break;
             }
 
-#if defined(TARGET_ARM64) || defined(TARGET_RISCV64)
+#if defined(TARGET_ARM64) || defined(TARGET_RISCV64) || defined(TARGET_XARCH)
             // Intrinsify Interlocked.Or and Interlocked.And only for arm64-v8.1 (and newer) and for RV64A
-            // TODO-CQ: Implement for XArch (https://github.com/dotnet/runtime/issues/32239).
             case NI_System_Threading_Interlocked_Or:
             case NI_System_Threading_Interlocked_And:
             {
+#if defined(TARGET_XARCH)
+                if (!followedByPop)
+                {
+                    // On XARCH we can only expand this if return value is not used.
+                    // XORR and XAND are special, unlike other Interlocked intrinsics, they return the original value
+                    // while a.g. XADD returns the new value. So if the return value is not used, we can emit:
+                    //
+                    //   xlock and dword ptr [rcx], eax
+                    //   xlock or  dword ptr [rcx], eax
+                    //
+                    // A better fix is to unconditionally use XORR and XAND here and generate XCHG loop in
+                    // the emitter for the case where return value is used, but that requires way more work.
+                    break;
+                }
+#endif
+
                 ARM64_ONLY(if (compOpportunisticallyDependsOn(InstructionSet_Atomics)))
                 {
                     assert(sig->numArgs == 2);

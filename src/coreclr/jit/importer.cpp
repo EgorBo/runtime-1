@@ -8827,7 +8827,8 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 }
 
                 callTyp = impImportCall(opcode, &resolvedToken, constraintCall ? &constrainedResolvedToken : nullptr,
-                                        newObjThisPtr, prefixFlags, &callInfo, opcodeOffs);
+                                        newObjThisPtr, prefixFlags, &callInfo, opcodeOffs,
+                                        impGetNonPrefixOpcode(codeAddr + sizeof(mdToken), codeEndp) == CEE_POP);
                 if (compDonotInline())
                 {
                     // We do not check fails after lvaGrabTemp. It is covered with CoreCLR_13272 issue.

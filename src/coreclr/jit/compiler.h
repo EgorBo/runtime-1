@@ -4377,7 +4377,8 @@ protected:
                             GenTree*           newobjThis,
                             int                prefixFlags,
                             CORINFO_CALL_INFO* callInfo,
-                            IL_OFFSET          rawILOffset);
+                            IL_OFFSET          rawILOffset,
+                            bool               followedByPop);
 
     CORINFO_CLASS_HANDLE impGetSpecialIntrinsicExactReturnType(GenTreeCall* call);
 
@@ -4455,6 +4456,7 @@ protected:
                           bool                    callvirt,
                           CORINFO_RESOLVED_TOKEN* pContstrainedResolvedToken,
                           CORINFO_THIS_TRANSFORM  constraintCallThisTransform,
+                          bool                    followedByPop,
                           NamedIntrinsic*         pIntrinsicName,
                           bool*                   isSpecialIntrinsic = nullptr);
     GenTree* impMathIntrinsic(CORINFO_METHOD_HANDLE method,
