@@ -397,6 +397,20 @@ void OptIfConversionDsc::IfConvertDump()
 }
 #endif
 
+static bool fgIsReturnTrueFalseBlock(BasicBlock* block, bool value)
+{
+    if (block->KindIs(BBJ_RETURN) && block->hasSingleStmt())
+    {
+        const GenTree* rootNode = block->lastStmt()->GetRootNode();
+        if (rootNode->OperIs(GT_RETURN) && rootNode->TypeIs(TYP_INT) && rootNode->gtGetOp1()->IsCnsIntOrI())
+        {
+            const ssize_t val = rootNode->gtGetOp1()->AsIntCon()->IconValue();
+            return val == (value ? 1 : 0);
+        }
+    }
+    return false;
+}
+
 //-----------------------------------------------------------------------------
 // optIfConvert
 //
@@ -548,6 +562,7 @@ void OptIfConversionDsc::IfConvertDump()
 //
 bool OptIfConversionDsc::optIfConvert()
 {
+
     // Does the block end by branching via a JTRUE after a compare?
     if (!m_startBlock->KindIs(BBJ_COND) || (m_startBlock->NumSucc() != 2))
     {
@@ -567,6 +582,27 @@ bool OptIfConversionDsc::optIfConvert()
     IfConvertFindFlow();
     if (!m_flowFound)
     {
+        if (m_comp->info.compRetType == TYP_UBYTE && fgIsReturnTrueFalseBlock(m_startBlock->GetTrueTarget(), true) &&
+            fgIsReturnTrueFalseBlock(m_startBlock->GetFalseTarget(), false) &&
+            (m_startBlock->GetTrueTarget()->countOfInEdges() == 1))
+        {
+            auto retTrueBb = m_startBlock->GetTrueTarget();
+
+            m_comp->fgRemoveRefPred(m_startBlock->GetTrueTarget(), m_startBlock);
+            m_comp->fgRemoveRefPred(m_startBlock->GetFalseTarget(), m_startBlock);
+            assert(last->OperIs(GT_JTRUE));
+            last->ChangeOper(GT_RETURN);
+            last->ChangeType(TYP_INT);
+            m_cond->gtFlags &= ~GTF_RELOP_JMP_USED;
+            m_startBlock->SetKindAndTarget(BBJ_RETURN);
+
+            m_comp->gtSetStmtInfo(m_startBlock->lastStmt());
+            m_comp->fgSetStmtSeq(m_startBlock->lastStmt());
+            m_comp->gtUpdateStmtSideEffects(m_startBlock->lastStmt());
+
+            m_startBlock->bbCodeOffsEnd = retTrueBb->bbCodeOffsEnd;
+            return true;
+        }
         return false;
     }
 
@@ -702,9 +738,16 @@ bool OptIfConversionDsc::optIfConvert()
         selectType       = genActualType(m_thenOperation.node);
     }
 
-    // Create a select node.
-    GenTreeConditional* select =
-        m_comp->gtNewConditionalNode(GT_SELECT, m_cond, selectTrueInput, selectFalseInput, selectType);
+    GenTree* select;
+    if (selectTrueInput->IsIntegralConst(1) && selectFalseInput->IsIntegralConst(0))
+    {
+        select = m_cond;
+    }
+    else
+    {
+        select = m_comp->gtNewConditionalNode(GT_SELECT, m_cond, selectTrueInput, selectFalseInput, selectType);
+    }
+
     m_thenOperation.node->AddAllEffectsFlags(select);
 
     // Use the select as the source of the Then operation.

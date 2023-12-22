@@ -6014,6 +6014,50 @@ bool Compiler::fgUpdateFlowGraph(bool doTailDuplication, bool isPhase)
             bNext = block->Next();
             bDest = nullptr;
 
+            if (doTailDuplication && block->KindIs(BBJ_RETURN) && info.compRetType == TYP_UBYTE &&
+                block->lastStmt() != nullptr)
+            {
+                GenTree* rootNode = block->lastStmt()->GetRootNode();
+                if (rootNode->OperIs(GT_RETURN) && rootNode->TypeIs(TYP_INT) && rootNode->gtGetOp1()->OperIsCompare() &&
+                    rootNode->gtGetOp1()->gtGetOp2()->IsIntegralConst())
+                {
+                    // Convert GT_RETURN to GT_JTRUE
+                    rootNode->gtGetOp1()->gtFlags |= (GTF_RELOP_JMP_USED | GTF_DONT_CSE);
+                    rootNode->gtGetOp1()->gtRequestSetFlags();
+                    rootNode->ChangeOper(GT_JTRUE);
+
+                    DebugInfo   dbgInfo = block->lastStmt()->GetDebugInfo();
+                    BasicBlock* retTrueBb =
+                        fgNewBBFromTreeAfter(BBJ_RETURN, block, gtNewOperNode(GT_RETURN, TYP_INT, gtNewTrue()),
+                                             dbgInfo);
+                    BasicBlock* retFalseBb =
+                        fgNewBBFromTreeAfter(BBJ_RETURN, block, gtNewOperNode(GT_RETURN, TYP_INT, gtNewFalse()),
+                                             dbgInfo);
+
+                    block->SetCond(retTrueBb);
+                    block->SetFalseTarget(retFalseBb);
+
+                    fgAddRefPred(retTrueBb, block);
+                    fgAddRefPred(retFalseBb, block);
+
+                    // We have:
+                    //
+                    // block:    return cmp;
+                    // nextBb:   return true;
+                    //
+                    // convert it to:
+                    //
+                    // block:    jtrue(cmp) -> nextBb
+                    // newBlock: return false;
+                    // nextBb:   return true;
+                    //
+                    change   = true;
+                    modified = true;
+                    bDest    = block->GetTrueTarget();
+                    bNext    = block->GetFalseTarget();
+                }
+            }
+
             if (block->KindIs(BBJ_ALWAYS))
             {
                 bDest = block->GetTarget();
