@@ -1441,6 +1441,31 @@ DONE_CALL:
                 {
                     impSpillSideEffects(true, CHECK_SPILL_ALL DEBUGARG("non-inline candidate call"));
                 }
+
+                if (JitConfig.JitProfileValues() && call->IsCall() &&
+                    call->AsCall()->IsSpecialIntrinsic(this, NI_System_SpanHelpers_SequenceEqual))
+                {
+                    if (opts.IsOptimizedWithProfile())
+                    {
+                        call = impOptimizeMemmoveWithProfile(call->AsCall(), rawILOffset);
+                        if (call->OperIs(GT_QMARK))
+                        {
+                            unsigned tmp = lvaGrabTemp(true DEBUGARG("Grabbing temp for Qmark"));
+                            impStoreTemp(tmp, call, CHECK_SPILL_ALL);
+                            call = gtNewLclvNode(tmp, call->TypeGet());
+                        }
+                    }
+                    else if (opts.IsInstrumented())
+                    {
+                        // We might want to instrument it for optimized versions too, but we don't currently.
+                        HandleHistogramProfileCandidateInfo* pInfo =
+                            new (this, CMK_Inlining) HandleHistogramProfileCandidateInfo;
+                        pInfo->ilOffset = rawILOffset;
+                        pInfo->probeIndex = 0;
+                        call->AsCall()->gtHandleHistogramProfileCandidateInfo = pInfo;
+                        compCurBB->SetFlags(BBF_HAS_VALUE_PROFILE);
+                    }
+                }
             }
         }
 
@@ -1494,7 +1519,7 @@ DONE_CALL:
 //
 GenTree* Compiler::impOptimizeMemmoveWithProfile(GenTreeCall* call, IL_OFFSET ilOffset)
 {
-    assert(call->IsSpecialIntrinsic(this, NI_System_Buffer_Memmove));
+    //assert(call->IsSpecialIntrinsic(this, NI_System_Buffer_Memmove));
     assert(opts.IsOptimizedWithProfile());
 
     if (call->IsInlineCandidate())
@@ -1532,6 +1557,11 @@ GenTree* Compiler::impOptimizeMemmoveWithProfile(GenTreeCall* call, IL_OFFSET il
     {
         const ssize_t popularSize = likelyValue.value;
 
+        if (call->IsSpecialIntrinsic(this, NI_System_SpanHelpers_SequenceEqual))
+        {
+            printf("");
+        }
+
         // It only makes sense if we're going to actually unroll it.
         // TODO: Consider enabling it for popularSize == 0 too.
         if ((popularSize > 0) && ((size_t)popularSize <= (size_t)getUnrollThreshold(Memmove)))
@@ -1559,9 +1589,9 @@ GenTree* Compiler::impOptimizeMemmoveWithProfile(GenTreeCall* call, IL_OFFSET il
             *lenNode              = popularLen;
 
             // TODO: Specify weights for the branches in the Qmark node.
-            GenTreeColon* colon = new (this, GT_COLON) GenTreeColon(TYP_VOID, fallbackCall, call);
+            GenTreeColon* colon = new (this, GT_COLON) GenTreeColon(call->TypeGet(), fallbackCall, call);
             GenTreeOp*    cond  = gtNewOperNode(GT_NE, TYP_INT, lenNodeClone, gtCloneExpr(popularLen));
-            GenTreeQmark* qmark = gtNewQmarkNode(TYP_VOID, cond, colon);
+            GenTreeQmark* qmark = gtNewQmarkNode(call->TypeGet(), cond, colon);
 
             JITDUMP("\n\nOptimized Memmove:\n")
             DISPTREE(qmark)
@@ -2708,6 +2738,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
             case NI_System_Threading_Volatile_Read:
             case NI_System_Threading_Volatile_Write:
             case NI_System_Buffer_Memmove:
+            case NI_System_SpanHelpers_SequenceEqual:
 
                 betterToExpand = true;
                 break;

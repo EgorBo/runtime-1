@@ -1949,9 +1949,13 @@ public:
     Compiler::fgWalkResult PreOrderVisit(GenTree** use, GenTree* user)
     {
         GenTree* const node = *use;
-        if (node->IsCall() && node->AsCall()->IsSpecialIntrinsic(m_compiler, NI_System_Buffer_Memmove))
+        if (node->IsCall() && node->AsCall()->IsSpecialIntrinsic())
         {
-            m_functor(m_compiler, node);
+            NamedIntrinsic ni = m_compiler->lookupNamedIntrinsic(node->AsCall()->gtCallMethHnd);
+            if ((ni == NI_System_Buffer_Memmove) || (ni == NI_System_SpanHelpers_SequenceEqual))
+            {
+                m_functor(m_compiler, node);
+            }
         }
         return Compiler::WALK_CONTINUE;
     }
@@ -2276,7 +2280,8 @@ public:
         }
 
         // Only Buffer.Memmove call is currently expected
-        assert(node->IsCall() && (node->AsCall()->IsSpecialIntrinsic(compiler, NI_System_Buffer_Memmove)));
+        assert(node->IsCall() && ((node->AsCall()->IsSpecialIntrinsic(compiler, NI_System_Buffer_Memmove)) ||
+            (node->AsCall()->IsSpecialIntrinsic(compiler, NI_System_SpanHelpers_SequenceEqual))));
 
         const ICorJitInfo::PgoInstrumentationSchema& countEntry = m_schema[*m_currentSchemaIndex];
         if (countEntry.ILOffset !=
