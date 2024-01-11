@@ -3252,6 +3252,14 @@ void Compiler::impImportAndPushBox(CORINFO_RESOLVED_TOKEN* pResolvedToken)
         compCurBB->SetFlags(BBF_HAS_NEWOBJ);
         optMethodFlags |= OMF_HAS_NEWOBJ;
 
+        // Spill exprToBox to a local so the actual allocation happens after it.
+        // Avoid this for side-effect-free expressions and structs (to only perform a single copy - directly into
+        // the boxed object).
+        if (!varTypeIsStruct(exprToBox) && ((exprToBox->gtFlags & GTF_SIDE_EFFECT) != 0))
+        {
+            impCloneExpr(exprToBox, &exprToBox, CHECK_SPILL_ALL, nullptr DEBUGARG("CASTCLASS eval op1"));
+        }
+
         // Assign the boxed object to the box temp.
         //
         GenTree*   allocBoxStore = gtNewTempStore(impBoxTemp, op1);
