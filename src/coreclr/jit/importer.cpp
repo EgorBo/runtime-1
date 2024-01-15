@@ -5321,16 +5321,17 @@ GenTree* Compiler::impOptimizeCastClassOrIsInst(GenTree* op1, CORINFO_RESOLVED_T
         }
         else if (castResult == TypeCompareState::MustNot)
         {
-            // See if we can sharpen exactness by looking for final classes
+            bool canBeDropped = !isCastClass;
             if (!isExact)
             {
-                isExact = impIsClassExact(fromClass);
+                if ((info.compCompHnd->compareTypesForCast(fromClass, toClass) != TypeCompareState::MustNot) ||
+                    (info.compCompHnd->compareTypesForCast(toClass, fromClass) != TypeCompareState::MustNot))
+                {
+                    canBeDropped = false;
+                }
             }
 
-            // Cast to exact type will fail. Handle case where we have
-            // an exact type (that is, fromClass is not a subtype)
-            // and we're not going to throw on failure.
-            if (isExact && !isCastClass)
+            if (canBeDropped)
             {
                 JITDUMP("Cast will fail, optimizing to return null\n");
 
