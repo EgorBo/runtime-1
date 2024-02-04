@@ -4863,9 +4863,20 @@ bool Compiler::optNonNullAssertionProp_Ind(ASSERT_VALARG_TP assertions, GenTree*
 {
     assert(indir->OperIsIndir());
 
+    bool updated = false;
+    if (indir->OperIs(GT_STOREIND))
+    {
+        const GenTree* data = indir->AsIndir()->Data();
+        if (data->IsIconHandle(GTF_ICON_OBJ_HDL) || vnStore->IsVNObjHandle(data->gtVNPair.GetConservative()))
+        {
+            indir->gtFlags |= GTF_IND_TGT_NOT_HEAP;
+            updated = true;
+        }
+    }
+
     if (!(indir->gtFlags & GTF_EXCEPT))
     {
-        return false;
+        return updated;
     }
 
 #ifdef DEBUG
@@ -4891,7 +4902,7 @@ bool Compiler::optNonNullAssertionProp_Ind(ASSERT_VALARG_TP assertions, GenTree*
         return true;
     }
 
-    return false;
+    return updated;
 }
 
 /*****************************************************************************
