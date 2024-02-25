@@ -19,6 +19,7 @@
 #include "corinfo.h"
 #include "exceptionhandlingqcalls.h"
 #include "exinfo.h"
+#include "configuration.h"
 
 #if defined(TARGET_X86)
 #define USE_CURRENT_CONTEXT_IN_FILTER
@@ -236,7 +237,7 @@ void InitializeExceptionHandling()
     // Initialize the lock used for synchronizing access to the stacktrace in the exception object
     g_StackTraceArrayLock.Init(LOCK_TYPE_DEFAULT, TRUE);
 
-    g_isNewExceptionHandlingEnabled = CLRConfig::GetConfigValue(CLRConfig::EXTERNAL_EnableNewExceptionHandling) != 0;
+    g_isNewExceptionHandlingEnabled = Configuration::GetKnobBooleanValue(W("System.Runtime.LegacyExceptionHandling"), CLRConfig::EXTERNAL_LegacyExceptionHandling ) == 0;
 
 #ifdef TARGET_UNIX
     // Register handler of hardware exceptions like null reference in PAL
@@ -939,7 +940,7 @@ ProcessCLRExceptionNew(IN     PEXCEPTION_RECORD   pExceptionRecord,
         else
         {
             OBJECTREF oref = ExceptionTracker::CreateThrowable(pExceptionRecord, FALSE);
-            DispatchManagedException(oref, pContextRecord);
+            DispatchManagedException(oref, pContextRecord, /* preserveStackTrace */ false);
         }
     }
 #endif // !HOST_UNIX
@@ -7578,15 +7579,8 @@ extern "C" void QCALLTYPE AppendExceptionStackFrame(QCall::ObjectHandleOnStack e
         _ASSERTE(pMD == codeInfo.GetMethodDesc());
 #endif // _DEBUG
 
-        // Compensate for a bug in the old EH that doesn't mark faulting instructions as faulting. The VS expects that behavior.
-        bool hasFaulted = pExInfo->m_frameIter.m_crawl.HasFaulted();
-        if (hasFaulted)
-        {
-            pExInfo->m_frameIter.m_crawl.hasFaulted = false;
-        }
         pExInfo->m_StackTraceInfo.AppendElement(canAllocateMemory, ip, sp, pMD, &pExInfo->m_frameIter.m_crawl);
         pExInfo->m_StackTraceInfo.SaveStackTrace(canAllocateMemory, pExInfo->m_hThrowable, /*bReplaceStack*/FALSE, /*bSkipLastElement*/FALSE);
-        pExInfo->m_frameIter.m_crawl.hasFaulted = hasFaulted;
     }
 
     // Notify the debugger that we are on the first pass for a managed exception.
