@@ -5749,10 +5749,21 @@ GenTree* Compiler::fgMorphPotentialTailCall(GenTreeCall* call)
 #endif
     };
 
-    if (call->gtCallMoreFlags & GTF_CALL_M_SPECIAL_INTRINSIC)
+    if (call->IsSpecialIntrinsic())
     {
-        failTailCall("Might turn into an intrinsic");
-        return nullptr;
+        switch (lookupNamedIntrinsic(call->gtCallMethHnd))
+        {
+            case NI_System_SpanHelpers_Fill:
+            case NI_System_SpanHelpers_Memmove:
+            case NI_System_SpanHelpers_ClearWithoutReferences:
+                // We're fine with these intrinsics being tail called.
+                // In most cases we
+                break;
+
+            default:
+                failTailCall("Might turn into an intrinsic");
+                return nullptr;
+        }
     }
 
 #ifdef TARGET_ARM

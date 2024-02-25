@@ -1875,6 +1875,13 @@ bool Lowering::LowerCallMemset(GenTreeCall* call, GenTree** next)
         return false;
     }
 
+    if (call->IsTailCall())
+    {
+        // We can't expand it - bail out.
+        // Perhaps, we can tail call into some void stub() as a workaround?
+        return false;
+    }
+
     GenTree* dstRefArg = call->gtArgs.GetUserArgByIndex(0)->GetNode();
     GenTree* lengthArg;
     GenTree* valueArg;
@@ -2020,6 +2027,13 @@ bool Lowering::LowerCallMemmove(GenTreeCall* call, GenTree** next)
     if (comp->info.compHasNextCallRetAddr)
     {
         JITDUMP("compHasNextCallRetAddr=true so we won't be able to remove the call - bail out.\n")
+        return false;
+    }
+
+    if (call->IsTailCall())
+    {
+        // We can't expand it - bail out.
+        // Perhaps, we can tail call into some void stub() as a workaround?
         return false;
     }
 
