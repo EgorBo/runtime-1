@@ -7836,7 +7836,18 @@ START:
                 }
 
                 // Use the inlinee compiler object
-                pParam->pComp = pParam->inlineInfo->InlinerCompiler->InlineeCompiler;
+                pParam->pComp                       = pParam->inlineInfo->InlinerCompiler->InlineeCompiler;
+                pParam->pComp->info.compTypeCtxtArg = -1;
+                CallArg* ctxArg = pParam->inlineInfo->iciCall->gtArgs.FindWellKnownArg(WellKnownArg::InstParam);
+                if (ctxArg != nullptr)
+                {
+                    GenTree* ctxArgNode = ctxArg->GetEarlyNode();
+                    assert(!ctxArgNode->OperIs(GT_RUNTIMELOOKUP));
+                    if (ctxArgNode->OperIs(GT_LCL_VAR))
+                    {
+                        pParam->pComp->info.compTypeCtxtArg = ctxArgNode->AsLclVar()->GetLclNum();
+                    }
+                }
 #ifdef DEBUG
 // memset(pParam->pComp, 0xEE, sizeof(Compiler));
 #endif

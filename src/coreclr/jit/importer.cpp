@@ -1548,19 +1548,17 @@ GenTree* Compiler::impMethodPointer(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORI
 
 GenTree* Compiler::getRuntimeContextTree(CORINFO_RUNTIME_LOOKUP_KIND kind)
 {
-    GenTree* ctxTree = nullptr;
+    GenTree* ctxTree;
 
     // Collectible types requires that for shared generic code, if we use the generic context parameter
     // that we report it. (This is a conservative approach, we could detect some cases particularly when the
     // context parameter is this that we don't need the eager reporting logic.)
     lvaGenericsContextInUse = true;
 
-    Compiler* pRoot = impInlineRoot();
-
     if (kind == CORINFO_LOOKUP_THISOBJ)
     {
         // this Object
-        ctxTree = gtNewLclvNode(pRoot->info.compThisArg, TYP_REF);
+        ctxTree = gtNewLclvNode(impInlineRoot()->info.compThisArg, TYP_REF);
         ctxTree->gtFlags |= GTF_VAR_CONTEXT;
 
         // context is the method table pointer of the this object
@@ -1571,7 +1569,9 @@ GenTree* Compiler::getRuntimeContextTree(CORINFO_RUNTIME_LOOKUP_KIND kind)
         assert(kind == CORINFO_LOOKUP_METHODPARAM || kind == CORINFO_LOOKUP_CLASSPARAM);
 
         // Exact method descriptor as passed in
-        ctxTree = gtNewLclvNode(pRoot->info.compTypeCtxtArg, TYP_I_IMPL);
+        unsigned ctxNum =
+            info.compTypeCtxtArg != BAD_VAR_NUM ? info.compTypeCtxtArg : impInlineRoot()->info.compTypeCtxtArg;
+        ctxTree = gtNewLclvNode(ctxNum, TYP_I_IMPL);
         ctxTree->gtFlags |= GTF_VAR_CONTEXT;
     }
     return ctxTree;
