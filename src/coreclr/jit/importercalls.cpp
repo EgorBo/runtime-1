@@ -6734,7 +6734,9 @@ void Compiler::impMarkInlineCandidate(GenTree*               callNode,
         CallArg* instParam = call->gtArgs.FindWellKnownArg(WellKnownArg::InstParam);
         if ((instParam != nullptr) && instParam->GetNode()->OperIs(GT_RUNTIMELOOKUP))
         {
-            fgInsertCommaFormTemp(&instParam->EarlyNodeRef());
+            const unsigned lookupTmp = lvaGrabTemp(true DEBUGARG("spilling runtimelookup"));
+            impStoreTemp(lookupTmp, instParam->GetNode(), CHECK_SPILL_NONE);
+            instParam->SetEarlyNode(gtNewLclvNode(lookupTmp, TYP_I_IMPL));
         }
         return;
     }

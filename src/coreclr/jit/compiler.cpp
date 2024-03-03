@@ -7837,7 +7837,8 @@ START:
 
                 // Use the inlinee compiler object
                 pParam->pComp                       = pParam->inlineInfo->InlinerCompiler->InlineeCompiler;
-                pParam->pComp->info.compTypeCtxtArg = -1;
+                pParam->pComp->info.compTypeCtxtArg = BAD_VAR_NUM;
+
                 CallArg* ctxArg = pParam->inlineInfo->iciCall->gtArgs.FindWellKnownArg(WellKnownArg::InstParam);
                 if (ctxArg != nullptr)
                 {
