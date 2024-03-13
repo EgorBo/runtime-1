@@ -72,6 +72,7 @@ void InitJITHelpers1()
 #endif // _DEBUG
         ))
     {
+        SetJitHelperFunction(CORINFO_HELP_NEWSFAST_CONST, JIT_NewS_MP_FastPortableConst);
 #ifdef TARGET_UNIX
         SetJitHelperFunction(CORINFO_HELP_NEWSFAST, JIT_NewS_MP_FastPortable);
         SetJitHelperFunction(CORINFO_HELP_NEWSFAST_ALIGN8, JIT_NewS_MP_FastPortable);

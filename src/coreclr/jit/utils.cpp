@@ -1581,6 +1581,7 @@ void HelperCallProperties::init()
 
             // Heap Allocation helpers, these all never return null
             case CORINFO_HELP_NEWSFAST:
+            case CORINFO_HELP_NEWSFAST_CONST:
             case CORINFO_HELP_NEWSFAST_ALIGN8:
             case CORINFO_HELP_NEWSFAST_ALIGN8_VC:
             case CORINFO_HELP_NEWFAST:

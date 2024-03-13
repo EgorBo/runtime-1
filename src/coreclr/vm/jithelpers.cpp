@@ -2414,6 +2414,52 @@ HCIMPLEND
 //*************************************************************
 // Allocation fast path for typical objects
 //
+HCIMPL2_IV(Object*, JIT_NewS_MP_FastPortableConst, CORINFO_CLASS_HANDLE typeHnd_, unsigned size)
+{
+    FCALL_CONTRACT;
+
+    do
+    {
+        _ASSERTE(GCHeapUtilities::UseThreadAllocationContexts());
+
+        // This is typically the only call in the fast path. Making the call early seems to be better, as it allows the compiler
+        // to use volatile registers for intermediate values. This reduces the number of push/pop instructions and eliminates
+        // some reshuffling of intermediate values into nonvolatile registers around the call.
+        Thread *thread = GetThread();
+
+        TypeHandle typeHandle(typeHnd_);
+        _ASSERTE(!typeHandle.IsTypeDesc()); // heap objects must have method tables
+        MethodTable *methodTable = typeHandle.AsMethodTable();
+
+        _ASSERTE(size == methodTable->GetBaseSize());
+        _ASSERTE(size % DATA_ALIGNMENT == 0);
+
+        gc_alloc_context *allocContext = thread->GetAllocContext();
+        BYTE *allocPtr = allocContext->alloc_ptr;
+        _ASSERTE(allocPtr <= allocContext->alloc_limit);
+        if (size > static_cast<SIZE_T>(allocContext->alloc_limit - allocPtr))
+        {
+            break;
+        }
+        allocContext->alloc_ptr = allocPtr + size;
+
+        _ASSERTE(allocPtr != nullptr);
+        Object *object = reinterpret_cast<Object *>(allocPtr);
+        _ASSERTE(object->HasEmptySyncBlockInfo());
+        object->SetMethodTable(methodTable);
+
+        return object;
+    } while (false);
+
+    // Tail call to the slow helper
+    ENDFORBIDGC();
+    return HCCALL1(JIT_New, typeHnd_);
+}
+HCIMPLEND
+
+//*************************************************************
+// Allocation fast path for typical objects
+//
 HCIMPL1(Object*, JIT_NewS_MP_FastPortable, CORINFO_CLASS_HANDLE typeHnd_)
 {
     FCALL_CONTRACT;
