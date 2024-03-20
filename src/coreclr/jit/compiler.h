@@ -3578,7 +3578,7 @@ public:
 
     bool gtIsRecursiveCall(CORINFO_METHOD_HANDLE callMethodHandle)
     {
-        return callMethodHandle == impInlineRoot()->info.compMethodHnd;
+        return (callMethodHandle == impInlineRoot()->info.compMethodHnd);
     }
 
     //-------------------------------------------------------------------------
