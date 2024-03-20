@@ -3571,14 +3571,18 @@ public:
 
     // Return true if call is a recursive call; return false otherwise.
     // Note when inlining, this looks for calls back to the root method.
-    bool gtIsRecursiveCall(GenTreeCall* call)
+    bool gtIsRecursiveCall(GenTreeCall* call, bool inlineeOnly = false)
     {
-        return gtIsRecursiveCall(call->gtCallMethHnd);
+        return gtIsRecursiveCall(call->gtCallMethHnd, inlineeOnly);
     }
 
-    bool gtIsRecursiveCall(CORINFO_METHOD_HANDLE callMethodHandle)
+    bool gtIsRecursiveCall(CORINFO_METHOD_HANDLE callMethodHandle, bool inlineeOnly = false)
     {
-        return (callMethodHandle == impInlineRoot()->info.compMethodHnd);
+        if (inlineeOnly)
+        {
+            return callMethodHandle == info.compMethodHnd;
+        }
+        return callMethodHandle == impInlineRoot()->info.compMethodHnd;
     }
 
     //-------------------------------------------------------------------------
@@ -4539,7 +4543,8 @@ protected:
                             CORINFO_CLASS_HANDLE  clsHnd,
                             CORINFO_METHOD_HANDLE method,
                             CORINFO_SIG_INFO*     sig,
-                            bool                  mustExpand);
+                            bool                  mustExpand,
+                            bool*                 pLateExpansion);
     GenTree* impSimdAsHWIntrinsic(NamedIntrinsic        intrinsic,
                                   CORINFO_CLASS_HANDLE  clsHnd,
                                   CORINFO_METHOD_HANDLE method,
