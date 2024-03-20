@@ -3571,17 +3571,13 @@ public:
 
     // Return true if call is a recursive call; return false otherwise.
     // Note when inlining, this looks for calls back to the root method.
-    bool gtIsRecursiveCall(GenTreeCall* call, bool inlineeOnly = false)
+    bool gtIsRecursiveCall(GenTreeCall* call)
     {
-        return gtIsRecursiveCall(call->gtCallMethHnd, inlineeOnly);
+        return gtIsRecursiveCall(call->gtCallMethHnd);
     }
 
-    bool gtIsRecursiveCall(CORINFO_METHOD_HANDLE callMethodHandle, bool inlineeOnly = false)
+    bool gtIsRecursiveCall(CORINFO_METHOD_HANDLE callMethodHandle)
     {
-        if (inlineeOnly)
-        {
-            return callMethodHandle == info.compMethodHnd;
-        }
         return callMethodHandle == impInlineRoot()->info.compMethodHnd;
     }
 
