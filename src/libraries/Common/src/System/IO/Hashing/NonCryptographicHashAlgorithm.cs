@@ -13,7 +13,12 @@ namespace System.IO.Hashing
     /// <summary>
     ///   Represents a non-cryptographic hash algorithm.
     /// </summary>
-    public abstract class NonCryptographicHashAlgorithm
+#if SYSTEM_PRIVATE_CORELIB
+    internal
+#else
+    public
+#endif
+    abstract class NonCryptographicHashAlgorithm
     {
         /// <summary>
         ///   Gets the number of bytes produced from this hash algorithm.
@@ -33,8 +38,12 @@ namespace System.IO.Hashing
         /// </exception>
         protected NonCryptographicHashAlgorithm(int hashLengthInBytes)
         {
+#if NET
+            ArgumentOutOfRangeException.ThrowIfLessThan(hashLengthInBytes, 1);
+#else
             if (hashLengthInBytes < 1)
                 throw new ArgumentOutOfRangeException(nameof(hashLengthInBytes));
+#endif
 
             HashLengthInBytes = hashLengthInBytes;
         }
@@ -83,10 +92,14 @@ namespace System.IO.Hashing
         /// </exception>
         public void Append(byte[] source)
         {
-            if (source is null)
+#if NET
+            ArgumentNullException.ThrowIfNull(source);
+#else
+            if (stream is null)
             {
                 throw new ArgumentNullException(nameof(source));
             }
+#endif
 
             Append(new ReadOnlySpan<byte>(source));
         }
@@ -102,10 +115,14 @@ namespace System.IO.Hashing
         /// <seealso cref="AppendAsync(Stream, CancellationToken)"/>
         public void Append(Stream stream)
         {
+#if NET
+            ArgumentNullException.ThrowIfNull(stream);
+#else
             if (stream is null)
             {
                 throw new ArgumentNullException(nameof(stream));
             }
+#endif
 
             byte[] buffer = ArrayPool<byte>.Shared.Rent(4096);
 
@@ -142,10 +159,14 @@ namespace System.IO.Hashing
         /// </exception>
         public Task AppendAsync(Stream stream, CancellationToken cancellationToken = default)
         {
+#if NET
+            ArgumentNullException.ThrowIfNull(stream);
+#else
             if (stream is null)
             {
                 throw new ArgumentNullException(nameof(stream));
             }
+#endif
 
             return AppendAsyncCore(stream, cancellationToken);
         }

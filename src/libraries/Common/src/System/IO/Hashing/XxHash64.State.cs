@@ -12,7 +12,12 @@ using static System.IO.Hashing.XxHashShared;
 
 namespace System.IO.Hashing
 {
-    public sealed partial class XxHash64
+#if SYSTEM_PRIVATE_CORELIB
+    internal
+#else
+    public
+#endif
+    sealed partial class XxHash64
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ulong Avalanche(ulong hash)

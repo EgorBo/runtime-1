@@ -3980,6 +3980,9 @@
   <data name="NotSupported_DebuggerAttached" xml:space="preserve">
     <value>Assembly updates cannot be applied while a debugger is attached.</value>
   </data>
+  <data name="NotSupported_GetHashCode" xml:space="preserve">
+    <value>The GetHashCode method is not supported on this object. Use GetCurrentHash or GetHashAndReset to retrieve the hash code computed by this object.</value>
+  </data>
   <data name="NotSupported_MethodBodyReplacement" xml:space="preserve">
     <value>Method body replacement not supported in this runtime.</value>
   </data>

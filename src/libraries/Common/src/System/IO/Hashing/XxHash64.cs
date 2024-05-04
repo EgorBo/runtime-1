@@ -15,7 +15,12 @@ namespace System.IO.Hashing
     /// For methods that persist the computed numerical hash value as bytes,
     /// the value is written in the Big Endian byte order.
     /// </remarks>
-    public sealed partial class XxHash64 : NonCryptographicHashAlgorithm
+#if SYSTEM_PRIVATE_CORELIB
+    internal
+#else
+    public
+#endif
+    sealed partial class XxHash64 : NonCryptographicHashAlgorithm
     {
         private const int HashSize = sizeof(ulong);
         private const int StripeSize = 4 * sizeof(ulong);
@@ -120,7 +125,9 @@ namespace System.IO.Hashing
 
         /// <summary>Gets the current computed hash value without modifying accumulated state.</summary>
         /// <returns>The hash value for the data already provided.</returns>
+#if !SYSTEM_PRIVATE_CORELIB
         [CLSCompliant(false)]
+#endif
         public ulong GetCurrentHashAsUInt64()
         {
             int remainingLength = (int)_length & 0x1F;
@@ -144,10 +151,14 @@ namespace System.IO.Hashing
         /// </exception>
         public static byte[] Hash(byte[] source)
         {
-            if (source is null)
+#if NET
+            ArgumentNullException.ThrowIfNull(source);
+#else
+            if (stream is null)
             {
                 throw new ArgumentNullException(nameof(source));
             }
+#endif
 
             return Hash(new ReadOnlySpan<byte>(source));
         }
@@ -163,10 +174,14 @@ namespace System.IO.Hashing
         /// </exception>
         public static byte[] Hash(byte[] source, long seed)
         {
-            if (source is null)
+#if NET
+            ArgumentNullException.ThrowIfNull(source);
+#else
+            if (stream is null)
             {
                 throw new ArgumentNullException(nameof(source));
             }
+#endif
 
             return Hash(new ReadOnlySpan<byte>(source), seed);
         }
@@ -237,7 +252,9 @@ namespace System.IO.Hashing
         /// <param name="source">The data to hash.</param>
         /// <param name="seed">The seed value for this hash computation.</param>
         /// <returns>The computed XxHash64 hash.</returns>
+#if !SYSTEM_PRIVATE_CORELIB
         [CLSCompliant(false)]
+#endif
         public static ulong HashToUInt64(ReadOnlySpan<byte> source, long seed = 0)
         {
             int totalLength = source.Length;

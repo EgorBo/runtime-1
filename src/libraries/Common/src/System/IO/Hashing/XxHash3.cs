@@ -19,7 +19,12 @@ namespace System.IO.Hashing
 #if NET
     [SkipLocalsInit]
 #endif
-    public sealed unsafe class XxHash3 : NonCryptographicHashAlgorithm
+#if SYSTEM_PRIVATE_CORELIB
+    internal
+#else
+    public
+#endif
+    sealed unsafe class XxHash3 : NonCryptographicHashAlgorithm
     {
         /// <summary>XXH3 produces 8-byte hashes.</summary>
         private new const int HashLengthInBytes = 8;
@@ -120,29 +125,37 @@ namespace System.IO.Hashing
         /// <param name="source">The data to hash.</param>
         /// <param name="seed">The seed value for this hash computation.</param>
         /// <returns>The computed XXH3 hash.</returns>
+#if !SYSTEM_PRIVATE_CORELIB
         [CLSCompliant(false)]
+#endif
         public static ulong HashToUInt64(ReadOnlySpan<byte> source, long seed = 0)
         {
             uint length = (uint)source.Length;
             fixed (byte* sourcePtr = &MemoryMarshal.GetReference(source))
             {
-                if (length <= 16)
-                {
-                    return HashLength0To16(sourcePtr, length, (ulong)seed);
-                }
-
-                if (length <= 128)
-                {
-                    return HashLength17To128(sourcePtr, length, (ulong)seed);
-                }
-
-                if (length <= MidSizeMaxBytes)
-                {
-                    return HashLength129To240(sourcePtr, length, (ulong)seed);
-                }
-
-                return HashLengthOver240(sourcePtr, length, (ulong)seed);
+                return HashToUInt64(sourcePtr, length, seed);
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong HashToUInt64(byte* sourcePtr, uint length, long seed = 0)
+        {
+            if (length <= 16)
+            {
+                return HashLength0To16(sourcePtr, length, (ulong)seed);
+            }
+
+            if (length <= 128)
+            {
+                return HashLength17To128(sourcePtr, length, (ulong)seed);
+            }
+
+            if (length <= MidSizeMaxBytes)
+            {
+                return HashLength129To240(sourcePtr, length, (ulong)seed);
+            }
+
+            return HashLengthOver240(sourcePtr, length, (ulong)seed);
         }
 
         /// <summary>Resets the hash computation to the initial state.</summary>
@@ -168,7 +181,9 @@ namespace System.IO.Hashing
 
         /// <summary>Gets the current computed hash value without modifying accumulated state.</summary>
         /// <returns>The hash value for the data already provided.</returns>
+#if !SYSTEM_PRIVATE_CORELIB
         [CLSCompliant(false)]
+#endif
         public ulong GetCurrentHashAsUInt64()
         {
             ulong current;

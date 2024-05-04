@@ -17,14 +17,24 @@ System.IO.Hashing.XxHash32</PackageDescription>
     <Compile Include="System\IO\Hashing\Crc32.Table.cs" />
     <Compile Include="System\IO\Hashing\Crc64.cs" />
     <Compile Include="System\IO\Hashing\Crc64.Table.cs" />
-    <Compile Include="System\IO\Hashing\NonCryptographicHashAlgorithm.cs" />
     <Compile Include="System\IO\Hashing\XxHash128.cs" />
-    <Compile Include="System\IO\Hashing\XxHash3.cs" />
     <Compile Include="System\IO\Hashing\XxHash32.cs" />
     <Compile Include="System\IO\Hashing\XxHash32.State.cs" />
-    <Compile Include="System\IO\Hashing\XxHash64.cs" />
-    <Compile Include="System\IO\Hashing\XxHash64.State.cs" />
-    <Compile Include="System\IO\Hashing\XxHashShared.cs" />
+    <Compile Include="$(CommonPath)System\IO\Hashing\NonCryptographicHashAlgorithm.cs">
+      <Link>Common\System\IO\Hashing\NonCryptographicHashAlgorithm.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)System\IO\Hashing\XxHash3.cs">
+      <Link>Common\System\IO\Hashing\XxHash3.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)System\IO\Hashing\XxHash64.cs">
+      <Link>Common\System\IO\Hashing\XxHash64.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)System\IO\Hashing\XxHash64.State.cs">
+      <Link>Common\System\IO\Hashing\XxHash64.State.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)System\IO\Hashing\XxHashShared.cs">
+      <Link>Common\System\IO\Hashing\XxHashShared.cs</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">

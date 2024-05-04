@@ -5,6 +5,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.IO.Hashing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -817,31 +818,9 @@ namespace System
         {
             fixed (char* src = &_firstChar)
             {
-                Debug.Assert(src[this.Length] == '\0', "src[this.Length] == '\\0'");
-                Debug.Assert(((int)src) % 4 == 0, "Managed string should start at 4 bytes boundary");
-
-                uint hash1 = (5381 << 16) + 5381;
-                uint hash2 = hash1;
-
-                uint* ptr = (uint*)src;
-                int length = this.Length;
-
-                while (length > 2)
-                {
-                    length -= 4;
-                    // Where length is 4n-1 (e.g. 3,7,11,15,19) this additionally consumes the null terminator
-                    hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ ptr[0];
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ ptr[1];
-                    ptr += 2;
-                }
-
-                if (length > 0)
-                {
-                    // Where length is 4n-3 (e.g. 1,5,9,13,17) this additionally consumes the null terminator
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ ptr[0];
-                }
-
-                return (int)(hash1 + (hash2 * 1566083941));
+                // Multiplication below will not overflow since going from positive Int32 to UInt32.
+                uint byteLength = (uint)_stringLength * 2;
+                return XxHash3.HashToUInt64((byte*)src, byteLength).GetHashCode();
             }
         }
 
