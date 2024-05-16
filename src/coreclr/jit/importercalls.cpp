@@ -2882,7 +2882,7 @@ GenTree* Compiler::impIntrinsic(GenTree*                newobjThis,
     if (isIntrinsic)
     {
         // The recursive non-virtual calls to Jit intrinsics are must-expand by convention.
-        mustExpand = gtIsRecursiveCall(method) && !(methodFlags & CORINFO_FLG_VIRTUAL);
+        mustExpand = (info.compMethodHnd == method) && !(methodFlags & CORINFO_FLG_VIRTUAL);
     }
     else
     {
@@ -9939,7 +9939,7 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
                                 assert(strcmp(className, "Vector`1") == 0);
                                 result = NI_Vector_GetCount;
                             }
-                            else if (gtIsRecursiveCall(method))
+                            else if (info.compMethodHnd == method)
                             {
                                 // For the framework itself, any recursive intrinsics will either be
                                 // only supported on a single platform or will be guarded by a relevant
@@ -10163,7 +10163,7 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
 
                                 result = NI_Vector_GetCount;
                             }
-                            else if (gtIsRecursiveCall(method))
+                            else if (info.compMethodHnd == method)
                             {
                                 // For the framework itself, any recursive intrinsics will either be
                                 // only supported on a single platform or will be guarded by a relevant

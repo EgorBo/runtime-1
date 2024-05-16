@@ -835,7 +835,7 @@ GenTree* Compiler::addRangeCheckIfNeeded(
     )
     {
         assert(!immOp->IsCnsIntOrI());
-        assert(varTypeIsUnsigned(immOp));
+        assert(varTypeIsIntegral(immOp));
 
         return addRangeCheckForHWIntrinsic(immOp, immLowerBound, immUpperBound);
     }
@@ -1076,7 +1076,7 @@ bool Compiler::CheckHWIntrinsicImmRange(NamedIntrinsic intrinsic,
 
         if (immOutOfRange)
         {
-            assert(!mustExpand);
+            *useFallback = true;
             // The imm-HWintrinsics that do not accept all imm8 values may throw
             // ArgumentOutOfRangeException when the imm argument is not in the valid range
             return false;
