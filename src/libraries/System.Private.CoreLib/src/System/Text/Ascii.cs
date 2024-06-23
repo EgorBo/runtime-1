@@ -178,12 +178,13 @@ namespace System.Text
                 // Process long inputs 64 bytes at a time.
                 if (length > 4 * Vector128<T>.Count)
                 {
+                    Vector128<T> v1 = Vector128.LoadUnsafe(ref searchSpace, 0 * (nuint)Vector128<T>.Count);
+                    Vector128<T> v2 = Vector128.LoadUnsafe(ref searchSpace, 1 * (nuint)Vector128<T>.Count);
+                    Vector128<T> v3 = Vector128.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector128<T>.Count);
+                    Vector128<T> v4 = Vector128.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector128<T>.Count);
+
                     // Process the first 64 bytes.
-                    if (!AllCharsInVectorAreAscii(
-                        Vector128.LoadUnsafe(ref searchSpace) |
-                        Vector128.LoadUnsafe(ref searchSpace, (nuint)Vector128<T>.Count) |
-                        Vector128.LoadUnsafe(ref searchSpace, 2 * (nuint)Vector128<T>.Count) |
-                        Vector128.LoadUnsafe(ref searchSpace, 3 * (nuint)Vector128<T>.Count)))
+                    if (!AllCharsInVectorAreAscii((v2 | v4) | (v1 | v3)))
                     {
                         return false;
                     }
@@ -203,11 +204,13 @@ namespace System.Text
                     {
                         ref T current = ref Unsafe.Add(ref searchSpace, i);
 
-                        if (!AllCharsInVectorAreAscii(
-                            Vector128.LoadUnsafe(ref current) |
-                            Vector128.LoadUnsafe(ref current, (nuint)Vector128<T>.Count) |
-                            Vector128.LoadUnsafe(ref current, 2 * (nuint)Vector128<T>.Count) |
-                            Vector128.LoadUnsafe(ref current, 3 * (nuint)Vector128<T>.Count)))
+                        v1 = Vector128.LoadUnsafe(ref current, 0 * (nuint)Vector128<T>.Count);
+                        v2 = Vector128.LoadUnsafe(ref current, 1 * (nuint)Vector128<T>.Count);
+                        v3 = Vector128.LoadUnsafe(ref current, 2 * (nuint)Vector128<T>.Count);
+                        v4 = Vector128.LoadUnsafe(ref current, 3 * (nuint)Vector128<T>.Count);
+
+                        // Process the first 64 bytes.
+                        if (!AllCharsInVectorAreAscii((v2 | v4) | (v1 | v3)))
                         {
                             return false;
                         }
@@ -216,14 +219,15 @@ namespace System.Text
                     searchSpace = ref Unsafe.Add(ref searchSpace, finalStart);
                 }
 
+                Vector128<T> tv1 = Vector128.LoadUnsafe(ref searchSpace, 0 * (nuint)Vector128<T>.Count);
+                Vector128<T> tv2 = Vector128.LoadUnsafe(ref searchSpace, 1 * (nuint)Vector128<T>.Count);
+                Vector128<T> tv3 = Vector128.LoadUnsafe(ref Unsafe.Subtract(ref searchSpaceEnd, 2 * Vector128<T>.Count));
+                Vector128<T> tv4 = Vector128.LoadUnsafe(ref Unsafe.Subtract(ref searchSpaceEnd, 1 * Vector128<T>.Count));
+
                 // Process the last [1, 64] bytes.
                 // The search space has at least 2 * Vector128 bytes available to read.
                 // We process the first 2 and last 2 vectors, which may overlap.
-                return AllCharsInVectorAreAscii(
-                    Vector128.LoadUnsafe(ref searchSpace) |
-                    Vector128.LoadUnsafe(ref searchSpace, (nuint)Vector128<T>.Count) |
-                    Vector128.LoadUnsafe(ref Unsafe.Subtract(ref searchSpaceEnd, 2 * Vector128<T>.Count)) |
-                    Vector128.LoadUnsafe(ref Unsafe.Subtract(ref searchSpaceEnd, Vector128<T>.Count)));
+                return AllCharsInVectorAreAscii((tv2 | tv4) | (tv1 | tv3));
             }
         }
     }
