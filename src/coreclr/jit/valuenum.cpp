@@ -4574,6 +4574,52 @@ ValueNum ValueNumStore::EvalBitCastForConstantArgs(var_types dstType, ValueNum a
     }
 }
 
+CORINFO_CLASS_HANDLE ValueNumStore::VNRuntimeTypeToClsHnd(ValueNum vn)
+{
+    if (IsVNObjHandle(vn))
+    {
+        CORINFO_OBJECT_HANDLE objHandle = ConstantObjHandle(vn);
+        if (m_pComp->info.compCompHnd->getObjectType(objHandle) ==
+            m_pComp->info.compCompHnd->getBuiltinClass(CLASSID_RUNTIME_TYPE))
+        {
+            return m_pComp->info.compCompHnd->getTypeHandleFromRuntimeTypePointer(objHandle);
+        }
+        return NO_CLASS_HANDLE;
+    }
+
+    VNFuncApp func;
+    if (GetVNFunc(vn, &func) && (func.m_func == VNF_TypeHandleToRuntimeType))
+    {
+        ValueNum handle = func.m_args[0];
+        if (IsVNHandle(handle))
+        {
+            assert(GetHandleFlags(handle) == GTF_ICON_CLASS_HDL);
+
+            const ssize_t handleVal = ConstantValue<ssize_t>(handle);
+            ssize_t       compileTimeHandle;
+
+            const bool found = m_embeddedToCompileTimeHandleMap.TryGetValue(handleVal, &compileTimeHandle);
+            assert(found);
+
+            // We may see null compile time handles for some constructed class handle cases.
+            // We should fix the construction if possible. But just skip those cases for now.
+            //
+            if (compileTimeHandle != 0)
+            {
+                return (CORINFO_CLASS_HANDLE)compileTimeHandle;
+            }
+        }
+        else if (ISMETHOD("Test"))
+        {
+            VNFuncApp ffunc;
+            bool      found = GetVNFunc(handle, &ffunc);
+            printf("");
+        }
+    }
+
+    return NO_CLASS_HANDLE;
+}
+
 //------------------------------------------------------------------------
 // VNEvalFoldTypeCompare:
 //
@@ -4598,72 +4644,19 @@ ValueNum ValueNumStore::VNEvalFoldTypeCompare(var_types type, VNFunc func, Value
     const genTreeOps oper = genTreeOps(func);
     assert(GenTree::StaticOperIs(oper, GT_EQ, GT_NE));
 
-    VNFuncApp  arg0Func;
-    const bool arg0IsFunc = GetVNFunc(arg0VN, &arg0Func);
+    CORINFO_CLASS_HANDLE cls0 = VNRuntimeTypeToClsHnd(arg0VN);
+    CORINFO_CLASS_HANDLE cls1 = VNRuntimeTypeToClsHnd(arg1VN);
 
-    if (!arg0IsFunc || (arg0Func.m_func != VNF_TypeHandleToRuntimeType))
+    if ((cls0 == NO_CLASS_HANDLE) || (cls1 == NO_CLASS_HANDLE))
     {
         return NoVN;
     }
 
-    VNFuncApp  arg1Func;
-    const bool arg1IsFunc = GetVNFunc(arg1VN, &arg1Func);
-
-    if (!arg1IsFunc || (arg1Func.m_func != VNF_TypeHandleToRuntimeType))
-    {
-        return NoVN;
-    }
-
-    // Only re-express as handle equality when we have known
-    // class handles and the VM agrees comparing these gives the same
-    // result as comparing the runtime types.
-    //
-    // Note that VN actually tracks the value of embedded handle;
-    // we need to pass the VM the associated the compile time handles,
-    // in case they differ (say for prejitting or AOT).
-    //
-    ValueNum handle0 = arg0Func.m_args[0];
-    if (!IsVNHandle(handle0))
-    {
-        return NoVN;
-    }
-
-    ValueNum handle1 = arg1Func.m_args[0];
-    if (!IsVNHandle(handle1))
-    {
-        return NoVN;
-    }
-
-    assert(GetHandleFlags(handle0) == GTF_ICON_CLASS_HDL);
-    assert(GetHandleFlags(handle1) == GTF_ICON_CLASS_HDL);
-
-    const ssize_t handleVal0 = ConstantValue<ssize_t>(handle0);
-    const ssize_t handleVal1 = ConstantValue<ssize_t>(handle1);
-    ssize_t       compileTimeHandle0;
-    ssize_t       compileTimeHandle1;
-
-    // These mappings should always exist.
-    //
-    const bool found0 = m_embeddedToCompileTimeHandleMap.TryGetValue(handleVal0, &compileTimeHandle0);
-    const bool found1 = m_embeddedToCompileTimeHandleMap.TryGetValue(handleVal1, &compileTimeHandle1);
-    assert(found0 && found1);
-
-    // We may see null compile time handles for some constructed class handle cases.
-    // We should fix the construction if possible. But just skip those cases for now.
-    //
-    if ((compileTimeHandle0 == 0) || (compileTimeHandle1 == 0))
-    {
-        return NoVN;
-    }
-
-    JITDUMP("Asking runtime to compare %p (%s) and %p (%s) for equality\n", dspPtr(compileTimeHandle0),
-            m_pComp->eeGetClassName(CORINFO_CLASS_HANDLE(compileTimeHandle0)), dspPtr(compileTimeHandle1),
-            m_pComp->eeGetClassName(CORINFO_CLASS_HANDLE(compileTimeHandle1)));
+    JITDUMP("Asking runtime to compare %p (%s) and %p (%s) for equality\n", dspPtr(cls0), m_pComp->eeGetClassName(cls0),
+            dspPtr(cls1), m_pComp->eeGetClassName(cls1));
 
     ValueNum               result = NoVN;
-    const TypeCompareState s =
-        m_pComp->info.compCompHnd->compareTypesForEquality(CORINFO_CLASS_HANDLE(compileTimeHandle0),
-                                                           CORINFO_CLASS_HANDLE(compileTimeHandle1));
+    const TypeCompareState s      = m_pComp->info.compCompHnd->compareTypesForEquality(cls0, cls1);
     if (s != TypeCompareState::May)
     {
         const bool typesAreEqual = (s == TypeCompareState::Must);
@@ -15125,7 +15118,7 @@ CORINFO_CLASS_HANDLE ValueNumStore::GetObjectType(ValueNum vn, bool* pIsExact, b
     }
 
     // obj.GetType() is guaranteed to return a non-null RuntimeType object
-    if (func == VNF_ObjGetType)
+    if ((func == VNF_ObjGetType) || (func == VNF_TypeHandleToRuntimeType))
     {
         *pIsNonNull = true;
         // Let's not assume whether RuntimeType is exact or not here (it was not in the past for NAOT)

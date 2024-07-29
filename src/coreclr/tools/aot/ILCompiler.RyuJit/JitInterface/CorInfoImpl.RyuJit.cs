@@ -2423,6 +2423,13 @@ namespace Internal.JitInterface
             return ObjectToHandle(_compilation.NecessaryRuntimeTypeIfPossible(type));
         }
 
+#pragma warning disable CA1822 // Mark members as static
+        private CORINFO_CLASS_STRUCT_* getTypeHandleFromRuntimeTypePointer(CORINFO_OBJECT_STRUCT_* obj)
+#pragma warning restore CA1822 // Mark members as static
+        {
+            return null;
+        }
+
         private bool isObjectImmutable(CORINFO_OBJECT_STRUCT_* objPtr)
         {
             return HandleToObject(objPtr).IsKnownImmutable;

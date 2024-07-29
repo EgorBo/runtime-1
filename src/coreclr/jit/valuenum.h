@@ -340,6 +340,8 @@ private:
     // Returns "true" iff "vnf" should be folded by evaluating the func with constant arguments.
     bool VNEvalShouldFold(var_types typ, VNFunc func, ValueNum arg0VN, ValueNum arg1VN);
 
+    CORINFO_CLASS_HANDLE VNRuntimeTypeToClsHnd(ValueNum vn);
+
     // Value number a type comparison
     ValueNum VNEvalFoldTypeCompare(var_types type, VNFunc func, ValueNum arg0VN, ValueNum arg1VN);
 

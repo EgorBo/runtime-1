@@ -79,6 +79,7 @@ struct JitInterfaceCallbacks
     CorInfoHelpFunc (* getBoxHelper)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE cls);
     CorInfoHelpFunc (* getUnBoxHelper)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE cls);
     CORINFO_OBJECT_HANDLE (* getRuntimeTypePointer)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_CLASS_HANDLE cls);
+    CORINFO_CLASS_HANDLE (* getTypeHandleFromRuntimeTypePointer)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_OBJECT_HANDLE obj);
     bool (* isObjectImmutable)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_OBJECT_HANDLE objPtr);
     bool (* getStringChar)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_OBJECT_HANDLE strObj, int index, uint16_t* value);
     CORINFO_CLASS_HANDLE (* getObjectType)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_OBJECT_HANDLE objPtr);
@@ -857,6 +858,15 @@ public:
 {
     CorInfoExceptionClass* pException = nullptr;
     CORINFO_OBJECT_HANDLE temp = _callbacks->getRuntimeTypePointer(_thisHandle, &pException, cls);
+    if (pException != nullptr) throw pException;
+    return temp;
+}
+
+    virtual CORINFO_CLASS_HANDLE getTypeHandleFromRuntimeTypePointer(
+          CORINFO_OBJECT_HANDLE obj)
+{
+    CorInfoExceptionClass* pException = nullptr;
+    CORINFO_CLASS_HANDLE temp = _callbacks->getTypeHandleFromRuntimeTypePointer(_thisHandle, &pException, obj);
     if (pException != nullptr) throw pException;
     return temp;
 }
