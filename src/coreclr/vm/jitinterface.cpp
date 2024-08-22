@@ -9013,8 +9013,34 @@ void CEEInfo::getFunctionEntryPoint(CORINFO_METHOD_HANDLE  ftnHnd,
 
     if (!ftn->IsFCall() && ftn->IsVersionableWithPrecode() && (ftn->GetPrecodeType() == PRECODE_FIXUP) && !ftn->IsPointingToStableNativeCode())
     {
-        ret = ((FixupPrecode*)ftn->GetOrCreatePrecode())->GetTargetSlot();
-        accessType = IAT_PVALUE;
+        bool direct = false;
+        if (!GetAppDomain()->GetTieredCompilationManager()->IsTieringDelayActive()
+            && g_pConfig->JitEnableOptionalRelocs())
+        {
+            // TODO: should probably ignore IsPointingToStableNativeCode check
+
+            CodeVersionManager* manager = ftn->GetCodeVersionManager();
+
+            NativeCodeVersion activeCodeVersion;
+            {
+                // Get active code version under a lock
+                CodeVersionManager::LockHolder codeVersioningLockHolder;
+                activeCodeVersion = manager->GetActiveILCodeVersion(ftn).GetActiveNativeCodeVersion(ftn);
+            }
+
+            if (activeCodeVersion.IsFinalTier())
+            {
+                ret = (LPVOID)activeCodeVersion.GetNativeCode();
+                accessType = IAT_VALUE;
+                direct = true;
+            }
+        }
+
+        if (!direct)
+        {
+            ret = ((FixupPrecode*)ftn->GetOrCreatePrecode())->GetTargetSlot();
+            accessType = IAT_PVALUE;
+        }
     }
     else
     {
