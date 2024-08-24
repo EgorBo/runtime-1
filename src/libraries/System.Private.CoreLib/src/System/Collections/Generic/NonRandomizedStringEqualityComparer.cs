@@ -74,7 +74,7 @@ namespace System.Collections.Generic
             info.SetType(typeof(GenericEqualityComparer<string>));
         }
 
-        private sealed class OrdinalComparer : NonRandomizedStringEqualityComparer, IAlternateEqualityComparer<ReadOnlySpan<char>, string?>
+        internal sealed class OrdinalComparer : NonRandomizedStringEqualityComparer, IAlternateEqualityComparer<ReadOnlySpan<char>, string?>
         {
             internal OrdinalComparer(IEqualityComparer<string?> wrappedComparer) : base(wrappedComparer)
             {
