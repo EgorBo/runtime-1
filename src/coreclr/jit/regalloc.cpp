@@ -231,13 +231,102 @@ bool Compiler::rpMustCreateEBPFrame(INDEBUG(const char** wbReason))
     }
 
 #ifdef TARGET_ARM64
-    // TODO-ARM64-NYI: This is temporary: force a frame pointer-based frame until genFnProlog can handle non-frame
-    // pointer frames.
-    if (!result)
+    if (!result && getNeedsGSSecurityCookie())
     {
-        INDEBUG(reason = "Temporary ARM64 force frame pointer");
+        INDEBUG(reason = "Contains GS cookie");
         result = true;
     }
+
+    if (!result && compIsProfilerHookNeeded())
+    {
+        INDEBUG(reason = "Profiler hook might be needed");
+        result = true;
+    }
+
+    if (!result && compShouldPoisonFrame())
+    {
+        INDEBUG(reason = "Frame should be poisoned");
+        result = true;
+    }
+
+    if (!result)
+    {
+        // Conservative implementation - walk all trees
+        for (BasicBlock* const block : Blocks())
+        {
+            LIR::Range& blockRange = LIR::AsRange(block);
+            for (auto i = blockRange.rbegin(); i != blockRange.rend(); ++i)
+            {
+                GenTree* node = *i;
+
+                // Explicit calls - bail out.
+                if (node->IsCall())
+                {
+                    INDEBUG(reason = "Contains a call");
+                    result = true;
+                    goto DONE;
+                }
+
+                // Now we need to catch non-calls which might trigger call emit in codegen (via genEmitHelperCall)
+
+                if (node->OperIs(GT_RETURNTRAP))
+                {
+                    INDEBUG(reason = "Contains GT_RETURNTRAP");
+                    result = true;
+                    goto DONE;
+                }
+
+                // TODO-CQ: this is a too conservative check, not all block stores end up
+                // emitting a write-barrier call
+                if (node->OperIs(GT_STORE_BLK) && node->AsBlk()->GetLayout()->HasGCPtr())
+                {
+                    INDEBUG(reason = "May contain a write barrier call");
+                    result = true;
+                    goto DONE;
+                }
+
+                // Same here
+                if (node->OperIs(GT_STOREIND) && varTypeIsGC(node))
+                {
+                    INDEBUG(reason = "May contain a write barrier call");
+                    result = true;
+                    goto DONE;
+                }
+
+                if (node->OperIs(GT_CKFINITE))
+                {
+                    INDEBUG(reason = "Contains GT_CKFINITE");
+                    result = true;
+                    goto DONE;
+                }
+
+                // TODO-CQ: this is a too conservative check
+                assert(!node->OperIs(GT_MOD, GT_UMOD));
+                if (node->OperIs(GT_DIV, GT_UDIV))
+                {
+                    INDEBUG(reason = "Contains a DIV");
+                    result = true;
+                    goto DONE;
+                }
+
+                if (node->OperMayOverflow() && node->gtOverflow())
+                {
+                    INDEBUG(reason = "Contains an operator with gtOverflow");
+                    result = true;
+                    goto DONE;
+                }
+
+                if (node->OperIs(GT_BOUNDS_CHECK))
+                {
+                    INDEBUG(reason = "Contains a GT_BOUNDS_CHECK");
+                    result = true;
+                    goto DONE;
+                }
+            }
+        }
+    }
+DONE:
+    compCallsAreDisallowed = !result;
 #endif // TARGET_ARM64
 
 #ifdef TARGET_LOONGARCH64

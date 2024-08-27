@@ -1925,6 +1925,7 @@ void Compiler::compInit(ArenaAllocator*       pAlloc,
     compQmarkUsed         = false;
     compFloatingPointUsed = false;
 
+    compCallsAreDisallowed = false;
     compSuppressedZeroInit = false;
 
     compNeedsGSSecurityCookie = false;

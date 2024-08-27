@@ -5149,6 +5149,10 @@ bool CodeGen::IsSaveFpLrWithAllCalleeSavedRegisters() const
 
 void CodeGen::genEmitHelperCall(unsigned helper, int argSize, emitAttr retSize, regNumber callTargetReg /*= REG_NA */)
 {
+    if (compiler->compCallsAreDisallowed)
+    {
+        assert(!"Attempted to create a call where it's illegal.");
+    }
     void* addr  = nullptr;
     void* pAddr = nullptr;
 
