@@ -31960,3 +31960,64 @@ bool Compiler::gtCanSkipCovariantStoreCheck(GenTree* value, GenTree* array)
 
     return false;
 }
+
+GenTree* Compiler::gtSkipCovariantStoreCheck(GenTreeCall* call)
+{
+    assert(opts.OptimizationEnabled());
+    assert(call->IsHelperCall(this, CORINFO_HELP_ARRADDR_ST));
+
+    assert(call->gtArgs.CountArgs() == 3);
+    GenTree* arr   = call->gtArgs.GetArgByIndex(0)->GetNode();
+    GenTree* index = call->gtArgs.GetArgByIndex(1)->GetNode();
+    GenTree* value = call->gtArgs.GetArgByIndex(2)->GetNode();
+
+    // Either or both of the array and index arguments may have been spilled to temps by `fgMorphArgs`. Copy
+    // the spill trees as well if necessary.
+    GenTree* argSetup = nullptr;
+    for (CallArg& arg : call->gtArgs.EarlyArgs())
+    {
+        if (arg.GetLateNode() == nullptr)
+        {
+            continue;
+        }
+
+        GenTree* const setupArgNode = arg.GetEarlyNode();
+        assert((setupArgNode != arr) && (setupArgNode != index));
+
+        if (argSetup == nullptr)
+        {
+            argSetup = setupArgNode;
+        }
+        else
+        {
+            argSetup = new (this, GT_COMMA) GenTreeOp(GT_COMMA, TYP_VOID, argSetup, setupArgNode);
+#if DEBUG
+            argSetup->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+#endif // DEBUG
+        }
+    }
+
+#ifdef DEBUG
+    auto resetMorphedFlag = [](GenTree** slot, fgWalkData* data) -> fgWalkResult {
+        (*slot)->gtDebugFlags &= ~GTF_DEBUG_NODE_MORPHED;
+        return WALK_CONTINUE;
+    };
+
+    fgWalkTreePost(&arr, resetMorphedFlag);
+    fgWalkTreePost(&index, resetMorphedFlag);
+    fgWalkTreePost(&value, resetMorphedFlag);
+#endif // DEBUG
+
+    GenTree* indexAddr = gtNewArrayIndexAddr(arr, index, TYP_REF, NO_CLASS_HANDLE);
+    GenTree* store     = gtNewStoreIndNode(TYP_REF, indexAddr, value);
+    GenTree* result    = fgMorphTree(store);
+    if (argSetup != nullptr)
+    {
+        result = new (this, GT_COMMA) GenTreeOp(GT_COMMA, TYP_VOID, argSetup, result);
+#if DEBUG
+        result->gtDebugFlags |= GTF_DEBUG_NODE_MORPHED;
+#endif // DEBUG
+    }
+
+    return result;
+}

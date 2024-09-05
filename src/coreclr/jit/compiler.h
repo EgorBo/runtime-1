@@ -3696,6 +3696,7 @@ public:
     }
 
     bool gtCanSkipCovariantStoreCheck(GenTree* value, GenTree* array);
+    GenTree* gtSkipCovariantStoreCheck(GenTreeCall* call);
 
     //-------------------------------------------------------------------------
 
@@ -7734,6 +7735,7 @@ public:
         OAK_NOT_EQUAL,
         OAK_SUBRANGE,
         OAK_NO_THROW,
+        OAK_COVARIANT,
         OAK_COUNT
     };
 
@@ -7748,6 +7750,7 @@ public:
         O1K_CONSTANT_LOOP_BND_UN,
         O1K_EXACT_TYPE,
         O1K_SUBTYPE,
+        O1K_COVARIANT_ARR,
         O1K_COUNT
     };
 
@@ -7761,6 +7764,7 @@ public:
         O2K_CONST_DOUBLE,
         O2K_ZEROOBJ,
         O2K_SUBRANGE,
+        O2K_COVARIANT_VAL,
         O2K_COUNT
     };
 
@@ -7960,6 +7964,9 @@ public:
                 case O2K_SUBRANGE:
                     return op2.u2.Equals(that->op2.u2);
 
+                case O2K_COVARIANT_VAL:
+                    return op2.vn == that->op2.vn;
+
                 case O2K_INVALID:
                     // we will return false
                     break;
@@ -8095,6 +8102,7 @@ public:
     AssertionIndex optAssertionIsSubrange(GenTree* tree, IntegralRange range, ASSERT_VALARG_TP assertions);
     AssertionIndex optAssertionIsSubtype(GenTree* tree, GenTree* methodTableArg, ASSERT_VALARG_TP assertions);
     AssertionIndex optAssertionIsNonNullInternal(GenTree* op, ASSERT_VALARG_TP assertions DEBUGARG(bool* pVnBased));
+    bool           op2AssertionIsCovariant(GenTreeCall* tree, ASSERT_VALARG_TP assertions);
     bool           optAssertionVNIsNonNull(ValueNum vn, ASSERT_VALARG_TP assertions);
     bool           optAssertionIsNonNull(GenTree*                    op,
                                          ASSERT_VALARG_TP assertions DEBUGARG(bool* pVnBased) DEBUGARG(AssertionIndex* pIndex));

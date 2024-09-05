@@ -1104,6 +1104,29 @@ AssertionIndex Compiler::optCreateAssertion(GenTree*         op1,
     AssertionDsc assertion = {OAK_INVALID};
     assert(assertion.assertionKind == OAK_INVALID);
 
+    if (assertionKind == OAK_COVARIANT)
+    {
+        if (optLocalAssertionProp)
+        {
+            goto DONE_ASSERTION;
+        }
+
+        assert(op1 != nullptr);
+        assert(op2 != nullptr);
+
+        if (op1->OperIs(GT_LCL_VAR))
+        {
+            assertion.assertionKind  = assertionKind;
+            assertion.op1.lcl.lclNum = op1->AsLclVar()->GetLclNum();
+            assertion.op1.lcl.ssaNum = op1->AsLclVar()->GetSsaNum();
+            assertion.op1.kind       = O1K_COVARIANT_ARR;
+            assertion.op1.vn         = optConservativeNormalVN(op1);
+            assertion.op2.kind       = O2K_COVARIANT_VAL;
+            assertion.op2.vn         = optConservativeNormalVN(op2);
+        }
+        goto DONE_ASSERTION;
+    }
+
     if (op1->OperIs(GT_BOUNDS_CHECK))
     {
         if (assertionKind == OAK_NO_THROW)
@@ -2447,6 +2470,12 @@ void Compiler::optAssertionGen(GenTree* tree)
                 GenTree* thisArg = call->gtArgs.GetThisArg()->GetNode();
                 assert(thisArg != nullptr);
                 assertionInfo = optCreateAssertion(thisArg, nullptr, OAK_NOT_EQUAL);
+            }
+            else if (call->IsHelperCall(this, CORINFO_HELP_ARRADDR_ST))
+            {
+                GenTree* array = call->gtArgs.GetUserArgByIndex(0)->GetNode();
+                GenTree* value = call->gtArgs.GetUserArgByIndex(2)->GetNode();
+                assertionInfo  = optCreateAssertion(array, value, OAK_COVARIANT);
             }
         }
         break;
@@ -4865,6 +4894,44 @@ AssertionIndex Compiler::optAssertionIsNonNullInternal(GenTree*                 
     return NO_ASSERTION_INDEX;
 }
 
+bool Compiler::op2AssertionIsCovariant(GenTreeCall* tree, ASSERT_VALARG_TP assertions)
+{
+    if (!optLocalAssertionProp)
+    {
+        if (BitVecOps::MayBeUninit(assertions) || BitVecOps::IsEmpty(apTraits, assertions))
+        {
+            return NO_ASSERTION_INDEX;
+        }
+
+        GenTree* array = tree->gtArgs.GetUserArgByIndex(0)->GetNode();
+        GenTree* value = tree->gtArgs.GetUserArgByIndex(2)->GetNode();
+
+        BitVecOps::Iter iter(apTraits, assertions);
+        unsigned        index = 0;
+        while (iter.NextElem(&index))
+        {
+            AssertionIndex assertionIndex = GetAssertionIndex(index);
+            if (assertionIndex > optAssertionCount)
+            {
+                break;
+            }
+            AssertionDsc* curAssertion = optGetAssertion(assertionIndex);
+            if (curAssertion->assertionKind == OAK_COVARIANT)
+            {
+                assert(curAssertion->op1.kind == optOp1Kind::O1K_COVARIANT_ARR);
+                assert(curAssertion->op2.kind == optOp2Kind::O2K_COVARIANT_VAL);
+
+                if (curAssertion->op1.vn == optConservativeNormalVN(array) &&
+                    curAssertion->op2.vn == optConservativeNormalVN(value))
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 //------------------------------------------------------------------------
 // optAssertionVNIsNonNull: See if we can prove that the value of a VN is
 // non-null using assertions.
@@ -5188,6 +5255,17 @@ GenTree* Compiler::optAssertionProp_Call(ASSERT_VALARG_TP assertions, GenTreeCal
             {
                 call->gtCallMoreFlags |= GTF_CALL_M_CAST_OBJ_NONNULL;
                 return optAssertionProp_Update(call, call, stmt);
+            }
+        }
+        else if (helper == CORINFO_HELP_ARRADDR_ST)
+        {
+            if (op2AssertionIsCovariant(call, assertions))
+            {
+                GenTree* result = gtSkipCovariantStoreCheck(call);
+                if (result != nullptr)
+                {
+                    return optAssertionProp_Update(result, call, stmt);
+                }
             }
         }
     }
