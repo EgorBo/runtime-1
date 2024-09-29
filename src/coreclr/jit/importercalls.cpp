@@ -4374,6 +4374,8 @@ GenTree* Compiler::impIntrinsic(CORINFO_CLASS_HANDLE    clsHnd,
             }
 
             case NI_System_Math_Pow:
+                isSpecial = true;
+                FALLTHROUGH;
             case NI_System_Math_Round:
             case NI_System_Math_Sin:
             case NI_System_Math_Sinh:

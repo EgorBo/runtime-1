@@ -2634,6 +2634,55 @@ AssertionIndex Compiler::optAssertionIsSubtype(GenTree* tree, GenTree* methodTab
 }
 
 //------------------------------------------------------------------------------
+// optVNBasedFoldExpr_MathPow: Folds Math.Pow intrinsic, e.g. Pow(X, 2.0) -> X * X.
+//
+// Arguments:
+//    call - NI_System_Math_Pow call to fold
+//
+// Return Value:
+//    Returns a new tree or nullptr if nothing is changed.
+//
+GenTree* Compiler::optVNBasedFoldExpr_MathPow(GenTreeCall* call)
+{
+    assert(call->IsSpecialIntrinsic(this, NI_System_Math_Pow));
+
+    CallArg*  arg0   = call->AsCall()->gtArgs.GetUserArgByIndex(0);
+    ValueNum  arg1VN = call->AsCall()->gtArgs.GetUserArgByIndex(1)->GetNode()->gtVNPair.GetConservative();
+    var_types type   = vnStore->TypeOfVN(arg1VN);
+
+    if (vnStore->IsVNConstant(arg1VN))
+    {
+        double power = (type == TYP_FLOAT) ? vnStore->GetConstantSingle(arg1VN) : vnStore->GetConstantDouble(arg1VN);
+
+        // Pow(X, +/-0.0) -> 1.0
+        if (FloatingPointUtils::isPositiveZero(power) || FloatingPointUtils::isNegativeZero(power))
+        {
+            return gtWrapWithSideEffects(gtNewDconNode(1.0, type), call, GTF_ALL_EFFECT, true);
+        }
+
+        // Pow(X, 1.0) -> X
+        if (power == 1.0)
+        {
+            // if arg0 is complex, fgMakeMultiUse will wrap it into a comma with an assignment inside the LateArg.
+            // gtWrapWithSideEffects will then properly extract it along with other side-effects of the call.
+            return gtWrapWithSideEffects(fgMakeMultiUse(&arg0->LateNodeRef()), call, GTF_ALL_EFFECT, true);
+        }
+
+        // Pow(X, 2.0) -> X * X
+        if (power == 2.0)
+        {
+            // Similar way to handle complex arg0 as above ^.
+            GenTree* arg0Clone = fgMakeMultiUse(&arg0->LateNodeRef());
+            GenTree* mul       = gtNewOperNode(GT_MUL, type, arg0Clone, gtCloneExpr(arg0Clone));
+            return gtWrapWithSideEffects(mul, call, GTF_ALL_EFFECT, true);
+        }
+
+        // We may also fold Pow(X, -1) to 1 / X if profitable.
+    }
+    return nullptr;
+}
+
+//------------------------------------------------------------------------------
 // optVNBasedFoldExpr_Call: Folds given call using VN to a simpler tree.
 //
 // Arguments:
@@ -2695,6 +2744,12 @@ GenTree* Compiler::optVNBasedFoldExpr_Call(BasicBlock* block, GenTree* parent, G
 
         default:
             break;
+    }
+
+    // Special intrinsic folding
+    if (call->IsSpecialIntrinsic(this, NI_System_Math_Pow))
+    {
+        return optVNBasedFoldExpr_MathPow(call);
     }
 
     return nullptr;
@@ -2763,6 +2818,13 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
 //
 GenTree* Compiler::optVNBasedFoldConstExpr(BasicBlock* block, GenTree* parent, GenTree* tree)
 {
+    // Don't try and fold expressions marked with GTF_DONT_CSE
+    // TODO-ASG: delete.
+    if (!tree->CanCSE())
+    {
+        return nullptr;
+    }
+
     if (tree->OperGet() == GT_JTRUE)
     {
         // Treat JTRUE separately to extract side effects into respective statements rather
@@ -6387,13 +6449,6 @@ Compiler::fgWalkResult Compiler::optVNBasedFoldCurStmt(BasicBlock* block,
                                                        GenTree*    parent,
                                                        GenTree*    tree)
 {
-    // Don't try and fold expressions marked with GTF_DONT_CSE
-    // TODO-ASG: delete.
-    if (!tree->CanCSE())
-    {
-        return WALK_CONTINUE;
-    }
-
     // Don't propagate floating-point constants into a TYP_STRUCT LclVar
     // This can occur for HFA return values (see hfa_sf3E_r.exe)
     if (tree->TypeGet() == TYP_STRUCT)
@@ -6464,7 +6519,7 @@ Compiler::fgWalkResult Compiler::optVNBasedFoldCurStmt(BasicBlock* block,
             break;
 
         case GT_CALL:
-            if (!tree->AsCall()->IsPure(this))
+            if (!tree->IsHelperCall() && !tree->AsCall()->IsSpecialIntrinsic())
             {
                 return WALK_CONTINUE;
             }
