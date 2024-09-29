@@ -748,6 +748,14 @@ CORINFO_OBJECT_HANDLE interceptor_ICJI::getRuntimeTypePointer(CORINFO_CLASS_HAND
     return temp;
 }
 
+CORINFO_CLASS_HANDLE interceptor_ICJI::getRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj)
+{
+    mc->cr->AddCall("getRuntimeTypeClassHandle");
+    CORINFO_CLASS_HANDLE temp = original_ICorJitInfo->getRuntimeTypeClassHandle(obj);
+    mc->recGetRuntimeTypeClassHandle(obj, temp);
+    return temp;
+}
+
 bool interceptor_ICJI::isObjectImmutable(CORINFO_OBJECT_HANDLE typeObj)
 {
     mc->cr->AddCall("isObjectImmutable");

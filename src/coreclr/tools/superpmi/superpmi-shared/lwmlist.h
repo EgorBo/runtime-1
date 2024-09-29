@@ -139,6 +139,7 @@ LWM(GetTypeForPrimitiveNumericClass, DWORDLONG, DWORD)
 LWM(GetUnboxedEntry, DWORDLONG, DLD);
 LWM(GetUnBoxHelper, DWORDLONG, DWORD)
 LWM(GetRuntimeTypePointer, DWORDLONG, DWORDLONG)
+LWM(GetRuntimeTypeClassHandle, DWORDLONG, DWORDLONG)
 LWM(IsObjectImmutable, DWORDLONG, DWORD)
 LWM(GetStringChar, DLD, DD)
 LWM(GetObjectType, DWORDLONG, DWORDLONG)

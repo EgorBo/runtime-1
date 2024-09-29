@@ -298,6 +298,10 @@ public:
     void dmpGetRuntimeTypePointer(DWORDLONG key, DWORDLONG value);
     CORINFO_OBJECT_HANDLE repGetRuntimeTypePointer(CORINFO_CLASS_HANDLE cls);
 
+    void recGetRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj, CORINFO_CLASS_HANDLE result);
+    void dmpGetRuntimeTypeClassHandle(DWORDLONG key, DWORDLONG value);
+    CORINFO_CLASS_HANDLE repGetRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj);
+
     void recIsObjectImmutable(CORINFO_OBJECT_HANDLE objPtr, bool result);
     void dmpIsObjectImmutable(DWORDLONG key, DWORD value);
     bool repIsObjectImmutable(CORINFO_OBJECT_HANDLE objPtr);
@@ -1187,6 +1191,7 @@ enum mcPackets
     Packet_GetFpStructLowering = 223,
     Packet_GetSpecialCopyHelper = 224,
     Packet_GetClassAssemblyName = 225,
+    Packet_GetRuntimeTypeClassHandle = 226,
 };
 
 void SetDebugDumpVariables();

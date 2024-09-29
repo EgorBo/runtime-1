@@ -3317,6 +3317,11 @@ namespace Internal.JitInterface
             return null;
         }
 
+        private CORINFO_CLASS_STRUCT_* getRuntimeTypeClassHandle(CORINFO_OBJECT_STRUCT_* obj)
+        {
+            return null;
+        }
+
         private int getArrayOrStringLength(CORINFO_OBJECT_STRUCT_* objHnd)
         {
             return -1;

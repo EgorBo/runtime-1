@@ -2497,6 +2497,10 @@ public:
             CORINFO_CLASS_HANDLE        cls
             ) = 0;
 
+    virtual CORINFO_CLASS_HANDLE getRuntimeTypeClassHandle(
+            CORINFO_OBJECT_HANDLE        obj
+            ) = 0;
+
     //------------------------------------------------------------------------------
     // isObjectImmutable: checks whether given object is known to be immutable or not
     //

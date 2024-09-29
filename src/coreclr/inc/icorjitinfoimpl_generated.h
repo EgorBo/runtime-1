@@ -281,6 +281,9 @@ CorInfoHelpFunc getUnBoxHelper(
 CORINFO_OBJECT_HANDLE getRuntimeTypePointer(
           CORINFO_CLASS_HANDLE cls) override;
 
+CORINFO_CLASS_HANDLE getRuntimeTypeClassHandle(
+          CORINFO_OBJECT_HANDLE obj) override;
+
 bool isObjectImmutable(
           CORINFO_OBJECT_HANDLE objPtr) override;
 

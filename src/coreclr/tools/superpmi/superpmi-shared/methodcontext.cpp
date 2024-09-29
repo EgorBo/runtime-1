@@ -2193,6 +2193,28 @@ CORINFO_OBJECT_HANDLE MethodContext::repGetRuntimeTypePointer(CORINFO_CLASS_HAND
     return (CORINFO_OBJECT_HANDLE)value;
 }
 
+void MethodContext::recGetRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj, CORINFO_CLASS_HANDLE result)
+{
+    if (GetRuntimeTypeClassHandle == nullptr)
+        GetRuntimeTypeClassHandle = new LightWeightMap<DWORDLONG, DWORDLONG>();
+
+    DWORDLONG key = CastHandle(obj);
+    DWORDLONG value = (DWORDLONG)result;
+    GetRuntimeTypeClassHandle->Add(key, value);
+    DEBUG_REC(dmpGetRuntimeTypeClassHandle(key, value));
+}
+void MethodContext::dmpGetRuntimeTypeClassHandle(DWORDLONG key, DWORDLONG value)
+{
+    printf("GetRuntimeTypeClassHandle key obj-%016" PRIX64 ", value res-%016" PRIX64 "", key, value);
+}
+CORINFO_CLASS_HANDLE MethodContext::repGetRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj)
+{
+    DWORDLONG key = CastHandle(obj);
+    DWORDLONG value = LookupByKeyOrMiss(GetRuntimeTypeClassHandle, key, ": key %016" PRIX64 "", key);
+    DEBUG_REP(dmpGetRuntimeTypeClassHandle(key, value));
+    return (CORINFO_CLASS_HANDLE)value;
+}
+
 void MethodContext::recIsObjectImmutable(CORINFO_OBJECT_HANDLE objPtr, bool result)
 {
     if (IsObjectImmutable == nullptr)

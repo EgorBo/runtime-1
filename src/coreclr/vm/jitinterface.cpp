@@ -5951,6 +5951,32 @@ CORINFO_OBJECT_HANDLE CEEInfo::getRuntimeTypePointer(CORINFO_CLASS_HANDLE clsHnd
     return pointer;
 }
 
+/***********************************************************************/
+CORINFO_CLASS_HANDLE CEEInfo::getRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE objHandle)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    CORINFO_CLASS_HANDLE pointer = NULL;
+
+    JIT_TO_EE_TRANSITION();
+
+    GCX_COOP();
+    OBJECTREF obj = getObjectFromJitHandle(objHandle);
+    MethodTable* type = obj->GetMethodTable();
+
+    if (type == g_pRuntimeTypeClass)
+    {
+        pointer = (CORINFO_CLASS_HANDLE)((REFLECTCLASSBASEREF)obj)->GetType().AsMethodTable();
+    }
+
+    EE_TO_JIT_TRANSITION();
+
+    return pointer;
+}
 
 /***********************************************************************/
 bool CEEInfo::isObjectImmutable(CORINFO_OBJECT_HANDLE objHandle)

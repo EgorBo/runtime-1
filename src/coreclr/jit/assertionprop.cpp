@@ -2720,10 +2720,43 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
         return foldedToCns;
     }
 
+    // auto x = gtFoldExpr(tree);
+    // if (!GenTree::Compare(x, tree))
+    //{
+    //     return x;
+    // }
+
     switch (tree->OperGet())
     {
         case GT_CALL:
             return optVNBasedFoldExpr_Call(block, parent, tree->AsCall());
+
+        case GT_NE:
+        case GT_EQ:
+        {
+            auto op1 = tree->gtGetOp1();
+            auto op2 = tree->gtGetOp2();
+            auto vn1 = op1->gtVNPair.GetConservative();
+            auto vn2 = op2->gtVNPair.GetConservative();
+
+            // vn1 is VNF_ObjGetType and vn2 is object handle?
+            VNFuncApp funcApp;
+            if (op1->OperIs(GT_LCL_VAR) && vnStore->GetVNFunc(vn1, &funcApp) && funcApp.m_func == VNF_ObjGetType &&
+                vnStore->IsVNObjHandle(vn2))
+            {
+                CORINFO_CLASS_HANDLE clsHandle = info.compCompHnd->getRuntimeTypeClassHandle(
+                    (CORINFO_OBJECT_HANDLE)vnStore->CoercedConstantValue<size_t>(vn2));
+                if (clsHandle != NO_CLASS_HANDLE)
+                {
+                    auto lclNum = op1->AsLclVarCommon()->GetLclNum();
+                    auto node   = lvaGetDesc(lclNum)->GetPerSsaData(lclNum)->GetDefNode();
+
+                    // gtDispTree(node);
+                }
+            }
+
+            break;
+        }
 
             // We can add more VN-based foldings here.
 
@@ -2763,6 +2796,13 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
 //
 GenTree* Compiler::optVNBasedFoldConstExpr(BasicBlock* block, GenTree* parent, GenTree* tree)
 {
+    // Don't try and fold expressions marked with GTF_DONT_CSE
+    // TODO-ASG: delete.
+    if (!tree->CanCSE())
+    {
+        return nullptr;
+    }
+
     if (tree->OperGet() == GT_JTRUE)
     {
         // Treat JTRUE separately to extract side effects into respective statements rather
@@ -6387,13 +6427,6 @@ Compiler::fgWalkResult Compiler::optVNBasedFoldCurStmt(BasicBlock* block,
                                                        GenTree*    parent,
                                                        GenTree*    tree)
 {
-    // Don't try and fold expressions marked with GTF_DONT_CSE
-    // TODO-ASG: delete.
-    if (!tree->CanCSE())
-    {
-        return WALK_CONTINUE;
-    }
-
     // Don't propagate floating-point constants into a TYP_STRUCT LclVar
     // This can occur for HFA return values (see hfa_sf3E_r.exe)
     if (tree->TypeGet() == TYP_STRUCT)

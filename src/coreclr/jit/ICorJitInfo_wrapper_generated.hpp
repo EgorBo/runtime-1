@@ -653,6 +653,15 @@ CORINFO_OBJECT_HANDLE WrapICorJitInfo::getRuntimeTypePointer(
     return temp;
 }
 
+CORINFO_CLASS_HANDLE WrapICorJitInfo::getRuntimeTypeClassHandle(
+          CORINFO_OBJECT_HANDLE obj)
+{
+    API_ENTER(getRuntimeTypeClassHandle);
+    CORINFO_CLASS_HANDLE temp = wrapHnd->getRuntimeTypeClassHandle(obj);
+    API_LEAVE(getRuntimeTypeClassHandle);
+    return temp;
+}
+
 bool WrapICorJitInfo::isObjectImmutable(
           CORINFO_OBJECT_HANDLE objPtr)
 {

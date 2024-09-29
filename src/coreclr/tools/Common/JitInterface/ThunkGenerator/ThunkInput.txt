@@ -229,6 +229,7 @@ FUNCTIONS
     CorInfoHelpFunc getBoxHelper(CORINFO_CLASS_HANDLE cls)
     CorInfoHelpFunc getUnBoxHelper(CORINFO_CLASS_HANDLE cls)
     CORINFO_OBJECT_HANDLE getRuntimeTypePointer(CORINFO_CLASS_HANDLE cls)
+    CORINFO_CLASS_HANDLE getRuntimeTypeClassHandle(CORINFO_OBJECT_HANDLE obj)
     bool isObjectImmutable(CORINFO_OBJECT_HANDLE objPtr)
     bool getStringChar(CORINFO_OBJECT_HANDLE strObj, int index, uint16_t* value);
     CORINFO_CLASS_HANDLE getObjectType(CORINFO_OBJECT_HANDLE objPtr)
