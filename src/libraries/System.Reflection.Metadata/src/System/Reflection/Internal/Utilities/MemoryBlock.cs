@@ -298,7 +298,7 @@ namespace System.Reflection.Internal
             CheckBounds(offset, 0);
             int length = GetUtf8NullTerminatedLength(offset, out numberOfBytesRead, terminator);
             return EncodingHelper.DecodeUtf8(Pointer + offset, length, prefix, utf8Decoder);
-        }
+        } 
 
         /// <summary>
         /// Get number of bytes from offset to given terminator, null terminator, or end-of-block (whichever comes first).
