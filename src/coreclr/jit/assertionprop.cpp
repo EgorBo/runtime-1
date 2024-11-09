@@ -2773,6 +2773,80 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
 
     switch (tree->OperGet())
     {
+        case GT_ADD:
+        {
+            auto op1 = tree->gtGetOp1();
+            auto op2 = tree->gtGetOp2();
+
+            {
+                if (op1->OperIs(GT_LCL_VAR) && op1->TypeIs(TYP_BYREF) && op2->IsCnsIntOrI() && op2->TypeIs(TYP_INT, TYP_I_IMPL))
+                {
+                    // Get ssa def for op1
+                    unsigned lclNum = op1->AsLclVarCommon()->GetLclNum();
+                    unsigned ssaNum = op1->AsLclVarCommon()->GetSsaNum();
+
+                    if (ssaNum != SsaConfig::RESERVED_SSA_NUM)
+                    {
+                        LclVarDsc* const  varDsc = lvaGetDesc(lclNum);
+                        auto ssaDef = varDsc->GetPerSsaData(ssaNum);
+                        if (!varDsc->lvIsCSE && !varDsc->IsAddressExposed() && ssaDef->GetDefNode() != nullptr && ssaDef->GetDefNode()->OperIs(GT_STORE_LCL_VAR))
+                        {
+                            auto data = ssaDef->GetDefNode()->Data();
+                            if (data->OperIs(GT_ADD))
+                            {
+                                auto defOp1 = data->gtGetOp1();
+                                auto defOp2 = data->gtGetOp2();
+                                if (defOp1->OperIs(GT_LCL_VAR) && defOp2->IsCnsIntOrI())
+                                {
+                                    if (defOp1->TypeIs(op1->TypeGet()) &&
+                                        defOp2->TypeIs(op2->TypeGet()))
+                                    {
+                                        auto cnsFolded = gtFoldExprConst(gtNewOperNode(GT_ADD,
+                                            op2->TypeGet(),
+                                            gtCloneExpr(defOp2),
+                                            gtCloneExpr(op2)));
+
+                                        if (!cnsFolded->OperIsConst())
+                                        {
+                                            return nullptr;
+                                        }
+
+                                        auto xx = lvaGetDesc(defOp1->AsLclVarCommon()->GetLclNum());
+                                        if (xx->IsAddressExposed())
+                                        {
+                                            return nullptr;
+                                        }
+
+                                        fgUpdateConstTreeValueNumber(cnsFolded);
+
+                                        auto result =  gtNewOperNode(GT_ADD,
+                                            tree->TypeGet(),
+                                            gtCloneExpr(defOp1),
+                                            cnsFolded);
+
+                                        const ValueNum newVN1 =
+                                            vnStore->VNForFunc(tree->TypeGet(), VNFunc(GT_ADD),
+                                                result->gtOp1->gtVNPair.GetLiberal(),
+                                                result->gtOp2->gtVNPair.GetLiberal());
+
+                                        const ValueNum newVN2 =
+                                            vnStore->VNForFunc(tree->TypeGet(), VNFunc(GT_ADD),
+                                                result->gtOp1->gtVNPair.GetConservative(),
+                                                result->gtOp2->gtVNPair.GetConservative());
+
+                                        result->gtVNPair = ValueNumPair(newVN1, newVN2);
+
+                                        return result;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return nullptr;
+        }
+
         case GT_CALL:
             return optVNBasedFoldExpr_Call(block, parent, tree->AsCall());
 
