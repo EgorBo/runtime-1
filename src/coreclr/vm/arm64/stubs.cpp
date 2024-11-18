@@ -896,6 +896,7 @@ void InitJITHelpers1()
         if (GCHeapUtilities::UseThreadAllocationContexts())
         {
             SetJitHelperFunction(CORINFO_HELP_NEWSFAST, JIT_NewS_MP_FastPortable);
+            SetJitHelperFunction(CORINFO_HELP_NEWSFAST_SIZED, JIT_NewS_MP_FastPortableSized);
             SetJitHelperFunction(CORINFO_HELP_NEWSFAST_ALIGN8, JIT_NewS_MP_FastPortable);
             SetJitHelperFunction(CORINFO_HELP_NEWARR_1_VC, JIT_NewArr1VC_MP_FastPortable);
             SetJitHelperFunction(CORINFO_HELP_NEWARR_1_OBJ, JIT_NewArr1OBJ_MP_FastPortable);

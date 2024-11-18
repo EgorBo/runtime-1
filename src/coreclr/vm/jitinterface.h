@@ -194,6 +194,7 @@ EXTERN_C FCDECL1(void*, JIT_GetDynamicNonGCStaticBaseNoCtor, DynamicStaticsInfo*
 EXTERN_C FCDECL1(void*, JIT_GetDynamicNonGCStaticBaseNoCtor_Portable, DynamicStaticsInfo* pStaticsInfo);
 
 extern FCDECL1(Object*, JIT_NewS_MP_FastPortable, CORINFO_CLASS_HANDLE typeHnd_);
+extern FCDECL2(Object*, JIT_NewS_MP_FastPortableSized, CORINFO_CLASS_HANDLE typeHnd_, SIZE_T size);
 extern FCDECL1(Object*, JIT_New, CORINFO_CLASS_HANDLE typeHnd_);
 
 extern FCDECL1(StringObject*, AllocateString_MP_FastPortable, DWORD stringLength);

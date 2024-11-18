@@ -544,7 +544,34 @@ GenTree* ObjectAllocator::MorphAllocObjNodeIntoHelperCall(GenTreeAllocObj* alloc
 #endif
 
     const bool morphArgs  = false;
-    GenTree*   helperCall = comp->fgMorphIntoHelperCall(allocObj, allocObj->gtNewHelper, morphArgs, arg);
+    GenTree*   helperCall = nullptr; // comp->fgMorphIntoHelperCall(allocObj, allocObj->gtNewHelper, morphArgs, arg);
+
+#ifdef TARGET_ARM64
+    if (!comp->opts.IsReadyToRun() && helper == CORINFO_HELP_NEWSFAST && !helperHasSideEffects &&
+        arg->IsIconHandle(GTF_ICON_CLASS_HDL))
+    {
+        struct MT
+        {
+            unsigned flags;
+            unsigned size;
+        };
+        CORINFO_CLASS_HANDLE cls = comp->gtGetHelperArgClassHandle(arg);
+        if ((comp->info.compCompHnd->getClassAttribs(cls) & (CORINFO_FLG_SHAREDINST | CORINFO_FLG_VAROBJSIZE |
+                                                             CORINFO_FLG_ARRAY | CORINFO_FLG_GENERIC_TYPE_VARIABLE)) ==
+            0)
+        {
+            unsigned size = ((MT*)cls)->size;
+            helperCall    = comp->fgMorphIntoHelperCall(allocObj, (int)CORINFO_HELP_NEWSFAST_SIZED, false, arg,
+                                                        comp->gtNewIconNode(size, TYP_I_IMPL));
+        }
+    }
+#endif
+
+    if (helperCall == nullptr)
+    {
+        helperCall = comp->fgMorphIntoHelperCall(allocObj, allocObj->gtNewHelper, false, arg);
+    }
+
     if (helperHasSideEffects)
     {
         helperCall->AsCall()->gtCallMoreFlags |= GTF_CALL_M_ALLOC_SIDE_EFFECTS;

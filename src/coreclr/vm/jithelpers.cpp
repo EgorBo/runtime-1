@@ -876,6 +876,43 @@ HCIMPL1_RAW(Object*, JIT_NewS_MP_FastPortable, CORINFO_CLASS_HANDLE typeHnd_)
 }
 HCIMPLEND_RAW
 
+HCIMPL2_RAW(Object*, JIT_NewS_MP_FastPortableSized, CORINFO_CLASS_HANDLE typeHnd_, SIZE_T size)
+{
+    CONTRACTL {
+        THROWS;
+        DISABLED(GC_TRIGGERS);
+        MODE_COOPERATIVE;
+    } CONTRACTL_END;
+
+    _ASSERTE(GCHeapUtilities::UseThreadAllocationContexts());
+    ee_alloc_context *eeAllocContext = &t_runtime_thread_locals.alloc_context;
+    gc_alloc_context *allocContext = &eeAllocContext->m_GCAllocContext;
+
+    TypeHandle typeHandle(typeHnd_);
+    _ASSERTE(!typeHandle.IsTypeDesc()); // heap objects must have method tables
+    MethodTable *methodTable = typeHandle.AsMethodTable();
+    _ASSERTE(size % DATA_ALIGNMENT == 0);
+
+    BYTE *allocPtr = allocContext->alloc_ptr;
+    _ASSERTE(allocPtr <= eeAllocContext->getCombinedLimit());
+    if (size > static_cast<SIZE_T>(eeAllocContext->getCombinedLimit() - allocPtr))
+    {
+        // Tail call to the slow helper
+        return HCCALL1(JIT_New, typeHnd_);
+    }
+
+    allocContext->alloc_ptr = allocPtr + size;
+
+    _ASSERTE(allocPtr != nullptr);
+    Object *object = reinterpret_cast<Object *>(allocPtr);
+    _ASSERTE(object->HasEmptySyncBlockInfo());
+    object->SetMethodTable(methodTable);
+
+    return object;
+}
+HCIMPLEND_RAW
+
+
 #include <optdefault.h>
 
 /*************************************************************/
