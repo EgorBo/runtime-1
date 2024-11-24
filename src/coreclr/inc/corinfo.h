@@ -1593,6 +1593,7 @@ struct CORINFO_THREAD_STATIC_BLOCKS_INFO
     uint32_t offsetOfMaxThreadStaticBlocks;
     uint32_t offsetOfThreadStaticBlocks;
     uint32_t offsetOfBaseOfThreadLocalData;
+    uint32_t offsetOfRuntimeThreadLocals;       // t_runtime_thread_locals
 };
 
 //----------------------------------------------------------------------------

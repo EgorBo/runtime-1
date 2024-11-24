@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 #include "common.h"
 #include "threadstatics.h"
+#include "threads.h"
 
 struct InFlightTLSData
 {
@@ -1081,6 +1082,16 @@ void GetThreadLocalStaticBlocksInfo(CORINFO_THREAD_STATIC_BLOCKS_INFO* pInfo)
     pInfo->offsetOfThreadLocalStoragePointer = offsetof(_TEB, ThreadLocalStoragePointer);
     threadStaticBaseOffset = ThreadLocalOffset(&t_ThreadStatics);
 
+    auto zzz = (uint8_t*)(__readgsqword(pInfo->offsetOfThreadLocalStoragePointer) + _tls_index * TARGET_POINTER_SIZE);
+    auto yyy = *(uintptr_t*)zzz + ThreadLocalOffset(&t_runtime_thread_locals);
+    printf("_PTR: %p\n", (void*)yyy);
+
+    size_t alloc_context_offset                    = offsetof(RuntimeThreadLocals, alloc_context);
+    size_t ee_alloc_context_offset                 = offsetof(ee_alloc_context, m_GCAllocContext);
+    size_t gc_alloc_context_alloc_ptr_offset       = offsetof(gc_alloc_context, alloc_ptr);
+    size_t ee_alloc_context_m_CombinedLimit_offset = offsetof(ee_alloc_context, m_CombinedLimit);
+    printf("");
+
 #elif defined(TARGET_OSX)
 
     pInfo->threadVarsSection = GetThreadVarsSectionAddress();
@@ -1106,6 +1117,7 @@ void GetThreadLocalStaticBlocksInfo(CORINFO_THREAD_STATIC_BLOCKS_INFO* pInfo)
     pInfo->offsetOfMaxThreadStaticBlocks = (uint32_t)(threadStaticBaseOffset + offsetof(ThreadLocalData, cNonCollectibleTlsData));
     pInfo->offsetOfThreadStaticBlocks = (uint32_t)(threadStaticBaseOffset + offsetof(ThreadLocalData, pNonCollectibleTlsArrayData));
     pInfo->offsetOfBaseOfThreadLocalData = (uint32_t)threadStaticBaseOffset;
+    pInfo->offsetOfRuntimeThreadLocals = ThreadLocalOffset(&t_ThreadStatics);
 }
 #endif // !DACCESS_COMPILE
 

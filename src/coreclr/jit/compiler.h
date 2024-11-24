@@ -6002,6 +6002,9 @@ public:
     template <bool (Compiler::*ExpansionFunction)(BasicBlock**, Statement*, GenTreeCall*)>
     bool fgExpandHelperForBlock(BasicBlock** pBlock);
 
+    PhaseStatus fgExpandAllocators();
+    bool fgExpandAllocatorsForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call);
+
     PhaseStatus fgExpandRuntimeLookups();
     bool fgExpandRuntimeLookupsForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call);
 

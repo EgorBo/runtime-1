@@ -5091,6 +5091,9 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
         // Conditional to Switch conversion
         //
         DoPhase(this, PHASE_SWITCH_RECOGNITION, &Compiler::optSwitchRecognition);
+
+
+        DoPhase(this, PHASE_EXPAND_RTLOOKUPS, &Compiler::fgExpandAllocators);
     }
 
 #ifdef DEBUG

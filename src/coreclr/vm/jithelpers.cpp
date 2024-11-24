@@ -835,6 +835,20 @@ HCIMPLEND
 
 #include <optsmallperfcritical.h>
 
+__declspec(noinline) static RuntimeThreadLocals* Testik()
+{
+    return &t_runtime_thread_locals;
+}
+
+
+__declspec(noinline) static RuntimeThreadLocals* Testik2()
+{
+    RuntimeThreadLocals *p_t_runtime_thread_locals = &t_runtime_thread_locals;
+    ee_alloc_context* eeAllocContext = &p_t_runtime_thread_locals->alloc_context;
+    gc_alloc_context* allocContext = &eeAllocContext->m_GCAllocContext;
+    uint8_t *obj = allocContext->alloc_ptr;
+}
+
 //*************************************************************
 // Allocation fast path for typical objects
 //
@@ -846,32 +860,22 @@ HCIMPL1_RAW(Object*, JIT_NewS_MP_FastPortable, CORINFO_CLASS_HANDLE typeHnd_)
         MODE_COOPERATIVE;
     } CONTRACTL_END;
 
-    _ASSERTE(GCHeapUtilities::UseThreadAllocationContexts());
-    ee_alloc_context *eeAllocContext = &t_runtime_thread_locals.alloc_context;
+    printf("REAL: %p\n", (void*)&t_runtime_thread_locals);
+
+    ee_alloc_context *eeAllocContext = &(Testik()->alloc_context);
+    uint8_t* combinedLimit = eeAllocContext->m_CombinedLimit;
     gc_alloc_context *allocContext = &eeAllocContext->m_GCAllocContext;
+    BYTE* allocPtr = allocContext->alloc_ptr;
 
-    TypeHandle typeHandle(typeHnd_);
-    _ASSERTE(!typeHandle.IsTypeDesc()); // heap objects must have method tables
-    MethodTable *methodTable = typeHandle.AsMethodTable();
-
+    MethodTable *methodTable = ((MethodTable*)typeHnd_);
     SIZE_T size = methodTable->GetBaseSize();
-    _ASSERTE(size % DATA_ALIGNMENT == 0);
-
-    BYTE *allocPtr = allocContext->alloc_ptr;
-    _ASSERTE(allocPtr <= eeAllocContext->getCombinedLimit());
-    if (size > static_cast<SIZE_T>(eeAllocContext->getCombinedLimit() - allocPtr))
+    if (size > static_cast<SIZE_T>(combinedLimit - allocPtr))
     {
-        // Tail call to the slow helper
         return HCCALL1(JIT_New, typeHnd_);
     }
-
     allocContext->alloc_ptr = allocPtr + size;
-
-    _ASSERTE(allocPtr != nullptr);
     Object *object = reinterpret_cast<Object *>(allocPtr);
-    _ASSERTE(object->HasEmptySyncBlockInfo());
     object->SetMethodTable(methodTable);
-
     return object;
 }
 HCIMPLEND_RAW

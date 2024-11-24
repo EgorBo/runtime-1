@@ -128,6 +128,57 @@ PhaseStatus Compiler::fgExpandRuntimeLookups()
     return fgExpandHelper<&Compiler::fgExpandRuntimeLookupsForCall>(false);
 }
 
+PhaseStatus Compiler::fgExpandAllocators()
+{
+    PhaseStatus result = PhaseStatus::MODIFIED_NOTHING;
+    if (!ISMETHOD("Tesdwdwzzzdt"))
+    {
+        return result;
+    }
+
+    return fgExpandHelper<&Compiler::fgExpandAllocatorsForCall>(true);
+}
+
+bool Compiler::fgExpandAllocatorsForCall(BasicBlock** pBlock, Statement* stmt, GenTreeCall* call)
+{
+    BasicBlock* block = *pBlock;
+
+    if (!call->IsHelperCall(this, CORINFO_HELP_NEWSFAST))
+    {
+        return false;
+    }
+
+    if (call->IsTailCall())
+    {
+        // It is very unlikely to happen and is impossible to represent in C#
+        return false;
+    }
+
+    assert(call->gtArgs.CountArgs() == 1);
+
+    DebugInfo debugInfo = stmt->GetDebugInfo();
+
+    BasicBlock* prevBb;
+    const unsigned resultLcl = SplitAtTreeAndReplaceItWithLocal(this, block, stmt, call, &prevBb, &block);
+
+
+
+    // Set bytesWritten -1 by default, if the fast path is not taken we'll return it as the result.
+    GenTree* bytesWrittenDefaultVal = gtNewStoreLclVarNode(resultLclNum, gtNewIconNode(-1));
+    fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(bytesWrittenDefaultVal, debugInfo));
+
+
+
+
+    *pBlock = block;
+
+    CORINFO_THREAD_STATIC_BLOCKS_INFO threadStaticBlocksInfo;
+    memset(&threadStaticBlocksInfo, 0, sizeof(CORINFO_THREAD_STATIC_BLOCKS_INFO));
+    info.compCompHnd->getThreadLocalStaticBlocksInfo(&threadStaticBlocksInfo);
+
+    return true;
+}
+
 //------------------------------------------------------------------------------
 // fgExpandRuntimeLookupsForCall : partially expand runtime lookups helper calls
 //    to add a nullcheck [+ size check] and a fast path
