@@ -640,5 +640,51 @@ namespace System.Runtime.CompilerServices
             else
                 Unbox_TypeTest_Helper(pMT1, pMT2);
         }
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        private static extern object JIT_New(void* pMT);
+
+        [Intrinsic] // Can be inlined in JIT
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        private static extern void* GetRuntimeThreadLocalsPtr();
+
+        [Intrinsic] // The whole method is marked as no-gc
+        [DebuggerHidden]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static object NewSMpFastPortable(void* pMT)
+        {
+            RuntimeThreadLocals* ptr = (RuntimeThreadLocals*)GetRuntimeThreadLocalsPtr();
+            ee_alloc_context* eeAllocContext = &ptr->alloc_context;
+            byte* combinedLimit = eeAllocContext->m_CombinedLimit;
+            gc_alloc_context* allocContext = &eeAllocContext->m_GCAllocContext;
+            byte* allocPtr = allocContext->alloc_ptr;
+            nuint size = ((MethodTable*)pMT)->BaseSize;
+
+            if (size > (nuint)(combinedLimit - allocPtr))
+                return JIT_New(pMT);
+
+            allocContext->alloc_ptr = allocPtr + size;
+            *(void**)allocPtr = pMT;
+            return *(object*)(allocPtr);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RuntimeThreadLocals
+    {
+        public ee_alloc_context alloc_context;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct ee_alloc_context
+    {
+        public byte* m_CombinedLimit;
+        public gc_alloc_context m_GCAllocContext;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct gc_alloc_context
+    {
+        public byte* alloc_ptr;
     }
 }

@@ -1169,6 +1169,7 @@ DEFINE_METHOD(CASTHELPERS, CHKCASTANY,       ChkCastAny,                  SM_Ptr
 DEFINE_METHOD(CASTHELPERS, CHKCASTINTERFACE, ChkCastInterface,            SM_PtrVoid_Obj_RetObj)
 DEFINE_METHOD(CASTHELPERS, CHKCASTCLASS,     ChkCastClass,                SM_PtrVoid_Obj_RetObj)
 DEFINE_METHOD(CASTHELPERS, CHKCASTCLASSSPECIAL, ChkCastClassSpecial,      SM_PtrVoid_Obj_RetObj)
+DEFINE_METHOD(CASTHELPERS, ALLOC,            NewSMpFastPortable,          SM_PtrVoid_RetObj)
 DEFINE_METHOD(CASTHELPERS, UNBOX,            Unbox,                       NoSig)
 DEFINE_METHOD(CASTHELPERS, STELEMREF,        StelemRef,                   SM_ArrObject_IntPtr_Obj_RetVoid)
 DEFINE_METHOD(CASTHELPERS, LDELEMAREF,       LdelemaRef,                  SM_ArrObject_IntPtr_PtrVoid_RetRefObj)

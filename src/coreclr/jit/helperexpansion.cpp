@@ -154,29 +154,26 @@ bool Compiler::fgExpandAllocatorsForCall(BasicBlock** pBlock, Statement* stmt, G
         return false;
     }
 
-    assert(call->gtArgs.CountArgs() == 1);
+    //assert(call->gtArgs.CountArgs() == 1);
 
-    DebugInfo debugInfo = stmt->GetDebugInfo();
+    //DebugInfo debugInfo = stmt->GetDebugInfo();
 
-    BasicBlock* prevBb;
-    const unsigned resultLcl = SplitAtTreeAndReplaceItWithLocal(this, block, stmt, call, &prevBb, &block);
-
-
-
-    // Set bytesWritten -1 by default, if the fast path is not taken we'll return it as the result.
-    GenTree* bytesWrittenDefaultVal = gtNewStoreLclVarNode(resultLclNum, gtNewIconNode(-1));
-    fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(bytesWrittenDefaultVal, debugInfo));
+    //BasicBlock* prevBb;
+    //const unsigned resultLcl = SplitAtTreeAndReplaceItWithLocal(this, block, stmt, call, &prevBb, &block);
 
 
 
+    //// Set bytesWritten -1 by default, if the fast path is not taken we'll return it as the result.
+    //GenTree* bytesWrittenDefaultVal = gtNewStoreLclVarNode(resultLclNum, gtNewIconNode(-1));
+    //fgInsertStmtAtEnd(lengthCheckBb, fgNewStmtFromTree(bytesWrittenDefaultVal, debugInfo));
 
-    *pBlock = block;
+    //*pBlock = block;
 
-    CORINFO_THREAD_STATIC_BLOCKS_INFO threadStaticBlocksInfo;
-    memset(&threadStaticBlocksInfo, 0, sizeof(CORINFO_THREAD_STATIC_BLOCKS_INFO));
-    info.compCompHnd->getThreadLocalStaticBlocksInfo(&threadStaticBlocksInfo);
+    //CORINFO_THREAD_STATIC_BLOCKS_INFO threadStaticBlocksInfo;
+    //memset(&threadStaticBlocksInfo, 0, sizeof(CORINFO_THREAD_STATIC_BLOCKS_INFO));
+    //info.compCompHnd->getThreadLocalStaticBlocksInfo(&threadStaticBlocksInfo);
 
-    return true;
+    return false;
 }
 
 //------------------------------------------------------------------------------

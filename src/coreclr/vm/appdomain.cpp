@@ -1121,6 +1121,10 @@ void SystemDomain::LoadBaseSystemClasses()
 
         g_pIDynamicInterfaceCastableInterface = CoreLibBinder::GetClass(CLASS__IDYNAMICINTERFACECASTABLE);
 
+        MethodDesc* pMD = CoreLibBinder::GetMethod((BinderMethodID)(METHOD__CASTHELPERS__ALLOC));
+        PCODE pDest = pMD->GetMultiCallableAddrOfCode();
+        SetJitHelperFunction(CORINFO_HELP_NEWSFAST, pDest);
+
     #ifdef FEATURE_COMINTEROP
         if (g_pConfig->IsBuiltInCOMSupported())
         {

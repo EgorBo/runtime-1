@@ -781,6 +781,13 @@ BOOL ObjIsInstanceOf(Object* pObject, TypeHandle toTypeHnd, BOOL throwCastExcept
     return ObjIsInstanceOfCore(pObject, toTypeHnd, throwCastException);
 }
 
+HCIMPL0(void*, GetRuntimeThreadLocalsPtr)
+{
+    FCALL_CONTRACT;
+    return &t_runtime_thread_locals;
+}
+HCIMPLEND
+
 HCIMPL2(Object*, ChkCastAny_NoCacheLookup, CORINFO_CLASS_HANDLE type, Object* obj)
 {
     FCALL_CONTRACT;
@@ -838,15 +845,6 @@ HCIMPLEND
 __declspec(noinline) static RuntimeThreadLocals* Testik()
 {
     return &t_runtime_thread_locals;
-}
-
-
-__declspec(noinline) static RuntimeThreadLocals* Testik2()
-{
-    RuntimeThreadLocals *p_t_runtime_thread_locals = &t_runtime_thread_locals;
-    ee_alloc_context* eeAllocContext = &p_t_runtime_thread_locals->alloc_context;
-    gc_alloc_context* allocContext = &eeAllocContext->m_GCAllocContext;
-    uint8_t *obj = allocContext->alloc_ptr;
 }
 
 //*************************************************************

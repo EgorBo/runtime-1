@@ -74,6 +74,7 @@ void InitJITHelpers1()
         // if (multi-proc || server GC)
         if (GCHeapUtilities::UseThreadAllocationContexts())
         {
+
             SetJitHelperFunction(CORINFO_HELP_NEWSFAST, JIT_NewS_MP_FastPortable);
             SetJitHelperFunction(CORINFO_HELP_NEWSFAST_ALIGN8, JIT_NewS_MP_FastPortable);
             SetJitHelperFunction(CORINFO_HELP_BOX, JIT_Box_MP_FastPortable);
