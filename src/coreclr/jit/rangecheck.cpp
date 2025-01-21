@@ -1014,7 +1014,7 @@ void RangeCheck::MergeAssertion(BasicBlock* block, GenTree* op, Range* pRange DE
 // Compute the range for a binary operation.
 Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool monIncreasing DEBUGARG(int indent))
 {
-    assert(binop->OperIs(GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
+    assert(binop->OperIs(GT_OR, GT_XOR, GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
 
     GenTree* op1 = binop->gtGetOp1();
     GenTree* op2 = binop->gtGetOp2();
@@ -1049,25 +1049,26 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
         {
             return Range(Limit::keUnknown);
         }
+        int op2IntCns = static_cast<int>(op2Cns);
 
         int op1op2Cns = 0;
         int icon      = -1;
         if (binop->OperIs(GT_AND))
         {
             // x & cns -> [0..cns]
-            icon = static_cast<int>(op2Cns);
+            icon = op2IntCns;
         }
         else if (binop->OperIs(GT_UMOD))
         {
             // x % cns -> [0..cns-1]
-            icon = static_cast<int>(op2Cns) - 1;
+            icon = op2IntCns - 1;
         }
         else if (binop->OperIs(GT_RSH, GT_LSH) && op1->OperIs(GT_AND) &&
                  vnStore->IsVNIntegralConstant<int>(op1->AsOp()->gtGetOp2()->gtVNPair.GetConservative(), &op1op2Cns))
         {
             // (x & cns1) >> cns2 -> [0..cns1>>cns2]
             int icon1 = op1op2Cns;
-            int icon2 = static_cast<int>(op2Cns);
+            int icon2 = op2IntCns;
             if ((icon1 >= 0) && (icon2 >= 0) && (icon2 < 32))
             {
                 icon = binop->OperIs(GT_RSH) ? (icon1 >> icon2) : (icon1 << icon2);
@@ -1107,7 +1108,7 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
     }
 
     // other operators are expected to be handled above.
-    assert(binop->OperIs(GT_ADD, GT_MUL, GT_LSH, GT_RSH, GT_RSZ));
+    assert(binop->OperIs(GT_ADD, GT_OR, GT_XOR, GT_MUL, GT_LSH, GT_RSH, GT_RSZ));
 
     Range* op1RangeCached = nullptr;
     Range  op1Range       = Limit(Limit::keUndef);
@@ -1158,6 +1159,18 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
     {
         r = RangeOps::Add(op1Range, op2Range);
         JITDUMP("BinOp add ranges %s %s = %s\n", op1Range.ToString(m_pCompiler), op2Range.ToString(m_pCompiler),
+                r.ToString(m_pCompiler));
+    }
+    if (binop->OperIs(GT_OR))
+    {
+        r = RangeOps::Or(op1Range, op2Range);
+        JITDUMP("BinOp or ranges %s %s = %s\n", op1Range.ToString(m_pCompiler), op2Range.ToString(m_pCompiler),
+                r.ToString(m_pCompiler));
+    }
+    if (binop->OperIs(GT_XOR))
+    {
+        r = RangeOps::Xor(op1Range, op2Range);
+        JITDUMP("BinOp xor ranges %s %s = %s\n", op1Range.ToString(m_pCompiler), op2Range.ToString(m_pCompiler),
                 r.ToString(m_pCompiler));
     }
     else if (binop->OperIs(GT_MUL))
@@ -1472,7 +1485,7 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
     }
     // These operators don't overflow.
     // Actually, GT_LSH can overflow so it depends on the analysis done in ComputeRangeForBinOp
-    else if (expr->OperIs(GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_NEG))
+    else if (expr->OperIs(GT_AND, GT_OR, GT_XOR, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_NEG))
     {
         overflows = false;
     }
@@ -1484,6 +1497,10 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
     else if (expr->OperIs(GT_CAST))
     {
         overflows = ComputeDoesOverflow(block, expr->gtGetOp1(), range);
+    }
+    else if (expr->OperIs(GT_HWINTRINSIC))
+    {
+        overflows = false;
     }
     GetOverflowMap()->Set(expr, overflows, OverflowMap::Overwrite);
     m_pSearchPath->Remove(expr);
@@ -1566,7 +1583,7 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
         MergeAssertion(block, expr, &range DEBUGARG(indent + 1));
     }
     // compute the range for binary operation
-    else if (expr->OperIs(GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL))
+    else if (expr->OperIs(GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL, GT_OR, GT_XOR))
     {
         range = ComputeRangeForBinOp(block, expr->AsOp(), monIncreasing DEBUGARG(indent + 1));
     }
@@ -1615,8 +1632,18 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
     }
     else
     {
-        // The expression is not recognized, so the result is unknown.
-        range = Range(Limit(Limit::keUnknown));
+        IntegralRange treeRange  = IntegralRange::ForNode(expr, m_pCompiler);
+        int64_t       lowerLimit = IntegralRange::SymbolicToRealValue(treeRange.GetLowerBound());
+        int64_t       upperLimit = IntegralRange::SymbolicToRealValue(treeRange.GetUpperBound());
+        if (FitsIn<int>(lowerLimit) && FitsIn<int>(upperLimit))
+        {
+            range = Range(Limit(Limit::keConstant, static_cast<int>(lowerLimit)),
+                          Limit(Limit::keConstant, static_cast<int>(upperLimit)));
+        }
+        else
+        {
+            range = Range(Limit(Limit::keUnknown));
+        }
     }
 
     GetRangeMap()->Set(expr, new (m_alloc) Range(range), RangeMap::Overwrite);

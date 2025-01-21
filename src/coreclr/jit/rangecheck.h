@@ -155,6 +155,27 @@ struct Limit
 
         return false;
     }
+
+    bool OrConstant(int i)
+    {
+        if (type == keConstant)
+        {
+            cns |= i;
+            return true;
+        }
+        return false;
+    }
+
+    bool XorConstant(int i)
+    {
+        if (type == keConstant)
+        {
+            cns ^= i;
+            return true;
+        }
+        return false;
+    }
+
     bool MultiplyConstant(int i)
     {
         switch (type)
@@ -305,6 +326,28 @@ struct RangeOps
         return Limit(Limit::keUnknown);
     }
 
+    static Limit OrConstantLimit(const Limit& value, const Limit& cns)
+    {
+        assert(cns.IsConstant());
+        Limit l = value;
+        if (l.OrConstant(cns.GetConstant()))
+        {
+            return l;
+        }
+        return Limit(Limit::keUnknown);
+    }
+
+    static Limit XorConstantLimit(const Limit& value, const Limit& cns)
+    {
+        assert(cns.IsConstant());
+        Limit l = value;
+        if (l.XorConstant(cns.GetConstant()))
+        {
+            return l;
+        }
+        return Limit(Limit::keUnknown);
+    }
+
     // Perform 'value' * 'cns'
     static Limit MultiplyConstantLimit(const Limit& value, const Limit& cns)
     {
@@ -367,6 +410,44 @@ struct RangeOps
         {
             result.uLimit = AddConstantLimit(r1hi, r2hi);
         }
+        return result;
+    }
+
+    static Range Or(Range& r1, Range& r2)
+    {
+        Limit& r1lo = r1.LowerLimit();
+        Limit& r1hi = r1.UpperLimit();
+        Limit& r2lo = r2.LowerLimit();
+        Limit& r2hi = r2.UpperLimit();
+
+        // Only support constant ranges for now.
+        if (!r1lo.IsConstant() || !r1hi.IsConstant() || !r2lo.IsConstant() || !r2hi.IsConstant())
+        {
+            return Range(Limit(Limit::keUnknown));
+        }
+
+        Range result  = Limit(Limit::keConstant);
+        result.lLimit = OrConstantLimit(r1lo, r2lo);
+        result.uLimit = OrConstantLimit(r1hi, r2hi);
+        return result;
+    }
+
+    static Range Xor(Range& r1, Range& r2)
+    {
+        Limit& r1lo = r1.LowerLimit();
+        Limit& r1hi = r1.UpperLimit();
+        Limit& r2lo = r2.LowerLimit();
+        Limit& r2hi = r2.UpperLimit();
+
+        // Only support constant ranges for now.
+        if (!r1lo.IsConstant() || !r1hi.IsConstant() || !r2lo.IsConstant() || !r2hi.IsConstant())
+        {
+            return Range(Limit(Limit::keUnknown));
+        }
+
+        Range result  = Limit(Limit::keConstant);
+        result.lLimit = XorConstantLimit(r1lo, r2lo);
+        result.uLimit = XorConstantLimit(r1hi, r2hi);
         return result;
     }
 
