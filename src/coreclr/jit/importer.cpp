@@ -1024,8 +1024,20 @@ GenTree* Compiler::impStoreStructPtr(GenTree* destAddr, GenTree* value, unsigned
 {
     var_types    type   = value->TypeGet();
     ClassLayout* layout = (type == TYP_STRUCT) ? value->GetLayout(this) : nullptr;
-    GenTree*     store  = gtNewStoreValueNode(type, layout, destAddr, value);
-    store               = impStoreStruct(store, curLevel);
+
+    bool isRetBuffer = false;
+    if (!compIsForInlining() && destAddr->OperIs(GT_LCL_VAR))
+    {
+        isRetBuffer = destAddr->AsLclVar()->GetLclNum() == info.compRetBuffArg;
+    }
+
+    GenTree* store = gtNewStoreValueNode(type, layout, destAddr, value);
+    if (isRetBuffer)
+    {
+        store->gtFlags |= GTF_IND_TGT_NOT_HEAP;
+    }
+
+    store = impStoreStruct(store, curLevel);
 
     return store;
 }
@@ -3332,6 +3344,16 @@ void Compiler::impImportAndPushBox(CORINFO_RESOLVED_TOKEN* pResolvedToken)
     GenTree*   op2       = nullptr;
     StackEntry se        = impPopStack();
     GenTree*   exprToBox = se.val;
+
+    if (varTypeIsStruct(exprToBox) && (exprToBox->IsCall() || exprToBox->OperIs(GT_RET_EXPR)))
+    {
+        unsigned             callTmp = lvaGrabTemp(true DEBUGARG("spill struct call to tmp"));
+        CORINFO_CLASS_HANDLE cls     = exprToBox->IsCall() ? exprToBox->AsCall()->gtRetClsHnd
+                                                           : exprToBox->AsRetExpr()->gtInlineCandidate->gtRetClsHnd;
+        lvaSetStruct(callTmp, cls, false);
+        impStoreToTemp(callTmp, exprToBox, CHECK_SPILL_ALL);
+        exprToBox = gtNewLclVarNode(callTmp);
+    }
 
     // Look at what helper we should use.
     CorInfoHelpFunc boxHelper = info.compCompHnd->getBoxHelper(pResolvedToken->hClass);
@@ -6429,6 +6451,17 @@ void Compiler::impImportBlockCode(BasicBlock* block)
         JITDUMP("\n    [%2u] %3u (0x%03x) ", stackState.esStackDepth, impCurOpcOffs, impCurOpcOffs);
 #endif
 
+        // CI testing. To be enabled only for jitstress
+        if (!opts.IsReadyToRun() && !compIsForInlining() && (info.compRetBuffArg != BAD_VAR_NUM) &&
+            (block == fgFirstBB))
+        {
+            // Write something into the buffer to make sure it's not on the gc heap.
+            // We write the value already in the buffer, so that we don't have to worry about
+            GenTree*     retBuffAddr = gtNewLclvNode(info.compRetBuffArg, TYP_BYREF);
+            GenTreeCall* call        = gtNewHelperCallNode(CORINFO_HELP_ENSURE_NONHEAP, TYP_VOID, retBuffAddr);
+            impAppendTree(call, CHECK_SPILL_NONE, impCurStmtDI);
+        }
+
     DECODE_OPCODE:
 
         // Return if any previous code has caused inline to fail.
@@ -9415,6 +9448,15 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
                 // Pull the value from the stack.
                 op2 = impPopStack().val;
+
+                // For STFLD(CALL) we need to spill the call, as the JIT
+                if (varTypeIsStruct(op2) && (op2->IsCall() || op2->OperIs(GT_RET_EXPR)))
+                {
+                    unsigned callTmp = lvaGrabTemp(true DEBUGARG("spill struct call to tmp"));
+                    lvaSetStruct(callTmp, fieldInfo.structType, false);
+                    impStoreToTemp(callTmp, op2, CHECK_SPILL_ALL);
+                    op2 = gtNewLclVarNode(callTmp);
+                }
 
                 if (opcode == CEE_STFLD)
                 {

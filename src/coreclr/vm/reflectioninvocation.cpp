@@ -492,6 +492,10 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     // If an exception occurs a gc may happen but we are going to dump the stack anyway and we do
     // not need to protect anything.
 
+    // Allocate a local buffer for the return buffer if necessary
+    DWORD objSize = retTH.GetMethodTable()->GetBaseSize();
+    PVOID pLocalRetBuf = _alloca(objSize);
+
     {
     BEGINFORBIDGC();
 #ifdef _DEBUG
@@ -501,8 +505,10 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     // Take care of any return arguments
     if (fHasRetBuffArg)
     {
-        PVOID pRetBuff = gc.retVal->GetData();
-        *((LPVOID*) (pTransitionBlock + argit.GetRetBuffArgOffset())) = pRetBuff;
+        _ASSERT(hasValueTypeReturn);
+
+        memset(pLocalRetBuf, 0, objSize);
+        *((LPVOID*) (pTransitionBlock + argit.GetRetBuffArgOffset())) = pLocalRetBuf;
     }
 
     // copy args
@@ -571,6 +577,12 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
 
     // Call the method
     CallDescrWorkerWithHandler(&callDescrData);
+
+    if (fHasRetBuffArg)
+    {
+        // Copy the return value from the return buffer to the object
+        memmoveGCRefs(gc.retVal->GetData(), pLocalRetBuf, objSize);
+    }
 
     // It is still illegal to do a GC here.  The return type might have/contain GC pointers.
     if (fConstructor)
