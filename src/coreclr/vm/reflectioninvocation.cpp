@@ -417,7 +417,9 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     GCStress<cfg_any>::MaybeTrigger();
 
     FrameWithCookie<ProtectValueClassFrame> *pProtectValueClassFrame = NULL;
+    FrameWithCookie<ProtectValueClassFrame>* pProtectValueClassFrame2 = NULL;
     ValueClassInfo *pValueClasses = NULL;
+    ValueClassInfo* pValueClasses2 = NULL;
 
     // if we have the magic Value Class return, we need to allocate that class
     // and place a pointer to it on the stack.
@@ -493,8 +495,7 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     // not need to protect anything.
 
     // Allocate a local buffer for the return buffer if necessary
-    DWORD objSize = retTH.GetMethodTable()->GetBaseSize();
-    PVOID pLocalRetBuf = _alloca(objSize);
+    PVOID pLocalRetBuf = nullptr;
 
     {
     BEGINFORBIDGC();
@@ -506,9 +507,14 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     if (fHasRetBuffArg)
     {
         _ASSERT(hasValueTypeReturn);
-
+        DWORD objSize = retTH.GetMethodTable()->GetBaseSize();
+        pLocalRetBuf = _alloca(objSize);
         memset(pLocalRetBuf, 0, objSize);
         *((LPVOID*) (pTransitionBlock + argit.GetRetBuffArgOffset())) = pLocalRetBuf;
+        if (retTH.GetMethodTable()->ContainsGCPointers())
+        {
+            pValueClasses2 = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pLocalRetBuf, retTH.GetMethodTable(), pValueClasses2);
+        }
     }
 
     // copy args
@@ -575,13 +581,19 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
             FrameWithCookie<ProtectValueClassFrame>(pThread, pValueClasses);
     }
 
+    if (pValueClasses2 != NULL)
+    {
+        pProtectValueClassFrame2 = new (_alloca(sizeof(FrameWithCookie<ProtectValueClassFrame>)))
+            FrameWithCookie<ProtectValueClassFrame>(pThread, pValueClasses2);
+    }
+
     // Call the method
     CallDescrWorkerWithHandler(&callDescrData);
 
     if (fHasRetBuffArg)
     {
         // Copy the return value from the return buffer to the object
-        memmoveGCRefs(gc.retVal->GetData(), pLocalRetBuf, objSize);
+        memmoveGCRefs(gc.retVal->GetData(), pLocalRetBuf, retTH.GetMethodTable()->GetBaseSize());
     }
 
     // It is still illegal to do a GC here.  The return type might have/contain GC pointers.
@@ -655,6 +667,8 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     if (pProtectValueClassFrame != NULL)
         pProtectValueClassFrame->Pop(pThread);
 
+    if (pProtectValueClassFrame2 != NULL)
+        pProtectValueClassFrame2->Pop(pThread);
     }
 
 Done:
