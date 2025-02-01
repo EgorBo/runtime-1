@@ -417,9 +417,7 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     GCStress<cfg_any>::MaybeTrigger();
 
     FrameWithCookie<ProtectValueClassFrame> *pProtectValueClassFrame = NULL;
-    FrameWithCookie<ProtectValueClassFrame>* pProtectValueClassFrame2 = NULL;
     ValueClassInfo *pValueClasses = NULL;
-    ValueClassInfo* pValueClasses2 = NULL;
 
     // if we have the magic Value Class return, we need to allocate that class
     // and place a pointer to it on the stack.
@@ -507,13 +505,14 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     if (fHasRetBuffArg)
     {
         _ASSERT(hasValueTypeReturn);
-        DWORD objSize = retTH.GetMethodTable()->GetBaseSize();
+        PTR_MethodTable pMT = retTH.GetMethodTable();
+        DWORD objSize = pMT->GetBaseSize();
         pLocalRetBuf = _alloca(objSize);
         memset(pLocalRetBuf, 0, objSize);
         *((LPVOID*) (pTransitionBlock + argit.GetRetBuffArgOffset())) = pLocalRetBuf;
-        if (retTH.GetMethodTable()->ContainsGCPointers())
+        if (pMT->ContainsGCPointers())
         {
-            pValueClasses2 = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pLocalRetBuf, retTH.GetMethodTable(), pValueClasses2);
+            pValueClasses = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pLocalRetBuf, pMT, pValueClasses);
         }
     }
 
@@ -561,7 +560,14 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
             // save the info into ValueClassInfo
             if (pMT->ContainsGCPointers())
             {
-                pValueClasses = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pStackCopy, pMT, pValueClasses);
+                if (pValueClasses == nullptr)
+                {
+                    pValueClasses = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pStackCopy, pMT, nullptr);
+                }
+                else
+                {
+                    pValueClasses->pNext = new (_alloca(sizeof(ValueClassInfo))) ValueClassInfo(pStackCopy, pMT, nullptr);
+                }
             }
 
             // We need a new ArgDestination that points to the stack copy
@@ -579,12 +585,6 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
     {
         pProtectValueClassFrame = new (_alloca (sizeof (FrameWithCookie<ProtectValueClassFrame>)))
             FrameWithCookie<ProtectValueClassFrame>(pThread, pValueClasses);
-    }
-
-    if (pValueClasses2 != NULL)
-    {
-        pProtectValueClassFrame2 = new (_alloca(sizeof(FrameWithCookie<ProtectValueClassFrame>)))
-            FrameWithCookie<ProtectValueClassFrame>(pThread, pValueClasses2);
     }
 
     // Call the method
@@ -666,9 +666,6 @@ extern "C" void QCALLTYPE RuntimeMethodHandle_InvokeMethod(
 
     if (pProtectValueClassFrame != NULL)
         pProtectValueClassFrame->Pop(pThread);
-
-    if (pProtectValueClassFrame2 != NULL)
-        pProtectValueClassFrame2->Pop(pThread);
     }
 
 Done:
