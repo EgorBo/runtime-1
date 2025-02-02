@@ -10639,6 +10639,16 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 op2 = impPopStack().val; // Src addr
                 op1 = impPopStack().val; // Dest addr
 
+                if (varTypeIsStruct(op2) && (op2->IsCall() || op2->OperIs(GT_RET_EXPR)))
+                {
+                    unsigned             callTmp = lvaGrabTemp(true DEBUGARG("spill struct call to tmp"));
+                    CORINFO_CLASS_HANDLE cls =
+                        op2->IsCall() ? op2->AsCall()->gtRetClsHnd : op2->AsRetExpr()->gtInlineCandidate->gtRetClsHnd;
+                    lvaSetStruct(callTmp, cls, false);
+                    impStoreToTemp(callTmp, op2, CHECK_SPILL_ALL);
+                    op2 = gtNewLclVarNode(callTmp);
+                }
+
                 op2 = gtNewLoadValueNode(layout, op2);
                 op1 = gtNewStoreValueNode(layout, op1, op2);
                 goto SPILL_APPEND;
@@ -10663,6 +10673,16 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 op2 = impPopStack().val; // Value
                 op1 = impPopStack().val; // Ptr
                 assertImp(varTypeIsStruct(op2));
+
+                if (varTypeIsStruct(op2) && (op2->IsCall() || op2->OperIs(GT_RET_EXPR)))
+                {
+                    unsigned             callTmp = lvaGrabTemp(true DEBUGARG("spill struct call to tmp"));
+                    CORINFO_CLASS_HANDLE cls =
+                        op2->IsCall() ? op2->AsCall()->gtRetClsHnd : op2->AsRetExpr()->gtInlineCandidate->gtRetClsHnd;
+                    lvaSetStruct(callTmp, cls, false);
+                    impStoreToTemp(callTmp, op2, CHECK_SPILL_ALL);
+                    op2 = gtNewLclVarNode(callTmp);
+                }
 
                 GenTreeFlags indirFlags = impPrefixFlagsToIndirFlags(prefixFlags);
                 if (eeIsByrefLike(resolvedToken.hClass))
