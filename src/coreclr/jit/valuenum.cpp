@@ -5040,6 +5040,34 @@ ValueNum ValueNumStore::EvalUsingMathIdentity(var_types typ, VNFunc func, ValueN
         return resultVN; // return the unsuccessful value
     }
 
+    // "X >= X / CNS" -> true if X is never negative
+    if ((func == VNF_GE) || (func == VNF_GE_UN) || (func == VNF_LT) || (func == VNF_LT_UN))
+    {
+        VNFuncApp argFuncApp;
+        if (GetVNFunc(arg1VN, &argFuncApp))
+        {
+            if (argFuncApp.FuncIs(VNF_DIV, VNF_UDIV, VNF_MOD, VNF_UMOD))
+            {
+                if (IsVNNeverNegative(arg0VN) && (arg0VN == argFuncApp.m_args[0]) &&
+                    IsVNPositiveInt32Constant(argFuncApp.m_args[1]))
+                {
+                    return ((func == VNF_GE) || (func == VNF_GE_UN)) ? VNOneForType(typ) : VNZeroForType(typ);
+                }
+            }
+        }
+        else if (GetVNFunc(arg0VN, &argFuncApp))
+        {
+            if (argFuncApp.FuncIs(VNF_DIV, VNF_UDIV, VNF_MOD, VNF_UMOD))
+            {
+                if (IsVNNeverNegative(arg1VN) && (arg1VN == argFuncApp.m_args[0]) &&
+                    IsVNPositiveInt32Constant(argFuncApp.m_args[1]))
+                {
+                    return ((func == VNF_GE) || (func == VNF_GE_UN)) ? VNZeroForType(typ) : VNOneForType(typ);
+                }
+            }
+        }
+    }
+
     ValueNum cnsVN = NoVN;
     ValueNum opVN  = NoVN;
 

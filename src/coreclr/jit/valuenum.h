@@ -205,6 +205,17 @@ struct VNFuncApp
         }
         return true;
     }
+
+    bool FuncIs(VNFunc func) const
+    {
+        return m_func == func;
+    }
+
+    template <typename... T>
+    bool FuncIs(VNFunc func, T... rest) const
+    {
+        return FuncIs(func) || FuncIs(rest...);
+    }
 };
 
 struct VNPhiDef
