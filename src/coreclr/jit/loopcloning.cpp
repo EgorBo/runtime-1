@@ -71,7 +71,7 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         int      rank = GetDimRank();
 
         // rank is always 0 for spans
-        assert(!arrIndex->isSpan || (rank == 0));
+        assert(!arrIndex->IsSpan() || (rank == 0));
 
         for (int i = 0; i < rank; ++i)
         {
@@ -93,13 +93,18 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         if (oper == ArrLen)
         {
             GenTree* arrLen;
-            if (arrIndex->isSpan)
+            if (arrIndex->isNonPromotedSpan)
             {
                 // For non-promoted spans, we emit IND(ADD(arr, sizeof(ptr)))
                 // (we don't support the promoted ones yet)
                 GenTreeIntCon* offset    = comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length, TYP_I_IMPL);
                 GenTreeOp*     addOffset = comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr, offset);
                 arrLen                   = comp->gtNewIndir(TYP_INT, addOffset);
+            }
+            else if (arrIndex->isPromotedSpan)
+            {
+                // For spans, we emit IND(ADD(arr, sizeof(ptr)))
+                arrLen = arr;
             }
             else
             {
@@ -973,9 +978,18 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
 {
     if (level == 0)
     {
-        // For level 0, just push (a != null).
-        (*conds)[level]->Push(
-            LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateNull())));
+        if (this->array.arrIndex->isPromotedSpan)
+        {
+            // TODO: remove this redundant condtion
+            (*conds)[level]->Push(
+                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateConst(0))));
+        }
+        else
+        {
+            // For level 0, just push (a != null).
+            (*conds)[level]->Push(
+                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateNull())));
+        }
     }
     else
     {
@@ -2253,7 +2267,8 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
         return false;
     }
 
-    bool     isSpan = false;
+    bool     isPromotedSpan    = false;
+    bool     isNonPromotedSpan = false;
     unsigned arrLcl;
     GenTree* arrLen = arrBndsChk->GetArrayLength();
     if (arrLen->OperIsArrLength() && arrLen->gtGetOp1()->OperIs(GT_LCL_VAR))
@@ -2270,13 +2285,23 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
             {
                 return false;
             }
-            isSpan = true;
+            isNonPromotedSpan = true;
             assert(arrLen->TypeIs(TYP_INT));
         }
         else
         {
             return false;
         }
+    }
+    else if (arrLen->OperIs(GT_LCL_VAR))
+    {
+        arrLcl = arrLen->AsLclVarCommon()->GetLclNum();
+        if (!lvaGetDesc(arrLcl)->IsNeverNegative())
+        {
+            return false;
+        }
+        isPromotedSpan = true;
+        assert(arrLen->TypeIs(TYP_INT));
     }
     else
     {
@@ -2292,8 +2317,9 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
 
     if (lhsNum == BAD_VAR_NUM)
     {
-        result->arrLcl = arrLcl;
-        result->isSpan = isSpan;
+        result->arrLcl            = arrLcl;
+        result->isPromotedSpan    = isPromotedSpan;
+        result->isNonPromotedSpan = isNonPromotedSpan;
     }
     result->indLcls.Push(indLcl);
     result->bndsChks.Push(tree);
