@@ -4571,6 +4571,13 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
         return nullptr;
     }
 
+    // Fold "x ==/!= null" with help of fgAddrCouldBeNull
+    if (varTypeIsGC(op1) && op2->IsIntegralConst(0) && !fgAddrCouldBeNull(op1))
+    {
+        newTree = tree->OperIs(GT_EQ) ? gtNewIconNode(0) : gtNewIconNode(1);
+        return optAssertionProp_Update(newTree, tree, stmt);
+    }
+
     // See if we have "PHI ==/!= null" tree. If so, we iterate over all PHI's arguments,
     // and if all of them are known to be non-null, we can bash the comparison to true/false.
     if (op2->IsIntegralConst(0) && op1->TypeIs(TYP_REF))
