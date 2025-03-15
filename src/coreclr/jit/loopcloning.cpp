@@ -982,7 +982,7 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
         {
             // TODO: remove this redundant condtion
             (*conds)[level]->Push(
-                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateConst(0))));
+                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateConst(1)), LC_Expr(LC_Ident::CreateConst(0))));
         }
         else
         {
