@@ -7509,6 +7509,16 @@ public:
         optMethodFlags |= OMF_HAS_STACK_ARRAY;
     }
 
+    bool doesMethodHaveArrayOrSpanElementAccess()
+    {
+        return (optMethodFlags & OMF_HAS_ARRAYREF) != 0;
+    }
+
+    void setMethodHasArrayOrSpanElementAccess()
+    {
+        optMethodFlags |= OMF_HAS_ARRAYREF;
+    }
+
     void pickGDV(GenTreeCall*           call,
                  IL_OFFSET              ilOffset,
                  bool                   isInterface,

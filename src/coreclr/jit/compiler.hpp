@@ -1691,7 +1691,7 @@ inline GenTreeArrLen* Compiler::gtNewArrLen(var_types typ, GenTree* arrayOp, int
     {
         block->SetFlags(BBF_HAS_IDX_LEN);
     }
-    optMethodFlags |= OMF_HAS_ARRAYREF;
+    setMethodHasArrayOrSpanElementAccess();
     return arrLen;
 }
 

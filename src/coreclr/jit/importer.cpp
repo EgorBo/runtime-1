@@ -7214,7 +7214,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 if (op1->OperIs(GT_LCL_VAR) && op2->OperIs(GT_LCL_VAR, GT_CNS_INT, GT_ADD))
                 {
                     block->SetFlags(BBF_HAS_IDX_LEN);
-                    optMethodFlags |= OMF_HAS_ARRAYREF;
+                    setMethodHasArrayOrSpanElementAccess();
                 }
 
                 op1 = gtNewArrayIndexAddr(op1, op2, lclTyp, ldelemClsHnd);
@@ -7320,7 +7320,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 if (op3->OperIs(GT_LCL_VAR) && op1->OperIs(GT_LCL_VAR, GT_CNS_INT, GT_ADD))
                 {
                     block->SetFlags(BBF_HAS_IDX_LEN);
-                    optMethodFlags |= OMF_HAS_ARRAYREF;
+                    setMethodHasArrayOrSpanElementAccess();
                 }
 
                 // Create the index address node.

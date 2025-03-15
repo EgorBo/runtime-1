@@ -69,6 +69,10 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         // Create a a[i][j][k].length type node.
         GenTree* arr  = comp->gtNewLclvNode(arrIndex->arrLcl, comp->lvaTable[arrIndex->arrLcl].lvType);
         int      rank = GetDimRank();
+
+        // rank is always 0 for spans
+        assert(!arrIndex->isSpan || (rank == 0));
+
         for (int i = 0; i < rank; ++i)
         {
             GenTree* idx     = comp->gtNewLclvNode(arrIndex->indLcls[i], comp->lvaTable[arrIndex->indLcls[i]].lvType);
@@ -88,7 +92,20 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         // If asked for arrlen invoke arr length operator.
         if (oper == ArrLen)
         {
-            GenTree* arrLen = comp->gtNewArrLen(TYP_INT, arr, OFFSETOF__CORINFO_Array__length, bb);
+            GenTree* arrLen;
+            if (arrIndex->isSpan)
+            {
+                // For non-promoted spans, we emit IND(ADD(arr, sizeof(ptr)))
+                // (we don't support the promoted ones yet)
+                arrLen =
+                    comp->gtNewIndir(TYP_INT, comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr,
+                                                                  comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length,
+                                                                                      TYP_I_IMPL)));
+            }
+            else
+            {
+                arrLen = comp->gtNewArrLen(TYP_INT, arr, OFFSETOF__CORINFO_Array__length, bb);
+            }
 
             // We already guaranteed (by a sequence of preceding checks) that the array length operator will not
             // throw an exception because we null checked the base array.
@@ -2237,17 +2254,36 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
         return false;
     }
 
-    // For span we may see the array length is a local var or local field or constant.
-    // We won't try and extract those.
-    if (arrBndsChk->GetArrayLength()->OperIs(GT_LCL_VAR, GT_LCL_FLD, GT_CNS_INT))
+    bool     isSpan = false;
+    unsigned arrLcl;
+    GenTree* arrLen = arrBndsChk->GetArrayLength();
+    if (arrLen->OperIsArrLength() && arrLen->gtGetOp1()->OperIs(GT_LCL_VAR))
+    {
+        arrLcl = arrLen->gtGetOp1()->AsLclVarCommon()->GetLclNum();
+    }
+    else if (arrLen->OperIs(GT_IND) && arrLen->AsIndir()->Addr()->OperIs(GT_ADD))
+    {
+        GenTree* add = arrLen->AsIndir()->Addr();
+        if (add->gtGetOp1()->OperIs(GT_LCL_VAR) && add->gtGetOp2()->IsIntegralConst(OFFSETOF__CORINFO_Span__length))
+        {
+            arrLcl = add->gtGetOp1()->AsLclVarCommon()->GetLclNum();
+            if (!lvaGetDesc(arrLcl)->IsSpan())
+            {
+                return false;
+            }
+            isSpan = true;
+            assert(arrLen->TypeIs(TYP_INT));
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
     {
         return false;
     }
-    if (arrBndsChk->GetArrayLength()->gtGetOp1()->gtOper != GT_LCL_VAR)
-    {
-        return false;
-    }
-    unsigned arrLcl = arrBndsChk->GetArrayLength()->gtGetOp1()->AsLclVarCommon()->GetLclNum();
+
     if (lhsNum != BAD_VAR_NUM && arrLcl != lhsNum)
     {
         return false;
@@ -2258,6 +2294,7 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
     if (lhsNum == BAD_VAR_NUM)
     {
         result->arrLcl = arrLcl;
+        result->isSpan = isSpan;
     }
     result->indLcls.Push(indLcl);
     result->bndsChks.Push(tree);
@@ -2832,7 +2869,7 @@ Compiler::fgWalkResult Compiler::optCanOptimizeByLoopCloningVisitor(GenTree** pT
 bool Compiler::optIdentifyLoopOptInfo(FlowGraphNaturalLoop* loop, LoopCloneContext* context)
 {
     NaturalLoopIterInfo* iterInfo               = context->GetLoopIterInfo(loop->GetIndex());
-    const bool           canCloneForArrayBounds = ((optMethodFlags & OMF_HAS_ARRAYREF) != 0) && (iterInfo != nullptr);
+    const bool           canCloneForArrayBounds = doesMethodHaveArrayOrSpanElementAccess() && (iterInfo != nullptr);
     const bool           canCloneForTypeTests   = ((optMethodFlags & OMF_HAS_GUARDEDDEVIRT) != 0);
 
     if (!canCloneForArrayBounds && !canCloneForTypeTests)
