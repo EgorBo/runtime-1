@@ -97,10 +97,9 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
             {
                 // For non-promoted spans, we emit IND(ADD(arr, sizeof(ptr)))
                 // (we don't support the promoted ones yet)
-                arrLen =
-                    comp->gtNewIndir(TYP_INT, comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr,
-                                                                  comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length,
-                                                                                      TYP_I_IMPL)));
+                GenTreeIntCon* offset    = comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length, TYP_I_IMPL);
+                GenTreeOp*     addOffset = comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr, offset);
+                arrLen                   = comp->gtNewIndir(TYP_INT, addOffset);
             }
             else
             {
