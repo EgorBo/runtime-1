@@ -195,8 +195,7 @@ struct ArrIndex
     JitExpandArrayStack<GenTree*> bndsChks; // The bounds checks nodes along each dimension.
     unsigned                      rank;     // Rank of the array
     BasicBlock*                   useBlock; // Block where the [] occurs
-    bool                          isPromotedSpan;
-    bool                          isNonPromotedSpan;
+    bool                          isSpan;
 
     ArrIndex(CompAllocator alloc)
         : arrLcl(BAD_VAR_NUM)
@@ -204,14 +203,8 @@ struct ArrIndex
         , bndsChks(alloc)
         , rank(0)
         , useBlock(nullptr)
-        , isPromotedSpan(false)
-        , isNonPromotedSpan(false)
+        , isSpan(false)
     {
-    }
-
-    bool IsSpan() const
-    {
-        return isPromotedSpan || isNonPromotedSpan;
     }
 
 #ifdef DEBUG

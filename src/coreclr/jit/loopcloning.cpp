@@ -71,7 +71,7 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         int      rank = GetDimRank();
 
         // rank is always 0 for spans
-        assert(!arrIndex->IsSpan() || (rank == 0));
+        assert(!arrIndex->isSpan || (rank == 0));
 
         for (int i = 0; i < rank; ++i)
         {
@@ -93,14 +93,7 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         if (oper == ArrLen)
         {
             GenTree* arrLen;
-            if (arrIndex->isNonPromotedSpan)
-            {
-                // For non-promoted spans, we emit IND(ADD(arr, sizeof(ptr)))
-                GenTreeIntCon* offset    = comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length, TYP_I_IMPL);
-                GenTreeOp*     addOffset = comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr, offset);
-                arrLen                   = comp->gtNewIndir(TYP_INT, addOffset);
-            }
-            else if (arrIndex->isPromotedSpan)
+            if (arrIndex->isSpan)
             {
                 // For promoted spans, arr is already our length.
                 assert(arr->OperIs(GT_LCL_VAR));
@@ -979,10 +972,10 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
 {
     if (level == 0)
     {
-        if (this->array.arrIndex->isPromotedSpan)
+        if (this->array.arrIndex->isSpan)
         {
-            // For Spans (at least, for the promoted ones) we don't need "array != null" check
-            // but since the current algorithm doesn't expect that this condition might not be
+            // For promoted Spans we don't need the "array != null" check.
+            // However, the current algorithm doesn't expect that this condition might not be
             // needed, we insert a dummy always-true condition.
             //
             (*conds)[level]->Push(
@@ -997,7 +990,7 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
     }
     else
     {
-        assert(!this->array.arrIndex->IsSpan());
+        assert(!this->array.arrIndex->isSpan);
 
         // Adjust for level0 having just 1 condition and push conditions (i >= 0) && (i < a.len).
         // We fold the two compares into one using unsigned compare, since we know a.len is non-negative.
@@ -1129,7 +1122,7 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
         {
             case LcOptInfo::LcJaggedArray:
                 // Keep a note that we might be dealing with a Span
-                spanInvolved |= optInfo->AsLcJaggedArrayOptInfo()->arrIndex.IsSpan();
+                spanInvolved |= optInfo->AsLcJaggedArrayOptInfo()->arrIndex.isSpan;
                 checkIterationBehavior = true;
                 break;
 
@@ -2285,8 +2278,7 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
         return false;
     }
 
-    bool     isPromotedSpan    = false;
-    bool     isNonPromotedSpan = false;
+    bool     isSpan = false;
     unsigned arrLcl;
     GenTree* arrLen = arrBndsChk->GetArrayLength();
     if (arrLen->OperIsArrLength() && arrLen->gtGetOp1()->OperIs(GT_LCL_VAR))
@@ -2294,34 +2286,15 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
         // Case 1: Arrays (jagged or multi-dimensional), Strings
         arrLcl = arrLen->gtGetOp1()->AsLclVarCommon()->GetLclNum();
     }
-    else if (arrLen->OperIs(GT_IND) && arrLen->AsIndir()->Addr()->OperIs(GT_ADD))
-    {
-        // Case 2: Non-promoted spans (rare case)
-        GenTree* add = arrLen->AsIndir()->Addr();
-        if (add->gtGetOp1()->OperIs(GT_LCL_VAR) && add->gtGetOp2()->IsIntegralConst(OFFSETOF__CORINFO_Span__length))
-        {
-            arrLcl = add->gtGetOp1()->AsLclVarCommon()->GetLclNum();
-            if (!lvaGetDesc(arrLcl)->IsSpan())
-            {
-                return false;
-            }
-            isNonPromotedSpan = true;
-            assert(arrLen->TypeIs(TYP_INT));
-        }
-        else
-        {
-            return false;
-        }
-    }
     else if (arrLen->OperIs(GT_LCL_VAR))
     {
-        // Case 3: Promoted spans
+        // Case 2: Promoted spans
         arrLcl = arrLen->AsLclVarCommon()->GetLclNum();
         if (!lvaGetDesc(arrLcl)->IsSpanLength())
         {
             return false;
         }
-        isPromotedSpan = true;
+        isSpan = true;
         assert(arrLen->TypeIs(TYP_INT));
     }
     else
@@ -2338,10 +2311,9 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
 
     if (lhsNum == BAD_VAR_NUM)
     {
-        result->arrLcl            = arrLcl;
-        result->isPromotedSpan    = isPromotedSpan;
-        result->isNonPromotedSpan = isNonPromotedSpan;
+        result->arrLcl = arrLcl;
     }
+    result->isSpan = isSpan;
     result->indLcls.Push(indLcl);
     result->bndsChks.Push(tree);
     result->useBlock = compCurBB;
