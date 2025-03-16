@@ -96,14 +96,15 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
             if (arrIndex->isNonPromotedSpan)
             {
                 // For non-promoted spans, we emit IND(ADD(arr, sizeof(ptr)))
-                // (we don't support the promoted ones yet)
                 GenTreeIntCon* offset    = comp->gtNewIconNode(OFFSETOF__CORINFO_Span__length, TYP_I_IMPL);
                 GenTreeOp*     addOffset = comp->gtNewOperNode(GT_ADD, TYP_BYREF, arr, offset);
                 arrLen                   = comp->gtNewIndir(TYP_INT, addOffset);
             }
             else if (arrIndex->isPromotedSpan)
             {
-                // For spans, we emit IND(ADD(arr, sizeof(ptr)))
+                // For promoted spans, arr is already our length.
+                assert(arr->OperIs(GT_LCL_VAR));
+                assert(comp->lvaGetDesc(arr->AsLclVar()->GetLclNum())->IsSpanLength());
                 arrLen = arr;
             }
             else
