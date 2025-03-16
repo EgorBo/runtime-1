@@ -30959,7 +30959,7 @@ ClassLayout* GenTreeLclVarCommon::GetLayout(Compiler* compiler) const
 bool GenTreeLclVar::IsNeverNegative(Compiler* comp) const
 {
     assert(OperIs(GT_LCL_VAR));
-    return comp->lvaGetDesc(GetLclNum())->IsNeverNegative();
+    return comp->lvaGetDesc(GetLclNum())->IsSpanLength();
 }
 
 #if (defined(TARGET_XARCH) || defined(TARGET_ARM64)) && defined(FEATURE_HW_INTRINSICS)

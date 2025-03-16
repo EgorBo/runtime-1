@@ -980,7 +980,10 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
     {
         if (this->array.arrIndex->isPromotedSpan)
         {
-            // TODO: remove this redundant condtion
+            // For Spans (at least, for the promoted ones) we don't need "array != null" check
+            // but since the current algorithm doesn't expect that this condition might not be
+            // needed, we insert a dummy always-true condition.
+            //
             (*conds)[level]->Push(
                 LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateConst(1)), LC_Expr(LC_Ident::CreateConst(0))));
         }
@@ -993,6 +996,8 @@ void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStac
     }
     else
     {
+        assert(!this->array.arrIndex->IsSpan());
+
         // Adjust for level0 having just 1 condition and push conditions (i >= 0) && (i < a.len).
         // We fold the two compares into one using unsigned compare, since we know a.len is non-negative.
         //
@@ -1110,16 +1115,23 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
     JitExpandArrayStack<LcOptInfo*>* optInfos = context->GetLoopOptInfo(loop->GetIndex());
     assert(optInfos->Size() > 0);
 
+    bool spanInvolved = false;
+
     // We only need to check for iteration behavior if we have array checks.
     //
     bool checkIterationBehavior = false;
 
     for (unsigned i = 0; i < optInfos->Size(); ++i)
     {
-        LcOptInfo* const optInfo = optInfos->Get(i);
+        LcOptInfo* optInfo = optInfos->Get(i);
         switch (optInfo->GetOptType())
         {
             case LcOptInfo::LcJaggedArray:
+                // Keep a note that we might be dealing with a Span
+                spanInvolved |= optInfo->AsLcJaggedArrayOptInfo()->arrIndex.IsSpan();
+                checkIterationBehavior = true;
+                break;
+
             case LcOptInfo::LcMdArray:
                 checkIterationBehavior = true;
                 break;
@@ -1191,13 +1203,18 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
     // is beyond the limit.
     int stride = abs(iterInfo->IterConst());
 
-    if (stride >= 58)
+    static_assert_no_msg(INT32_MAX >= CORINFO_Array_MaxLength);
+    if (stride >= (INT32_MAX - CORINFO_Array_MaxLength))
     {
         // Array.MaxLength can have maximum of 0X7FFFFFC7 elements, so make sure
-        // the stride increment doesn't overflow or underflow the index. Hence,
-        // the maximum stride limit is set to
-        // (int.MaxValue - (Array.MaxLength - 1) + 1), which is
-        // (0X7fffffff - 0x7fffffc7 + 2) = 0x3a or 58.
+        // the stride increment doesn't overflow or underflow the index.
+        return false;
+    }
+
+    if (spanInvolved && (stride > 1))
+    {
+        // Span<T> can only be iterated with a stride of 1 since its Length
+        // can be INT32_MAX.
         return false;
     }
 
@@ -2273,10 +2290,12 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
     GenTree* arrLen = arrBndsChk->GetArrayLength();
     if (arrLen->OperIsArrLength() && arrLen->gtGetOp1()->OperIs(GT_LCL_VAR))
     {
+        // Case 1: Arrays (jagged or multi-dimensional), Strings
         arrLcl = arrLen->gtGetOp1()->AsLclVarCommon()->GetLclNum();
     }
     else if (arrLen->OperIs(GT_IND) && arrLen->AsIndir()->Addr()->OperIs(GT_ADD))
     {
+        // Case 2: Non-promoted spans (rare case)
         GenTree* add = arrLen->AsIndir()->Addr();
         if (add->gtGetOp1()->OperIs(GT_LCL_VAR) && add->gtGetOp2()->IsIntegralConst(OFFSETOF__CORINFO_Span__length))
         {
@@ -2295,8 +2314,9 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
     }
     else if (arrLen->OperIs(GT_LCL_VAR))
     {
+        // Case 3: Promoted spans
         arrLcl = arrLen->AsLclVarCommon()->GetLclNum();
-        if (!lvaGetDesc(arrLcl)->IsNeverNegative())
+        if (!lvaGetDesc(arrLcl)->IsSpanLength())
         {
             return false;
         }

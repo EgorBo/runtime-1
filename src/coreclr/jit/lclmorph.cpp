@@ -2104,7 +2104,7 @@ private:
                 // Span's Length is never negative unconditionally
                 if (isSpanLength && (accessSize == genTypeSize(TYP_INT)))
                 {
-                    fieldVarDsc->SetIsNeverNegative(true);
+                    fieldVarDsc->SetIsSpanLength(true);
                 }
 
                 // Retargeting the indirection to reference the promoted field would make it "wide", exposing

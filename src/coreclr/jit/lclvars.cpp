@@ -1930,7 +1930,7 @@ void Compiler::StructPromotionHelper::PromoteStructVar(unsigned lclNum)
 
         if (varDsc->IsSpan() && fieldVarDsc->lvFldOffset == OFFSETOF__CORINFO_Span__length)
         {
-            fieldVarDsc->SetIsNeverNegative(true);
+            fieldVarDsc->SetIsSpanLength(true);
         }
 
         // This new local may be the first time we've seen a long typed local.

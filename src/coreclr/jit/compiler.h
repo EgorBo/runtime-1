@@ -670,7 +670,7 @@ public:
     unsigned char lvIsEnumerator : 1; // Local is assigned exact class where : IEnumerable<T> via GDV
 
 private:
-    unsigned char lvIsNeverNegative : 1; // The local is known to be never negative
+    unsigned char lvIsSpanLength : 1; // The local is Span<T>._length
 
     unsigned char lvIsSpan : 1; // The local is a Span<T>
 
@@ -850,15 +850,15 @@ public:
 #endif
 
     // Is this is local never negative?
-    bool IsNeverNegative() const
+    bool IsSpanLength() const
     {
-        return lvIsNeverNegative;
+        return lvIsSpanLength;
     }
 
     // Is this is local never negative?
-    void SetIsNeverNegative(bool value)
+    void SetIsSpanLength(bool value)
     {
-        lvIsNeverNegative = value;
+        lvIsSpanLength = value;
     }
 
     // Is this is local a Span<T>?

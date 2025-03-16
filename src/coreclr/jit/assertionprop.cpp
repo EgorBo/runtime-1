@@ -207,7 +207,7 @@ bool IntegralRange::Contains(int64_t value) const
                 rangeType = compiler->lvaGetDesc(node->AsLclVar())->TypeGet();
             }
 
-            if (varDsc->IsNeverNegative())
+            if (varDsc->IsSpanLength())
             {
                 return {SymbolicIntegerValue::Zero, UpperBoundForType(rangeType)};
             }
