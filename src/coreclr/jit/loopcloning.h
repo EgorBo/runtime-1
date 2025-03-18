@@ -190,21 +190,48 @@ class Compiler;
  */
 struct ArrIndex
 {
-    unsigned                      arrLcl;   // The array base local num
-    JitExpandArrayStack<unsigned> indLcls;  // The indices local nums
-    JitExpandArrayStack<GenTree*> bndsChks; // The bounds checks nodes along each dimension.
-    unsigned                      rank;     // Rank of the array
-    BasicBlock*                   useBlock; // Block where the [] occurs
-    bool                          isSpan;
+    // We either have an array object or its length
+    unsigned                      arrLcl;    // The array base local num
+    unsigned                      arrLenLcl; // The array length local num
+    JitExpandArrayStack<unsigned> indLcls;   // The indices local nums
+    JitExpandArrayStack<GenTree*> bndsChks;  // The bounds checks nodes along each dimension.
+    unsigned                      rank;      // Rank of the array
+    BasicBlock*                   useBlock;  // Block where the [] occurs
 
     ArrIndex(CompAllocator alloc)
         : arrLcl(BAD_VAR_NUM)
+        , arrLenLcl(BAD_VAR_NUM)
         , indLcls(alloc)
         , bndsChks(alloc)
         , rank(0)
         , useBlock(nullptr)
-        , isSpan(false)
     {
+    }
+
+    bool HasArrayObj() const
+    {
+        return arrLcl != BAD_VAR_NUM;
+    }
+
+    bool HasLength() const
+    {
+        return arrLenLcl != BAD_VAR_NUM;
+    }
+
+    unsigned GetArrayObjLcl() const
+    {
+        // arrLcl and arrLenLcl are mutually exclusive.
+        assert(arrLenLcl == BAD_VAR_NUM);
+        assert(arrLcl != BAD_VAR_NUM);
+        return arrLcl;
+    }
+
+    unsigned GetLengthLcl() const
+    {
+        // arrLcl and arrLenLcl are mutually exclusive.
+        assert(arrLcl == BAD_VAR_NUM);
+        assert(arrLenLcl != BAD_VAR_NUM);
+        return arrLenLcl;
     }
 
 #ifdef DEBUG
@@ -292,7 +319,8 @@ struct LcMdArrayOptInfo : public LcOptInfo
             {
                 index->indLcls.Push(arrElem->gtArrInds[i]->AsLclVarCommon()->GetLclNum());
             }
-            index->arrLcl = arrElem->gtArrObj->AsLclVarCommon()->GetLclNum();
+            index->arrLcl    = arrElem->gtArrObj->AsLclVarCommon()->GetLclNum();
+            index->arrLenLcl = BAD_VAR_NUM;
         }
         return index;
     }
@@ -449,7 +477,8 @@ struct LC_Array
         assert(type != Invalid && that.type != Invalid);
 
         // Types match and the array base matches.
-        if (type != that.type || arrIndex->arrLcl != that.arrIndex->arrLcl || oper != that.oper)
+        if ((type != that.type) || (arrIndex->arrLcl != that.arrIndex->arrLcl) ||
+            (arrIndex->arrLenLcl != that.arrIndex->arrLenLcl) || (oper != that.oper))
         {
             return false;
         }
@@ -869,7 +898,7 @@ struct LoopCloneContext
     // mark the slow path as "run rarely", since it really shouldn't execute (given the currently optimized loop
     // conditions) except under exceptional circumstances.
     //
-    static constexpr weight_t fastPathWeightScaleFactor = 0.99;
+    static constexpr weight_t fastPathWeightScaleFactor = 1.0;
     static constexpr weight_t slowPathWeightScaleFactor = 1.0 - fastPathWeightScaleFactor;
 
     CompAllocator alloc; // The allocator

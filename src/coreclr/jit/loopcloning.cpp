@@ -23,7 +23,14 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 //
 void ArrIndex::Print(unsigned dim /* = -1 */)
 {
-    printf("V%02d", arrLcl);
+    // When we have only length, we deal with a single-dimensional array or span
+    if (HasLength())
+    {
+        printf("Len: V%02d", GetLengthLcl());
+        return;
+    }
+
+    printf("ArrObj: V%02d", GetArrayObjLcl());
     for (unsigned i = 0; i < ((dim == (unsigned)-1) ? rank : dim); ++i)
     {
         printf("[V%02d]", indLcls.Get(i));
@@ -67,11 +74,18 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
     if (type == Jagged)
     {
         // Create a a[i][j][k].length type node.
-        GenTree* arr  = comp->gtNewLclvNode(arrIndex->arrLcl, comp->lvaTable[arrIndex->arrLcl].lvType);
-        int      rank = GetDimRank();
+        int rank = GetDimRank();
 
-        // rank is always 0 for spans
-        assert(!arrIndex->isSpan || (rank == 0));
+        if (arrIndex->HasLength())
+        {
+            assert(oper == ArrLen);
+            assert(rank == 0);
+            assert(arrIndex->HasLength());
+            return comp->gtNewLclvNode(arrIndex->GetLengthLcl(), comp->lvaTable[arrIndex->GetLengthLcl()].lvType);
+        }
+
+        GenTree* arr =
+            comp->gtNewLclvNode(arrIndex->GetArrayObjLcl(), comp->lvaTable[arrIndex->GetArrayObjLcl()].lvType);
 
         for (int i = 0; i < rank; ++i)
         {
@@ -92,18 +106,7 @@ GenTree* LC_Array::ToGenTree(Compiler* comp, BasicBlock* bb)
         // If asked for arrlen invoke arr length operator.
         if (oper == ArrLen)
         {
-            GenTree* arrLen;
-            if (arrIndex->isSpan)
-            {
-                // For promoted spans, arr is already our length.
-                assert(arr->OperIs(GT_LCL_VAR));
-                assert(comp->lvaGetDesc(arr->AsLclVar()->GetLclNum())->IsSpanLength());
-                arrLen = arr;
-            }
-            else
-            {
-                arrLen = comp->gtNewArrLen(TYP_INT, arr, OFFSETOF__CORINFO_Array__length, bb);
-            }
+            GenTree* arrLen = comp->gtNewArrLen(TYP_INT, arr, OFFSETOF__CORINFO_Array__length, bb);
 
             // We already guaranteed (by a sequence of preceding checks) that the array length operator will not
             // throw an exception because we null checked the base array.
@@ -934,7 +937,7 @@ unsigned LC_ArrayDeref::Lcl()
     unsigned lvl = level;
     if (lvl == 0)
     {
-        return array.arrIndex->arrLcl;
+        return array.arrIndex->GetArrayObjLcl();
     }
     lvl--;
     return array.arrIndex->indLcls[lvl];
@@ -970,27 +973,17 @@ bool LC_ArrayDeref::HasChildren()
 //
 void LC_ArrayDeref::DeriveLevelConditions(JitExpandArrayStack<JitExpandArrayStack<LC_Condition>*>* conds)
 {
+    assert(this->array.arrIndex->HasArrayObj());
+
     if (level == 0)
     {
-        if (this->array.arrIndex->isSpan)
-        {
-            // For promoted Spans we don't need the "array != null" check.
-            // However, the current algorithm doesn't expect that this condition might not be
-            // needed, we insert a dummy always-true condition.
-            //
-            (*conds)[level]->Push(
-                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateConst(1)), LC_Expr(LC_Ident::CreateConst(0))));
-        }
-        else
-        {
-            // For level 0, just push (a != null).
-            (*conds)[level]->Push(
-                LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateNull())));
-        }
+        // For level 0, just push (a != null).
+        (*conds)[level]->Push(
+            LC_Condition(GT_NE, LC_Expr(LC_Ident::CreateVar(Lcl())), LC_Expr(LC_Ident::CreateNull())));
     }
     else
     {
-        assert(!this->array.arrIndex->isSpan);
+        assert(this->array.arrIndex->HasArrayObj());
 
         // Adjust for level0 having just 1 condition and push conditions (i >= 0) && (i < a.len).
         // We fold the two compares into one using unsigned compare, since we know a.len is non-negative.
@@ -1109,7 +1102,7 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
     JitExpandArrayStack<LcOptInfo*>* optInfos = context->GetLoopOptInfo(loop->GetIndex());
     assert(optInfos->Size() > 0);
 
-    bool spanInvolved = false;
+    bool spanMaybeInvolved = false;
 
     // We only need to check for iteration behavior if we have array checks.
     //
@@ -1122,7 +1115,7 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
         {
             case LcOptInfo::LcJaggedArray:
                 // Keep a note that we might be dealing with a Span
-                spanInvolved |= optInfo->AsLcJaggedArrayOptInfo()->arrIndex.isSpan;
+                spanMaybeInvolved |= optInfo->AsLcJaggedArrayOptInfo()->arrIndex.HasLength();
                 checkIterationBehavior = true;
                 break;
 
@@ -1205,7 +1198,7 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
         return false;
     }
 
-    if (spanInvolved && (stride > 1))
+    if (spanMaybeInvolved && (stride > 1))
     {
         // Span<T> can only be iterated with a stride of 1 since its Length
         // can be INT32_MAX.
@@ -1513,6 +1506,14 @@ bool Compiler::optComputeDerefConditions(FlowGraphNaturalLoop* loop, LoopCloneCo
     for (unsigned i = 0; i < arrayDeref->Size(); ++i)
     {
         LC_Array& array = (*arrayDeref)[i];
+
+        if (array.arrIndex->HasLength())
+        {
+            // If we have only length, then we don't need to deref the array (we don't even have the array object)
+            // and the array is guaranteed to be single-dimensional.
+            maxRank = max(0, maxRank);
+            continue;
+        }
 
         // First populate the array base variable.
         LC_ArrayDeref* node = LC_ArrayDeref::Find(&arrayDerefNodes, array.arrIndex->arrLcl);
@@ -1954,7 +1955,6 @@ BasicBlock* Compiler::optInsertLoopChoiceConditions(LoopCloneContext*     contex
                                                     BasicBlock*           insertAfter)
 {
     JITDUMP("Inserting loop " FMT_LP " loop choice conditions\n", loop->GetIndex());
-    assert(context->HasBlockConditions(loop->GetIndex()));
     assert(slowPreheader != nullptr);
 
     if (context->HasBlockConditions(loop->GetIndex()))
@@ -2128,9 +2128,6 @@ void Compiler::optCloneLoop(FlowGraphNaturalLoop* loop, LoopCloneContext* contex
     //      ...
     //      slowPreheader --> slowHeader
     //
-    // We should always have block conditions.
-
-    assert(context->HasBlockConditions(loop->GetIndex()));
 
     // If any condition is false, go to slowPreheader (which branches or falls through to header of the slow loop).
     BasicBlock* slowHeader = nullptr;
@@ -2278,9 +2275,15 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
         return false;
     }
 
-    bool     isSpan = false;
-    unsigned arrLcl;
+    unsigned arrLcl    = BAD_VAR_NUM;
+    unsigned arrLenLcl = BAD_VAR_NUM;
+
     GenTree* arrLen = arrBndsChk->GetArrayLength();
+    if (!arrLen->TypeIs(TYP_INT))
+    {
+        return false;
+    }
+
     if (arrLen->OperIsArrLength() && arrLen->gtGetOp1()->OperIs(GT_LCL_VAR))
     {
         // Case 1: Arrays (jagged or multi-dimensional), Strings
@@ -2288,14 +2291,8 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
     }
     else if (arrLen->OperIs(GT_LCL_VAR))
     {
-        // Case 2: Promoted spans
-        arrLcl = arrLen->AsLclVarCommon()->GetLclNum();
-        if (!lvaGetDesc(arrLcl)->IsSpanLength())
-        {
-            return false;
-        }
-        isSpan = true;
-        assert(arrLen->TypeIs(TYP_INT));
+        // Case 2: Array's length (or Span) is stored in a local variable.
+        arrLenLcl = arrLen->AsLclVarCommon()->GetLclNum();
     }
     else
     {
@@ -2313,7 +2310,7 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
     {
         result->arrLcl = arrLcl;
     }
-    result->isSpan = isSpan;
+    result->arrLenLcl = arrLenLcl;
     result->indLcls.Push(indLcl);
     result->bndsChks.Push(tree);
     result->useBlock = compCurBB;
@@ -2546,10 +2543,19 @@ Compiler::fgWalkResult Compiler::optCanOptimizeByLoopCloning(GenTree* tree, Loop
         }
 #endif
 
-        // Check that the array object local variable is invariant within the loop body.
-        if (!optIsStackLocalInvariant(info->loop, arrIndex.arrLcl))
+        // Check that the array object (or its length) local variable is invariant within the loop body.
+        if (!optIsStackLocalInvariant(info->loop,
+                                      arrIndex.HasArrayObj() ? arrIndex.GetArrayObjLcl() : arrIndex.GetLengthLcl()))
         {
-            JITDUMP("V%02d is not loop invariant\n", arrIndex.arrLcl);
+            if (arrIndex.HasArrayObj())
+            {
+                JITDUMP("ArrObj V%02d is not loop invariant\n", arrIndex.GetArrayObjLcl());
+            }
+            else
+            {
+                assert(arrIndex.HasLength());
+                JITDUMP("ArrLen V%02d is not loop invariant\n", arrIndex.GetLengthLcl());
+            }
             return WALK_SKIP_SUBTREES;
         }
 
