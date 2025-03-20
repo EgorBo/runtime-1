@@ -48,6 +48,10 @@ static bool blockNeedsGCPoll(BasicBlock* block)
                         blockMayNeedGCPoll = true;
                     }
                 }
+                else if (tree->OperIs(GT_GCPOLL))
+                {
+                    blockMayNeedGCPoll = true;
+                }
             }
         }
     }

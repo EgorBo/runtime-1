@@ -2667,6 +2667,7 @@ AGAIN:
                 }
                 return true;
 
+            case GT_GCPOLL:
             case GT_NOP:
             case GT_LABEL:
             case GT_SWIFT_ERROR:
@@ -5238,6 +5239,7 @@ unsigned Compiler::gtSetEvalOrder(GenTree* tree)
                 costSz = 0;
                 break;
 
+            case GT_GCPOLL:
             case GT_NOP:
                 level  = 0;
                 costEx = 0;
@@ -6583,6 +6585,7 @@ bool GenTree::TryGetUse(GenTree* operand, GenTree*** pUse)
         case GT_PINVOKE_EPILOG:
         case GT_IL_OFFSET:
         case GT_NOP:
+        case GT_GCPOLL:
         case GT_SWIFT_ERROR:
             return false;
 
@@ -6912,6 +6915,7 @@ bool GenTree::OperRequiresCallFlag(Compiler* comp) const
         case GT_CALL:
             return true;
 
+        case GT_GCPOLL:
         case GT_KEEPALIVE:
             return true;
 
@@ -7242,6 +7246,7 @@ bool GenTree::OperRequiresGlobRefFlag(Compiler* comp) const
         case GT_CMPXCHG:
         case GT_MEMORYBARRIER:
         case GT_KEEPALIVE:
+        case GT_GCPOLL:
         case GT_SWIFT_ERROR:
             return true;
 
@@ -9428,6 +9433,7 @@ GenTree* Compiler::gtCloneExpr(GenTree* tree)
             case GT_CATCH_ARG:
             case GT_NO_OP:
             case GT_NOP:
+            case GT_GCPOLL:
             case GT_LABEL:
             case GT_SWIFT_ERROR:
                 copy = new (this, oper) GenTree(oper, tree->gtType);
@@ -10200,6 +10206,7 @@ GenTreeUseEdgeIterator::GenTreeUseEdgeIterator(GenTree* node)
         case GT_PINVOKE_EPILOG:
         case GT_IL_OFFSET:
         case GT_NOP:
+        case GT_GCPOLL:
         case GT_SWIFT_ERROR:
             m_state = -1;
             return;
@@ -12340,6 +12347,7 @@ void Compiler::gtDispLeaf(GenTree* tree, IndentStack* indentStack)
             // Vanilla leaves. No qualifying information available. So do nothing
 
         case GT_NOP:
+        case GT_GCPOLL:
         case GT_NO_OP:
         case GT_START_NONGC:
         case GT_START_PREEMPTGC:

@@ -4436,6 +4436,22 @@ GenTree* Compiler::impIntrinsic(CORINFO_CLASS_HANDLE    clsHnd,
                 break;
             }
 
+            case NI_System_Threading_Thread_PollGC:
+            {
+                GenTree* keepalive = new (this, GT_GCPOLL) GenTree(GT_GCPOLL, TYP_VOID);
+
+                // Prevent both reordering and removal. Invalid optimizations of GC.KeepAlive are
+                // very subtle and hard to observe. Thus we are conservatively marking it with both
+                // GTF_CALL and GTF_GLOB_REF side-effects even though it may be more than strictly
+                // necessary. The conservative side-effects are unlikely to have negative impact
+                // on code quality in this case.
+                keepalive->gtFlags |= (GTF_CALL | GTF_GLOB_REF);
+                optMethodFlags |= OMF_NEEDS_GCPOLLS;
+                // compCurBB->SetFlags(BBF_NEEDS_GCPOLL); // let's comment it out for now
+                retNode = keepalive;
+                break;
+            }
+
             case NI_System_Object_GetType:
             {
                 JITDUMP("\n impIntrinsic: call to Object.GetType\n");
@@ -11123,6 +11139,10 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
                         else if (strcmp(methodName, "get_ManagedThreadId") == 0)
                         {
                             result = NI_System_Threading_Thread_get_ManagedThreadId;
+                        }
+                        else if (strcmp(methodName, "PollGC") == 0)
+                        {
+                            result = NI_System_Threading_Thread_PollGC;
                         }
                     }
                     else if (strcmp(className, "Volatile") == 0)

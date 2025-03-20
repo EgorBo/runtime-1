@@ -60,6 +60,7 @@ GTNODE(CNS_MSK          , GenTreeMskCon      ,0,0,GTK_LEAF)
 GTNODE(NOT              , GenTreeOp          ,0,0,GTK_UNOP)
 GTNODE(NOP              , GenTree            ,0,1,GTK_LEAF|DBK_NOCONTAIN)
 GTNODE(NEG              , GenTreeOp          ,0,0,GTK_UNOP)
+GTNODE(GCPOLL           , GenTree            ,0,0,GTK_LEAF)
 
 GTNODE(INTRINSIC        , GenTreeIntrinsic   ,0,0,GTK_BINOP|GTK_EXOP)
 GTNODE(KEEPALIVE        , GenTree            ,0,0,GTK_UNOP|GTK_NOVALUE)   // keep operand alive, generate no code, produce no result

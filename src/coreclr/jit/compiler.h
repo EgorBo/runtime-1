@@ -11860,6 +11860,7 @@ public:
             case GT_PINVOKE_EPILOG:
             case GT_IL_OFFSET:
             case GT_NOP:
+            case GT_GCPOLL:
             case GT_SWIFT_ERROR:
                 break;
 

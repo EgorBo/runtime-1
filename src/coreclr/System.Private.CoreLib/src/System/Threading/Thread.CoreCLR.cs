@@ -134,8 +134,10 @@ namespace System.Threading
         /// only take a few machine instructions.  Calling this API is preferable to coding
         /// a explicit busy loop because the hardware can be informed that it is busy waiting.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void SpinWait(int iterations)
         {
+            PollGC();
             if (iterations < SpinWaitCoopThreshold)
             {
                 SpinWaitInternal(iterations);
@@ -491,23 +493,11 @@ namespace System.Threading
             }
         }
 
-        [LibraryImport(RuntimeHelpers.QCall, EntryPoint = "ThreadNative_PollGC")]
-        private static partial void PollGCInternal();
-
         // GC Suspension is done by simply dropping into native code via p/invoke, and we reuse the p/invoke
         // mechanism for suspension. On all architectures we should have the actual stub used for the check be implemented
         // as a small assembly stub which checks the global g_TrapReturningThreads flag and tail-call to this helper
-        private static unsafe void PollGC()
-        {
-            NativeThreadState catchAtSafePoint = ((NativeThreadClass*)Thread.DirectOnThreadLocalData.pNativeThread)->m_State & NativeThreadState.TS_CatchAtSafePoint;
-            if (catchAtSafePoint != NativeThreadState.None)
-            {
-                PollGCWorker();
-            }
-
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            static void PollGCWorker() => PollGCInternal();
-        }
+        [Intrinsic]
+        private static unsafe void PollGC() => PollGC();
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeThreadClass
