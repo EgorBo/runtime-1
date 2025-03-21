@@ -59,7 +59,7 @@ else()
   # Enable cached interface dispatch so that we can test/debug it more easily on non-embedded scenarios (set DOTNET_UseCachedInterfaceDispatch=1)
   # Only enable in chk/debug builds as this support isn't intended for retail use elsewhere
   if (CLR_CMAKE_TARGET_ARCH_AMD64 OR CLR_CMAKE_TARGET_ARCH_ARM64)
-    set(FEATURE_CORECLR_CACHED_INTERFACE_DISPATCH $<IF:$<CONFIG:Debug,Checked>,1,0>)
+    set(FEATURE_CORECLR_CACHED_INTERFACE_DISPATCH 1)
   else()
     set(FEATURE_CORECLR_CACHED_INTERFACE_DISPATCH 0)
   endif()
