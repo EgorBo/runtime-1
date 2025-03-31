@@ -421,6 +421,7 @@ ValueNumStore::ValueNumStore(Compiler* comp, CompAllocator alloc)
     , m_nextChunkBase(0)
     , m_fixedPointMapSels(alloc, 8)
     , m_checkedBoundVNs(alloc)
+    , m_checkedIndexVNs(alloc)
     , m_chunks(alloc, 8)
     , m_intCnsMap(nullptr)
     , m_longCnsMap(nullptr)
@@ -6878,6 +6879,60 @@ const char* ValueNumStore::VNRelationString(VN_RELATION_KIND vrk)
 }
 #endif
 
+bool ValueNumStore::IsVNRelop(ValueNum vn, genTreeOps* oper, bool* isUnsigned, ValueNum* op1VN, ValueNum* op2VN)
+{
+    VNFuncApp funcAttr;
+    if (!GetVNFunc(vn, &funcAttr))
+    {
+        return false;
+    }
+
+    if (funcAttr.m_arity != 2)
+    {
+        return false;
+    }
+
+    const VNFunc func = funcAttr.m_func;
+
+    bool       isUnsign = false;
+    genTreeOps op       = GT_NONE;
+    if (func >= VNF_Boundary)
+    {
+        isUnsign = true;
+        switch (func)
+        {
+            case VNF_LT_UN:
+                op = GT_LT;
+                break;
+            case VNF_LE_UN:
+                op = GT_LE;
+                break;
+            case VNF_GE_UN:
+                op = GT_GE;
+                break;
+            case VNF_GT_UN:
+                op = GT_GT;
+                break;
+            default:
+                return false;
+        }
+    }
+    else
+    {
+        op = (genTreeOps)func;
+    }
+
+    if (GenTree::OperIsCompare(op))
+    {
+        *oper       = op;
+        *isUnsigned = isUnsign;
+        *op1VN      = funcAttr.m_args[0];
+        *op2VN      = funcAttr.m_args[1];
+        return true;
+    }
+    return false;
+}
+
 bool ValueNumStore::IsVNRelop(ValueNum vn)
 {
     VNFuncApp funcAttr;
@@ -7310,6 +7365,17 @@ bool ValueNumStore::IsVNArrLen(ValueNum vn)
            ((funcAttr.m_func == (VNFunc)GT_ARR_LENGTH) || (funcAttr.m_func == VNF_MDArrLength));
 }
 
+bool ValueNumStore::IsVNCheckedIndex(ValueNum vn)
+{
+    bool dummy;
+    if (m_checkedIndexVNs.TryGetValue(vn, &dummy))
+    {
+        // This VN appeared as the index argument of some GT_BOUNDS_CHECK node.
+        return true;
+    }
+    return false;
+}
+
 bool ValueNumStore::IsVNCheckedBound(ValueNum vn)
 {
     bool dummy;
@@ -7368,6 +7434,11 @@ void ValueNumStore::SetVNIsCheckedBound(ValueNum vn)
     // directly about constants.
     assert(!IsVNConstant(vn));
     m_checkedBoundVNs.AddOrUpdate(vn, true);
+}
+
+void ValueNumStore::SetVNIsCheckedIndex(ValueNum vn)
+{
+    m_checkedIndexVNs.AddOrUpdate(vn, true);
 }
 
 #ifdef FEATURE_HW_INTRINSICS
@@ -12597,9 +12668,16 @@ void Compiler::fgValueNumberTree(GenTree* tree)
                         // that assertion prop will know that comparisons against them are worth analyzing.
                         ValueNum lengthVN =
                             vnStore->VNNormalValue(tree->AsBoundsChk()->GetArrayLength()->gtVNPair.GetConservative());
+                        ValueNum indexVN =
+                            vnStore->VNNormalValue(tree->AsBoundsChk()->GetIndex()->gtVNPair.GetConservative());
+
                         if ((lengthVN != ValueNumStore::NoVN) && !vnStore->IsVNConstant(lengthVN))
                         {
                             vnStore->SetVNIsCheckedBound(lengthVN);
+                        }
+                        if ((indexVN != ValueNumStore::NoVN) && !vnStore->IsVNConstant(indexVN))
+                        {
+                            vnStore->SetVNIsCheckedIndex(indexVN);
                         }
                     }
                     break;

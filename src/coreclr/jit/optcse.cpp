@@ -5138,6 +5138,14 @@ void CSE_HeuristicCommon::InsertUseIntoSsa(IncrementalSsaBuilder& ssaBuilder, co
     {
         m_pCompiler->vnStore->SetVNIsCheckedBound(ssaDsc->m_vnPair.GetConservative());
     }
+
+    // new VN to make sure assertion prop will pay attention to this VN.
+    if ((oldConservativeVN != ssaDsc->m_vnPair.GetConservative()) &&
+        m_pCompiler->vnStore->IsVNCheckedIndex(oldConservativeVN) &&
+        !m_pCompiler->vnStore->IsVNConstant(ssaDsc->m_vnPair.GetConservative()))
+    {
+        m_pCompiler->vnStore->SetVNIsCheckedIndex(ssaDsc->m_vnPair.GetConservative());
+    }
 }
 
 void CSE_Heuristic::AdjustHeuristic(CSE_Candidate* successfulCandidate)

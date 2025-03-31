@@ -1775,7 +1775,7 @@ void Compiler::optCreateComplementaryAssertion(AssertionIndex assertionIndex, Ge
 
     AssertionDsc& candidateAssertion = *optGetAssertion(assertionIndex);
     if ((candidateAssertion.op1.kind == O1K_BOUND_OPER_BND) || (candidateAssertion.op1.kind == O1K_BOUND_LOOP_BND) ||
-        (candidateAssertion.op1.kind == O1K_CONSTANT_LOOP_BND) ||
+        (candidateAssertion.op1.kind == O1K_CONSTANT_LOOP_BND) || (candidateAssertion.op1.kind == O1K_VN) ||
         (candidateAssertion.op1.kind == O1K_CONSTANT_LOOP_BND_UN))
     {
         AssertionDsc dsc  = candidateAssertion;
@@ -1868,6 +1868,9 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
     GenTree* op2     = relop->gtGetOp2();
     ValueNum relopVN = vnStore->VNConservativeNormalValue(relop->gtVNPair);
 
+    ValueNum op1VN = vnStore->VNConservativeNormalValue(relop->gtGetOp1()->gtVNPair);
+    ValueNum op2VN = vnStore->VNConservativeNormalValue(relop->gtGetOp2()->gtVNPair);
+
     ValueNumStore::UnsignedCompareCheckedBoundInfo unsignedCompareBnd;
 
     // Cases where op1 holds the lhs of the condition and op2 holds the bound arithmetic.
@@ -1958,6 +1961,22 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
         AssertionDsc dsc;
         dsc.assertionKind  = OAK_NOT_EQUAL;
         dsc.op1.kind       = O1K_CONSTANT_LOOP_BND_UN;
+        dsc.op1.vn         = relopVN;
+        dsc.op2.kind       = O2K_CONST_INT;
+        dsc.op2.vn         = vnStore->VNZeroForType(TYP_INT);
+        dsc.op2.u1.iconVal = 0;
+        dsc.op2.SetIconFlag(GTF_EMPTY);
+        AssertionIndex index = optAddAssertion(&dsc);
+        optCreateComplementaryAssertion(index, nullptr, nullptr);
+        return index;
+    }
+    else if (vnStore->IsVNCheckedIndex(op1VN) || vnStore->IsVNCheckedIndex(op2VN))
+    {
+        assert(vnStore->IsVNRelop(relopVN));
+
+        AssertionDsc dsc;
+        dsc.assertionKind  = OAK_NOT_EQUAL;
+        dsc.op1.kind       = O1K_VN;
         dsc.op1.vn         = relopVN;
         dsc.op2.kind       = O2K_CONST_INT;
         dsc.op2.vn         = vnStore->VNZeroForType(TYP_INT);

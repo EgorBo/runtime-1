@@ -1061,12 +1061,16 @@ public:
     // of the length argument to a GT_BOUNDS_CHECK node.
     bool IsVNCheckedBound(ValueNum vn);
 
+    bool IsVNCheckedIndex(ValueNum vn);
+
     // Returns true if the VN is known to be a cast to ulong
     bool IsVNCastToULong(ValueNum vn, ValueNum* castedOp);
 
     // Record that a VN is known to appear as the conservative value number of the length
     // argument to a GT_BOUNDS_CHECK node.
     void SetVNIsCheckedBound(ValueNum vn);
+
+    void SetVNIsCheckedIndex(ValueNum vn);
 
     // Information about the individual components of a value number representing an unsigned
     // comparison of some value against a checked bound VN.
@@ -1210,6 +1214,7 @@ public:
 
     // Returns true iff the VN represents a relop
     bool IsVNRelop(ValueNum vn);
+    bool IsVNRelop(ValueNum vn, genTreeOps* oper, bool* isUnsigned, ValueNum* op1VN, ValueNum* op2VN);
 
     enum class VN_RELATION_KIND
     {
@@ -1645,6 +1650,7 @@ private:
 
     // This is the set of value numbers that have been flagged as arguments to bounds checks, in the length position.
     CheckedBoundVNSet m_checkedBoundVNs;
+    CheckedBoundVNSet m_checkedIndexVNs;
 
     // This is a map from "chunk number" to the attributes of the chunk.
     JitExpandArrayStack<Chunk*> m_chunks;

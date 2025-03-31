@@ -7820,6 +7820,20 @@ public:
         {
             return ((assertionKind == OAK_NO_THROW) && (op1.kind == O1K_ARR_BND));
         }
+        bool IsRelop(ValueNumStore* vnStore)
+        {
+            if ((assertionKind == OAK_EQUAL || assertionKind == OAK_NOT_EQUAL))
+            {
+                if (op2.kind == O2K_CONST_INT && op2.u1.iconVal == 0)
+                {
+                    if (op1.kind == O1K_VN && vnStore->IsVNRelop(op1.vn))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
 
         bool IsCopyAssertion()
         {

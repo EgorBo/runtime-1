@@ -760,6 +760,52 @@ void RangeCheck::MergeEdgeAssertions(Compiler*        comp,
         {
             if (curAssertion->op1.vn != normalLclVN)
             {
+                if (curAssertion->IsRelop(comp->vnStore))
+                {
+                    genTreeOps relopOper;
+                    bool       isUnsigned;
+                    ValueNum   op1VN;
+                    ValueNum   op2VN;
+                    if (comp->vnStore->IsVNRelop(curAssertion->op1.vn, &relopOper, &isUnsigned, &op1VN, &op2VN))
+                    {
+                        if (curAssertion->assertionKind == Compiler::OAK_EQUAL)
+                        {
+                            relopOper = GenTree::ReverseRelop(relopOper);
+                        }
+                        if (op2VN == normalLclVN)
+                        {
+                            relopOper = GenTree::ReverseRelop(relopOper);
+                        }
+
+                        if (op1VN == normalLclVN && !comp->vnStore->IsVNCheckedBound(op2VN) &&
+                            !comp->vnStore->IsVNConstant(op2VN))
+                        {
+                            Range op2Range = Range(Limit(Limit::keUnknown));
+                            MergeEdgeAssertions(comp, op2VN, preferredBoundVN, assertions, &op2Range);
+
+                            if (relopOper == GT_LT || relopOper == GT_LE)
+                            {
+                                if (op2Range.uLimit.IsConstant() || op2Range.uLimit.IsBinOpArray())
+                                {
+                                    limit               = op2Range.uLimit;
+                                    cmpOper             = relopOper;
+                                    isConstantAssertion = true;
+                                    goto PROCESS;
+                                }
+                            }
+                            else if (relopOper == GT_GT || relopOper == GT_GE)
+                            {
+                                if (op2Range.lLimit.IsConstant() || op2Range.lLimit.IsBinOpArray())
+                                {
+                                    limit               = op2Range.lLimit;
+                                    cmpOper             = relopOper;
+                                    isConstantAssertion = true;
+                                    goto PROCESS;
+                                }
+                            }
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -822,11 +868,14 @@ void RangeCheck::MergeEdgeAssertions(Compiler*        comp,
                 continue;
             }
         }
+
         // Current assertion is not supported, ignore it
         else
         {
             continue;
         }
+
+    PROCESS:
 
         assert(limit.IsBinOpArray() || limit.IsConstant());
 
