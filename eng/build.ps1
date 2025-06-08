@@ -206,29 +206,29 @@ if ($vs) {
     }
   }
   elseif (-Not (Test-Path $vs)) {
+    
+    if (-Not ($vs.endswith(".slnx")) -and -Not ($vs.endswith(".sln"))) {
+      $vs = "$vs.slnx"
+    }
+
     $solution = $vs
 
     if ($runtimeFlavor -eq "Mono") {
       # Search for the solution in mono
-      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\mono" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs.slnx"
+      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\mono" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs"
     } else {
       # Search for the solution in coreclr
-      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\coreclr" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs.slnx"
+      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\coreclr" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs"
     }
 
     if (-Not (Test-Path $vs)) {
       $vs = $solution
 
       # Search for the solution in libraries
-      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\libraries" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs.slnx"
+      $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\libraries" | Join-Path -ChildPath $vs | Join-Path -ChildPath "$vs"
 
       if (-Not (Test-Path $vs)) {
         $vs = $solution
-
-        # Search for the solution in installer
-        if (-Not ($vs.endswith(".slnx"))) {
-          $vs = "$vs.slnx"
-        }
 
         $vs = Split-Path $PSScriptRoot -Parent | Join-Path -ChildPath "src\installer" | Join-Path -ChildPath $vs
 
