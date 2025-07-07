@@ -2263,7 +2263,20 @@ void Compiler::fgFindJumpTargets(const BYTE* codeAddr, IL_OFFSET codeSize, Fixed
 
                         varType = impInlineInfo->lclVarInfo[varNum].lclTypeInfo;
 
-                        impInlineInfo->inlArgInfo[varNum].argHasLdargaOp = true;
+                        OPCODE prefix;
+                        if ((varType == TYP_REF) && (impGetNonPrefixOpcode(codeAddr + sz, codeEndp, &prefix) == CEE_CALLVIRT) && (prefix == CEE_CONSTRAINED))
+                        {
+                            // When we have:
+                            //
+                            //   ldarga
+                            //   constrained callvirt
+                            //
+                            // we can ignore the ldarga for reference types.
+                        }
+                        else
+                        {
+                            impInlineInfo->inlArgInfo[varNum].argHasLdargaOp = true;
+                        }
 
                         pushedStack.PushArgument(varNum);
                         handled = true;

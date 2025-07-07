@@ -1403,6 +1403,8 @@ inline GenTree::GenTree(genTreeOps oper, var_types type DEBUGARG(bool largeNode)
     gtSeqNum = 0;
     gtUseNum = -1;
     gtTreeID = JitTls::GetCompiler()->compGenTreeID++;
+    if (gtTreeID == 108)
+        printf("");
     gtVNPair.SetBoth(ValueNumStore::NoVN);
     gtRegTag   = GT_REGTAG_NONE;
     gtOperSave = GT_NONE;

@@ -4433,7 +4433,7 @@ private:
     };
 
     static void impValidateMemoryAccessOpcode(const BYTE* codeAddr, const BYTE* codeEndp, bool volatilePrefix);
-    static OPCODE impGetNonPrefixOpcode(const BYTE* codeAddr, const BYTE* codeEndp);
+    static OPCODE impGetNonPrefixOpcode(const BYTE* codeAddr, const BYTE* codeEndp, OPCODE* prefix = nullptr);
     static GenTreeFlags impPrefixFlagsToIndirFlags(unsigned prefixFlags);
     static bool impOpcodeIsCallOpcode(OPCODE opcode);
 

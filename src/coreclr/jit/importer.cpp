@@ -5446,8 +5446,13 @@ void Compiler::impResetLeaveBlock(BasicBlock* block, unsigned jmpAddr)
 // Get the first non-prefix opcode. Used for verification of valid combinations
 // of prefixes and actual opcodes.
 
-OPCODE Compiler::impGetNonPrefixOpcode(const BYTE* codeAddr, const BYTE* codeEndp)
+OPCODE Compiler::impGetNonPrefixOpcode(const BYTE* codeAddr, const BYTE* codeEndp, OPCODE* prefix)
 {
+    if (prefix != nullptr)
+    {
+        *prefix = CEE_NOP;
+    }
+
     while (codeAddr < codeEndp)
     {
         OPCODE opcode = (OPCODE)getU1LittleEndian(codeAddr);
@@ -5470,6 +5475,10 @@ OPCODE Compiler::impGetNonPrefixOpcode(const BYTE* codeAddr, const BYTE* codeEnd
             case CEE_TAILCALL:
             case CEE_CONSTRAINED:
             case CEE_READONLY:
+                if (prefix != nullptr)
+                {
+                    *prefix = opcode;
+                }
                 break;
             default:
                 return opcode;
@@ -7062,9 +7071,7 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                         return;
                     }
 
-                    op1->ChangeType(TYP_BYREF);
-                    op1->SetOper(GT_LCL_ADDR);
-                    op1->AsLclFld()->SetLclOffs(0);
+                    op1 = gtNewLclAddrNode(op1->AsLclVar()->GetLclNum(), 0, TYP_BYREF);
                     goto _PUSH_ADRVAR;
                 }
 
