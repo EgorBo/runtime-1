@@ -268,7 +268,7 @@ namespace System
             300;
 #endif
         /// <summary>Lazily-populated cache of strings for uint values in the range [0, <see cref="SmallNumberCacheLength"/>).</summary>
-        private static readonly string?[] s_smallNumberCache = new string[SmallNumberCacheLength];
+        private static readonly string[] s_smallNumberCache = new string[SmallNumberCacheLength];
 
         // Optimizations using "TwoDigits" inspired by:
         // https://engineering.fb.com/2013/03/15/developer-tools/three-optimization-tips-for-c/
@@ -387,8 +387,9 @@ namespace System
 
             int maxDigits = precision;
 
-            switch (fmt | 0x20)
+            switch (fmt)
             {
+                case 'C':
                 case 'c':
                     {
                         // The currency format uses the precision specifier to indicate the number of
@@ -403,6 +404,7 @@ namespace System
                         break;
                     }
 
+                case 'E':
                 case 'e':
                     {
                         // The exponential format uses the precision specifier to indicate the number of
@@ -421,7 +423,9 @@ namespace System
                         break;
                     }
 
+                case 'F':
                 case 'f':
+                case 'N':
                 case 'n':
                     {
                         // The fixed-point and number formats use the precision specifier to indicate the number
@@ -436,6 +440,7 @@ namespace System
                         break;
                     }
 
+                case 'G':
                 case 'g':
                     {
                         // The general format uses the precision specifier to indicate the number of significant
@@ -452,6 +457,7 @@ namespace System
                         break;
                     }
 
+                case 'P':
                 case 'p':
                     {
                         // The percent format uses the precision specifier to indicate the number of
@@ -470,6 +476,7 @@ namespace System
                         break;
                     }
 
+                case 'R':
                 case 'r':
                     {
                         // The roundtrip format ignores the precision specifier and always returns the shortest
@@ -1670,7 +1677,7 @@ namespace System
             return bufferEnd;
         }
 
-        internal static string UInt32ToDecStr(uint value)
+        internal static unsafe string UInt32ToDecStr(uint value)
         {
             // For small numbers, consult a lazily-populated cache.
             if (value < SmallNumberCacheLength)
@@ -2531,6 +2538,102 @@ namespace System
 
             charsWritten = 0;
             return false;
+        }
+
+        private static ulong ExtractFractionAndBiasedExponent(double value, out int exponent)
+        {
+            ulong bits = BitConverter.DoubleToUInt64Bits(value);
+            ulong fraction = (bits & 0xFFFFFFFFFFFFF);
+            exponent = ((int)(bits >> 52) & 0x7FF);
+
+            if (exponent != 0)
+            {
+                // For normalized value, according to https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+                // value = 1.fraction * 2^(exp - 1023)
+                //       = (1 + mantissa / 2^52) * 2^(exp - 1023)
+                //       = (2^52 + mantissa) * 2^(exp - 1023 - 52)
+                //
+                // So f = (2^52 + mantissa), e = exp - 1075;
+
+                fraction |= (1UL << 52);
+                exponent -= 1075;
+            }
+            else
+            {
+                // For denormalized value, according to https://en.wikipedia.org/wiki/Double-precision_floating-point_format
+                // value = 0.fraction * 2^(1 - 1023)
+                //       = (mantissa / 2^52) * 2^(-1022)
+                //       = mantissa * 2^(-1022 - 52)
+                //       = mantissa * 2^(-1074)
+                // So f = mantissa, e = -1074
+                exponent = -1074;
+            }
+
+            return fraction;
+        }
+
+        private static ushort ExtractFractionAndBiasedExponent(Half value, out int exponent)
+        {
+            ushort bits = BitConverter.HalfToUInt16Bits(value);
+            ushort fraction = (ushort)(bits & 0x3FF);
+            exponent = ((int)(bits >> 10) & 0x1F);
+
+            if (exponent != 0)
+            {
+                // For normalized value, according to https://en.wikipedia.org/wiki/Half-precision_floating-point_format
+                // value = 1.fraction * 2^(exp - 15)
+                //       = (1 + mantissa / 2^10) * 2^(exp - 15)
+                //       = (2^10 + mantissa) * 2^(exp - 15 - 10)
+                //
+                // So f = (2^10 + mantissa), e = exp - 25;
+
+                fraction |= (ushort)(1U << 10);
+                exponent -= 25;
+            }
+            else
+            {
+                // For denormalized value, according to https://en.wikipedia.org/wiki/Half-precision_floating-point_format
+                // value = 0.fraction * 2^(1 - 15)
+                //       = (mantissa / 2^10) * 2^(-14)
+                //       = mantissa * 2^(-14 - 10)
+                //       = mantissa * 2^(-24)
+                // So f = mantissa, e = -24
+                exponent = -24;
+            }
+
+            return fraction;
+        }
+
+        private static uint ExtractFractionAndBiasedExponent(float value, out int exponent)
+        {
+            uint bits = BitConverter.SingleToUInt32Bits(value);
+            uint fraction = (bits & 0x7FFFFF);
+            exponent = ((int)(bits >> 23) & 0xFF);
+
+            if (exponent != 0)
+            {
+                // For normalized value, according to https://en.wikipedia.org/wiki/Single-precision_floating-point_format
+                // value = 1.fraction * 2^(exp - 127)
+                //       = (1 + mantissa / 2^23) * 2^(exp - 127)
+                //       = (2^23 + mantissa) * 2^(exp - 127 - 23)
+                //
+                // So f = (2^23 + mantissa), e = exp - 150;
+
+                fraction |= (1U << 23);
+                exponent -= 150;
+            }
+            else
+            {
+                // For denormalized value, according to https://en.wikipedia.org/wiki/Single-precision_floating-point_format
+                // value = 0.fraction * 2^(1 - 127)
+                //       = (mantissa / 2^23) * 2^(-126)
+                //       = mantissa * 2^(-126 - 23)
+                //       = mantissa * 2^(-149)
+                // So f = mantissa, e = -149
+                exponent = -149;
+            }
+
+            return fraction;
         }
 
         private static ulong ExtractFractionAndBiasedExponent<TNumber>(TNumber value, out int exponent)
