@@ -1575,7 +1575,18 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
     }
     else if (expr->OperIs(GT_CAST))
     {
-        overflows = ComputeDoesOverflow(block, expr->gtGetOp1(), range);
+        // If CastTo range is a subset of the value range - it never overflows.
+        if (range.LowerLimit().IsConstant() && range.UpperLimit().IsConstant())
+        {
+            IntegralRange ir = IntegralRange::ForCastOutput(expr->AsCast(), m_pCompiler);
+
+            int64_t castLo = IntegralRange::SymbolicToRealValue(ir.GetLowerBound());
+            int64_t castHi = IntegralRange::SymbolicToRealValue(ir.GetUpperBound());
+            if ((range.LowerLimit().GetConstant() >= castLo) && (range.UpperLimit().GetConstant() <= castHi))
+            {
+                overflows = false;
+            }
+        }
     }
     GetOverflowMap()->Set(expr, overflows, OverflowMap::Overwrite);
     GetSearchPath()->Remove(expr);
