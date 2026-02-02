@@ -2760,6 +2760,66 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
         case GT_CALL:
             return optVNBasedFoldExpr_Call(block, parent, tree->AsCall());
 
+        case GT_NOT:
+        {
+            if (tree->gtGetOp1()->OperIs(GT_LCL_VAR))
+            {
+                GenTreeLclVar* lcl = tree->gtGetOp1()->AsLclVar();
+                if (!lcl->HasSsaName())
+                {
+                    return nullptr;
+                }
+
+                LclVarDsc* varDsc = lvaGetDesc(lcl);
+                LclSsaVarDsc* ssaDef = varDsc->GetPerSsaData(lcl->GetSsaNum());
+                if (ssaDef != nullptr && ssaDef->GetDefNode() != nullptr)
+                {
+                    GenTreeLclVarCommon* def = ssaDef->GetDefNode();
+                    if (def->OperIs(GT_STORE_LCL_VAR))
+                    {
+                        GenTree* realVal = nullptr;
+
+                        GenTree* defVal = def->gtGetOp1();
+                        if (defVal->OperIs(GT_PHI))
+                        {
+                            for (GenTreePhi::Use& use : defVal->AsPhi()->Uses())
+                            {
+                                if (use.GetNode()->OperIs(GT_PHI_ARG)) // can it be anything else?
+                                {
+                                    GenTreePhiArg* phiArg = use.GetNode()->AsPhiArg();
+                                    if (phiArg->gtPredBB->bbRefs == 0)
+                                    {
+                                        // Just ignore PHI_ARGs from unreachable preds.
+                                        continue;
+                                    }
+
+                                    if (realVal == nullptr && phiArg->HasSsaName())
+                                    {
+                                        LclSsaVarDsc* phiArgVal = lvaGetDesc(phiArg)->GetPerSsaData(phiArg->GetSsaNum());
+                                        if (phiArgVal != nullptr && phiArgVal->GetDefNode() != nullptr && phiArgVal->GetDefNode()->OperIs(GT_STORE_LCL_VAR))
+                                        {
+                                            realVal = phiArgVal->GetDefNode()->gtGetOp1();
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            realVal = defVal;
+                        }
+
+                        if (realVal != nullptr && realVal->OperIs(GT_NOT) && ((realVal->gtGetOp1()->gtFlags & GTF_ALL_EFFECT) == 0))
+                        {
+                            return gtCloneExpr(realVal->gtGetOp1());
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
             // We can add more VN-based foldings here.
 
         default:
@@ -6310,6 +6370,7 @@ Compiler::fgWalkResult Compiler::optVNBasedFoldCurStmt(BasicBlock* block,
         case GT_RSH:
         case GT_RSZ:
         case GT_NEG:
+        case GT_NOT:
         case GT_CAST:
         case GT_BITCAST:
         case GT_INTRINSIC:
