@@ -684,6 +684,10 @@ RELEASE_CONFIG_INTEGER(JitExtDefaultPolicyMaxBB, "JitExtDefaultPolicyMaxBB", 7)
 RELEASE_CONFIG_INTEGER(JitExtDefaultPolicyProfTrust, "JitExtDefaultPolicyProfTrust", 0x7)
 RELEASE_CONFIG_INTEGER(JitExtDefaultPolicyProfScale, "JitExtDefaultPolicyProfScale", 0x2A)
 
+// MinimalSizePolicy - size-optimized inliner policy for NativeAOT -Osize.
+// Automatically selected when JIT_FLAG_SIZE_OPT is set and this knob is non-zero.
+RELEASE_CONFIG_INTEGER(JitMinSizePolicy, "JitMinSizePolicy", 1)
+
 RELEASE_CONFIG_INTEGER(JitInlinePolicyModel, "JitInlinePolicyModel", 0)
 RELEASE_CONFIG_INTEGER(JitInlinePolicyProfile, "JitInlinePolicyProfile", 0)
 RELEASE_CONFIG_INTEGER(JitInlinePolicyProfileThreshold, "JitInlinePolicyProfileThreshold", 40)

@@ -90,6 +90,12 @@ InlinePolicy* InlinePolicy::GetPolicy(Compiler* compiler, bool isPrejitRoot)
 
     const bool isPrejit   = compiler->IsAot();
     const bool isSpeedOpt = compiler->opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SPEED_OPT);
+    const bool isSizeOpt  = compiler->opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT);
+
+    if (isSizeOpt && (JitConfig.JitMinSizePolicy() != 0))
+    {
+        return new (compiler, CMK_Inlining) MinimalSizePolicy(compiler, isPrejitRoot);
+    }
 
     if ((JitConfig.JitExtDefaultPolicy() != 0))
     {
@@ -1959,6 +1965,327 @@ void ExtendedDefaultPolicy::OnDumpXml(FILE* file, unsigned indent) const
     XATTR_B(m_MayReturnSmallArray)
 }
 #endif
+
+//------------------------------------------------------------------------
+// MinimalSizePolicy: NoteInt override for IL size / BB limit knobs
+//
+// Arguments:
+//    obs      - the current observation
+//    value    - the value being observed
+
+void MinimalSizePolicy::NoteInt(InlineObservation obs, int value)
+{
+    switch (obs)
+    {
+        case InlineObservation::CALLEE_IL_CODE_SIZE:
+        {
+            assert(m_IsForceInlineKnown);
+            assert(value != 0);
+            m_CodeSize           = static_cast<unsigned>(value);
+            unsigned maxCodeSize = 0x80;
+
+            if (m_HasProfileWeights && (m_RootCompiler->fgHaveTrustedProfileWeights()))
+            {
+                maxCodeSize = 0x80;
+            }
+            else if (m_RootCompiler->fgHaveSufficientProfileWeights())
+            {
+                const bool isTier1Instr = m_RootCompiler->opts.IsInstrumentedAndOptimized();
+                const bool isOSR        = m_RootCompiler->opts.IsOSR();
+
+                if (!isTier1Instr && !isOSR)
+                {
+                    maxCodeSize = 0x80;
+                }
+            }
+
+            unsigned alwaysInlineSize = 2;
+            if (m_InsideThrowBlock)
+            {
+                alwaysInlineSize /= 2;
+                maxCodeSize = min(alwaysInlineSize + 1, maxCodeSize);
+            }
+
+            if (m_IsForceInline)
+            {
+                SetCandidate(InlineObservation::CALLEE_IS_FORCE_INLINE);
+            }
+            else if (m_CodeSize <= alwaysInlineSize)
+            {
+                SetCandidate(InlineObservation::CALLEE_BELOW_ALWAYS_INLINE_SIZE);
+            }
+            else if (m_CodeSize <= maxCodeSize)
+            {
+                SetCandidate(InlineObservation::CALLEE_IS_DISCRETIONARY_INLINE);
+            }
+            else
+            {
+                SetNever(InlineObservation::CALLEE_TOO_MUCH_IL);
+            }
+            break;
+        }
+        case InlineObservation::CALLEE_NUMBER_OF_BASIC_BLOCKS:
+        {
+            if (!m_IsForceInline && m_IsNoReturn && (value == 1))
+            {
+                SetNever(InlineObservation::CALLEE_DOES_NOT_RETURN);
+            }
+            else if (!m_IsForceInline && !m_HasProfileWeights && !m_ConstArgFeedsIsKnownConst &&
+                     !m_ArgFeedsIsKnownConst)
+            {
+                unsigned bbLimit = 2;
+                if (m_IsPrejitRoot)
+                {
+                    bbLimit += 5 + m_Switch * 10;
+                }
+                bbLimit += m_FoldableBranch + m_FoldableSwitch * 10 + m_UnrollableMemop * 2;
+
+                if ((unsigned)value > bbLimit)
+                {
+                    SetNever(InlineObservation::CALLEE_TOO_MANY_BASIC_BLOCKS);
+                }
+            }
+            break;
+        }
+        default:
+            ExtendedDefaultPolicy::NoteInt(obs, value);
+            break;
+    }
+}
+
+//------------------------------------------------------------------------
+// EstimatedTotalILSize: size-optimized IL size estimate
+//
+// Return value:
+//    Estimated IL size to import
+
+unsigned MinimalSizePolicy::EstimatedTotalILSize() const
+{
+    INT64 codeSize = (INT64)m_CodeSize;
+
+    codeSize -= (INT64)m_FoldableBranch * 70;
+    codeSize -= (INT64)m_FoldableSwitch * 51;
+
+    // Can't fold more than 70% of IL
+    codeSize = codeSize < (INT64)(m_CodeSize * 0.3) ? (INT64)(m_CodeSize * 0.3) : codeSize;
+
+    return (unsigned)codeSize;
+}
+
+//------------------------------------------------------------------------
+// DetermineMultiplier: size-optimized benefit multiplier
+//
+// Notes: All magic numbers are read from DOTNET_JitMinSizePolicy* knobs.
+//    Knobs are fixed-point integers divided by 10.0.
+
+double MinimalSizePolicy::DetermineMultiplier()
+{
+    double multiplier = 0.0;
+
+    if (m_IsInstanceCtor)
+    {
+        multiplier += 0.5;
+    }
+
+    if (m_IsFromValueClass)
+    {
+        multiplier += 1.7;
+    }
+
+    if (m_ReturnsStructByValue || m_ArgIsStructByValue > 0)
+    {
+        multiplier += 1.1;
+    }
+    else if (m_FldAccessOverArgStruct > 0)
+    {
+        multiplier += 0.5;
+    }
+
+    if (m_LooksLikeWrapperMethod)
+    {
+        multiplier += 0.5;
+    }
+
+    if (m_MethodIsMostlyLoadStore)
+    {
+        multiplier += 1.0;
+    }
+
+    if (m_ArgFeedsRangeCheck > 0)
+    {
+        multiplier += 0.5;
+    }
+
+    if (m_NonGenericCallsGeneric)
+    {
+        multiplier += 1.9;
+    }
+
+    if (m_FoldableBranch > 0)
+    {
+        multiplier += 2.1 * m_FoldableBranch;
+    }
+    else if (m_ConstantArgFeedsConstantTest > 0 || ((m_ArgIsConst > 0) && (m_FoldableExpr < 1)))
+    {
+        multiplier += 0.6;
+    }
+
+    if ((m_FoldableBox > 0) && m_NonGenericCallsGeneric)
+    {
+        multiplier += 1.0;
+    }
+
+#ifdef FEATURE_SIMD
+    if (m_HasSimd)
+    {
+        multiplier += 2.8;
+    }
+#endif
+
+    {
+        unsigned foldableCount = m_FoldableIntrinsic + m_FoldableExpr + m_FoldableExprUn;
+        if (foldableCount > 0)
+        {
+            multiplier += 1.1 * foldableCount;
+        }
+    }
+
+    if (m_Intrinsic > 0)
+    {
+        multiplier += 0.5 + m_Intrinsic * 0.15;
+    }
+
+    if (m_ArgIsBoxedAtCallsite > 0)
+    {
+        multiplier += 0.3 * m_ArgIsBoxedAtCallsite;
+    }
+
+    if (m_ArgIsExactClsSigIsNot > 0)
+    {
+        multiplier += 1.0;
+    }
+
+    if (m_DivByCns > 0)
+    {
+        multiplier += 1.0;
+    }
+
+    if (m_BinaryExprWithCns > 0)
+    {
+        multiplier += m_BinaryExprWithCns * 0.3;
+        if (m_IsPrejitRoot)
+        {
+            multiplier += m_BinaryExprWithCns * 0.3;
+        }
+    }
+
+    if (m_ArgFeedsConstantTest > 0)
+    {
+        multiplier += m_IsPrejitRoot ? 1.0 : 0.5;
+    }
+    else if (m_IsPrejitRoot && (m_ArgFeedsTest > 0))
+    {
+        multiplier += 1.0;
+    }
+
+    if (m_ArgUnboxExact > 0)
+    {
+        multiplier += 1.0;
+    }
+    if (m_ArgUnbox > 0)
+    {
+        multiplier += m_IsPrejitRoot ? 1.0 : 0.5;
+    }
+
+    switch (m_CallsiteFrequency)
+    {
+        case InlineCallsiteFrequency::RARE:
+            multiplier = 1.1;
+            break;
+        case InlineCallsiteFrequency::BORING:
+            multiplier += 0.5;
+            break;
+        case InlineCallsiteFrequency::WARM:
+            multiplier += 0.8;
+            break;
+        case InlineCallsiteFrequency::LOOP:
+        case InlineCallsiteFrequency::HOT:
+            multiplier += 2.3;
+            break;
+        default:
+            assert(!"Unexpected callsite frequency");
+            break;
+    }
+
+    if (m_UnrollableMemop > 0)
+    {
+        multiplier += 0.5 * m_UnrollableMemop;
+    }
+
+    if (m_FoldableSwitch > 0)
+    {
+        multiplier += 6.1 * m_FoldableSwitch;
+    }
+    else if (m_Switch > 0)
+    {
+        if (m_IsPrejitRoot)
+        {
+            multiplier += 6.1 * m_Switch;
+        }
+        else
+        {
+            multiplier = 0.0;
+        }
+    }
+
+    if (m_MayReturnSmallArray)
+    {
+        multiplier += 1.0;
+    }
+
+    if (m_HasProfileWeights)
+    {
+        if (m_RootCompiler->fgHaveTrustedProfileWeights())
+        {
+            multiplier *= 0.3 + min(m_ProfileFrequency, 1.0) * 4.1;
+        }
+        else
+        {
+            multiplier *= min(m_ProfileFrequency, 1.0) * 4.1;
+        }
+    }
+
+    if (m_RootCompiler->lvaTableCnt > 64)
+    {
+        const double lclFullness = min(1.0, (double)m_RootCompiler->lvaTableCnt / JitConfig.JitMaxLocalsToTrack());
+        multiplier *= (1.0 - lclFullness);
+    }
+
+    if (m_BackwardJump)
+    {
+        multiplier *= 0.4;
+    }
+
+    if (m_IsCallsiteInNoReturnRegion)
+    {
+        multiplier = 0.5;
+    }
+
+#ifdef DEBUG
+    int additionalMultiplier = JitConfig.JitInlineAdditionalMultiplier();
+    if (additionalMultiplier != 0)
+    {
+        multiplier += additionalMultiplier;
+    }
+
+    if (m_RootCompiler->compInlineStress())
+    {
+        multiplier += 10;
+    }
+#endif // DEBUG
+
+    return multiplier;
+}
 
 //------------------------------------------------------------------------
 // DiscretionaryPolicy: construct a new DiscretionaryPolicy

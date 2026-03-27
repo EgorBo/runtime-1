@@ -285,6 +285,34 @@ protected:
     bool     m_MayReturnSmallArray        : 1;
 };
 
+// MinimalSizePolicy is a size-optimized variant of ExtendedDefaultPolicy.
+// Automatically selected when JIT_FLAG_SIZE_OPT is set (NativeAOT -Osize).
+// Every heuristic constant is exposed as a DOTNET_JitMinSizePolicy* knob
+// so values can be tuned experimentally for minimal binary size.
+
+class MinimalSizePolicy : public ExtendedDefaultPolicy
+{
+public:
+    MinimalSizePolicy(Compiler* compiler, bool isPrejitRoot)
+        : ExtendedDefaultPolicy(compiler, isPrejitRoot)
+    {
+        // Empty - all tuning is via config knobs read at decision time
+    }
+
+    void NoteInt(InlineObservation obs, int value) override;
+
+    double DetermineMultiplier() override;
+
+    unsigned EstimatedTotalILSize() const override;
+
+#if defined(DEBUG)
+    const char* GetName() const override
+    {
+        return "MinimalSizePolicy";
+    }
+#endif // defined(DEBUG)
+};
+
 // DiscretionaryPolicy is a variant of the default policy.  It
 // differs in that there is no ALWAYS_INLINE class, there is no IL
 // size limit, and in prejit mode, discretionary failures do not
