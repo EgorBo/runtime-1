@@ -1789,7 +1789,33 @@ namespace System.Text
             Debug.Assert(elementCount - currentOffsetInElements >= SizeOfVector128, "We should be able to run at least one whole vector.");
 
             nuint finalOffsetWhereCanRunLoop = elementCount - SizeOfVector128;
-            do
+
+            // On ARM64, process two vectors (32 chars) per iteration to better utilize dual vector
+            // execution units on modern cores (e.g. Neoverse-V2/N2). This matches AVX2 throughput
+            // while staying within the 128-bit vector constraint.
+            // The AdvSimd.IsSupported check is a JIT-time constant and this block is dead-code-eliminated on x64.
+            if (AdvSimd.IsSupported)
+            {
+                while (currentOffsetInElements + SizeOfVector128 <= finalOffsetWhereCanRunLoop)
+                {
+                    utf16VectorFirst = Vector128.LoadUnsafe(ref utf16Buffer, currentOffsetInElements);
+                    Vector128<ushort> utf16VectorSecond = Vector128.LoadUnsafe(ref utf16Buffer, currentOffsetInElements + SizeOfVector128 / sizeof(ushort));
+                    Vector128<ushort> utf16VectorThird = Vector128.LoadUnsafe(ref utf16Buffer, currentOffsetInElements + SizeOfVector128);
+                    Vector128<ushort> utf16VectorFourth = Vector128.LoadUnsafe(ref utf16Buffer, currentOffsetInElements + SizeOfVector128 + SizeOfVector128 / sizeof(ushort));
+
+                    if (VectorContainsNonAsciiChar((utf16VectorFirst | utf16VectorSecond) | (utf16VectorThird | utf16VectorFourth)))
+                    {
+                        break;
+                    }
+
+                    ExtractAsciiVector(utf16VectorFirst, utf16VectorSecond).StoreUnsafe(ref asciiBuffer, currentOffsetInElements);
+                    ExtractAsciiVector(utf16VectorThird, utf16VectorFourth).StoreUnsafe(ref asciiBuffer, currentOffsetInElements + SizeOfVector128);
+
+                    currentOffsetInElements += 2 * SizeOfVector128;
+                }
+            }
+
+            while (currentOffsetInElements <= finalOffsetWhereCanRunLoop)
             {
                 // In a loop, perform two unaligned reads, narrow to a single vector, then aligned write one vector.
 
@@ -1809,7 +1835,7 @@ namespace System.Text
                 asciiVector.StoreUnsafe(ref asciiBuffer, currentOffsetInElements);
 
                 currentOffsetInElements += SizeOfVector128;
-            } while (currentOffsetInElements <= finalOffsetWhereCanRunLoop);
+            }
 
         Finish:
 
