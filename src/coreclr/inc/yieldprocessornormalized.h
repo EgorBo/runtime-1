@@ -3,11 +3,43 @@
 
 #pragma once
 
-#ifdef FEATURE_NATIVEAOT
-FORCEINLINE void System_YieldProcessor() { PalYieldProcessor(); }
-#else
-FORCEINLINE void System_YieldProcessor() { YieldProcessor(); }
+// ARM64 WFET (Wait-For-Event with Timeout) support for ARMv8.7+ (FEAT_WFxT).
+// WFET puts the CPU in a low-power state for a specified duration or until an
+// event occurs, providing significant power savings over the YIELD instruction
+// which is essentially a NOP on most ARM64 implementations.
+#if defined(HOST_ARM64)
+extern bool g_arm64UseWfet;
+extern uint32_t g_arm64WfetDelayNs;
+
+#if !defined(_MSC_VER)
+// WFET delay using ARMv8.7+ instructions. Sleeps until the counter reaches
+// (now + delayNs) or an event is received (whichever comes first).
+// Uses CNTVCTSS_EL0 (FEAT_ECV, self-synchronizing counter) and WFET (FEAT_WFxT).
+// On ARMv8.6+, CNTFRQ_EL0 is mandated to be 1GHz, so 1 tick = 1 nanosecond.
+FORCEINLINE void Arm64WfetDelay(uint32_t delayNs)
+{
+    uint64_t cnt;
+    __asm__ __volatile__("mrs %0, S3_3_C14_C0_6" : "=r" (cnt));  // CNTVCTSS_EL0
+    cnt += delayNs;
+    __asm__ __volatile__("msr S0_3_C1_C0_0, %0" : : "r" (cnt) : "memory"); // WFET
+}
+#endif // !_MSC_VER
+#endif // HOST_ARM64
+
+FORCEINLINE void System_YieldProcessor() {
+#if defined(HOST_ARM64) && !defined(_MSC_VER)
+    if (g_arm64UseWfet)
+    {
+        Arm64WfetDelay(g_arm64WfetDelayNs);
+        return;
+    }
 #endif
+#ifdef FEATURE_NATIVEAOT
+    PalYieldProcessor();
+#else
+    YieldProcessor();
+#endif
+}
 
 #define DISABLE_COPY(T) \
     T(const T &) = delete; \

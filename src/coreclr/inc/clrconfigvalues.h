@@ -709,6 +709,8 @@ RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableArm64Rcpc,              W("EnableArm64Rc
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableArm64Rcpc2,             W("EnableArm64Rcpc2"),          1, "Allows Arm64 Rcpc2+ hardware intrinsics to be disabled")
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableArm64Sve,               W("EnableArm64Sve"),            1, "Allows Arm64 SVE hardware intrinsics to be disabled")
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableArm64Sve2,              W("EnableArm64Sve2"),           1, "Allows Arm64 SVE2 hardware intrinsics to be disabled")
+RETAIL_CONFIG_DWORD_INFO_EX(EXTERNAL_Arm64YieldType,            W("Arm64YieldType"),            0, "Arm64 spin-wait yield type: 0=auto (WFET if available, else YIELD), 1=force YIELD, 2=force WFET", CLRConfig::LookupOptions::ParseIntegerAsBase10)
+RETAIL_CONFIG_DWORD_INFO_EX(EXTERNAL_Arm64WfetDelayNs,          W("Arm64WfetDelayNs"),          0, "Arm64 WFET delay in nanoseconds (0=default of 37ns, range 1-1000)", CLRConfig::LookupOptions::ParseIntegerAsBase10)
 #elif defined(TARGET_RISCV64)
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableRiscV64Zba,             W("EnableRiscV64Zba"),          1, "Allows RiscV64 Zba hardware intrinsics to be disabled")
 RETAIL_CONFIG_DWORD_INFO(EXTERNAL_EnableRiscV64Zbb,             W("EnableRiscV64Zbb"),          1, "Allows RiscV64 Zbb hardware intrinsics to be disabled")

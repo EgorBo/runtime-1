@@ -14,3 +14,8 @@ unsigned int YieldProcessorNormalization::s_optimalMaxNormalizedYieldsPerSpinIte
         YieldProcessorNormalization::TargetNsPerNormalizedYield +
         0.5
     );
+
+#if defined(HOST_ARM64)
+bool g_arm64UseWfet = false;
+uint32_t g_arm64WfetDelayNs = YieldProcessorNormalization::TargetNsPerNormalizedYield;
+#endif

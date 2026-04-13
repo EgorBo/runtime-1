@@ -7,4 +7,8 @@
 
 #include "finalizerthread.h"
 
+#if defined(HOST_ARM64)
+#include <minipal/cpufeatures.h>
+#endif
+
 #include "yieldprocessornormalizedshared.cpp"

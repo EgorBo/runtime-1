@@ -51,6 +51,12 @@
 #ifndef HWCAP2_SVE2
 #define HWCAP2_SVE2   (1 << 1)
 #endif
+#ifndef HWCAP2_ECV
+#define HWCAP2_ECV    (1 << 19)
+#endif
+#ifndef HWCAP2_WFXT
+#define HWCAP2_WFXT   (1u << 31)
+#endif
 
 #endif
 
@@ -519,6 +525,12 @@ int minipal_getcpufeatures(void)
     if (hwCap2 & HWCAP2_SVE2)
         result |= ARM64IntrinsicConstants_Sve2;
 
+    if (hwCap2 & HWCAP2_ECV)
+        result |= ARM64IntrinsicConstants_Ecv;
+
+    if (hwCap2 & HWCAP2_WFXT)
+        result |= ARM64IntrinsicConstants_WFxT;
+
 #else // !HAVE_AUXV_HWCAP_H
 
 #if HAVE_SYSCTLBYNAME
@@ -568,6 +580,12 @@ int minipal_getcpufeatures(void)
 
     if ((sysctlbyname("hw.optional.arm.FEAT_LRCPC2", &valueFromSysctl, &sz, NULL, 0) == 0) && (valueFromSysctl != 0))
         result |= ARM64IntrinsicConstants_Rcpc2;
+
+    if ((sysctlbyname("hw.optional.arm.FEAT_ECV", &valueFromSysctl, &sz, NULL, 0) == 0) && (valueFromSysctl != 0))
+        result |= ARM64IntrinsicConstants_Ecv;
+
+    if ((sysctlbyname("hw.optional.arm.FEAT_WFxT", &valueFromSysctl, &sz, NULL, 0) == 0) && (valueFromSysctl != 0))
+        result |= ARM64IntrinsicConstants_WFxT;
 #endif // HAVE_SYSCTLBYNAME
 #endif // HAVE_AUXV_HWCAP_H
 #endif // HOST_UNIX

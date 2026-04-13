@@ -16,6 +16,10 @@
 #include "yieldprocessornormalized.h"
 #include "minipal/time.h"
 
+#if defined(HOST_ARM64)
+#include <minipal/cpufeatures.h>
+#endif
+
 #include "../../utilcode/yieldprocessornormalized.cpp"
 
 #include "../../vm/yieldprocessornormalizedshared.cpp"

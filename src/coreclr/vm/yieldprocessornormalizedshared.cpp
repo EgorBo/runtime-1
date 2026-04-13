@@ -8,6 +8,18 @@ enum class NormalizationState : uint8_t
     Failed
 };
 
+// Yield type selector for ARM64 spin-wait.
+// Configurable via DOTNET_Arm64YieldType environment variable (available in Release builds).
+//   0 = Auto: use WFET if FEAT_WFxT is available, otherwise YIELD
+//   1 = YIELD: always use the YIELD instruction (baseline, essentially NOP on most ARM64)
+//   2 = WFET: use Wait-For-Event-with-Timeout (requires FEAT_WFxT + FEAT_ECV, ARMv8.7+)
+enum class Arm64YieldType : uint8_t
+{
+    Auto  = 0,
+    Yield = 1,
+    Wfet  = 2,
+};
+
 static const int NsPerYieldMeasurementCount = 8;
 static const int64_t MeasurementPeriodMs = 4000;
 
@@ -20,6 +32,12 @@ static int64_t s_performanceCounterTicksPerS;
 static double s_nsPerYieldMeasurements[NsPerYieldMeasurementCount];
 static int s_nextMeasurementIndex;
 static double s_establishedNsPerYield = YieldProcessorNormalization::TargetNsPerNormalizedYield;
+
+// When WFET is active, we need the raw YIELD measurement for the GC scaling factor.
+// The GC uses its own YieldProcessor() (raw YIELD), not System_YieldProcessor().
+#if defined(HOST_ARM64)
+static double s_rawYieldNsPerYield = YieldProcessorNormalization::TargetNsPerNormalizedYield;
+#endif
 
 void RhEnableFinalization();
 
@@ -101,6 +119,66 @@ static double MeasureNsPerYield(unsigned int measureDurationUs)
     return max(MinNsPerYield, min((double)elapsedTicks * NsPerS / ((double)yieldCount * ticksPerS), MaxNsPerYield));
 }
 
+#if defined(HOST_ARM64) && !defined(_MSC_VER)
+// Measures the duration of the raw YIELD instruction (bypassing WFET).
+// This is needed for the GC's scaling factor: the GC uses its own YieldProcessor()
+// which always issues YIELD, so the GC needs calibration based on raw YIELD timing
+// even when System_YieldProcessor() uses WFET.
+static double MeasureRawNsPerYield(unsigned int measureDurationUs)
+{
+    CONTRACTL
+    {
+        NOTHROW;
+        GC_NOTRIGGER;
+#ifndef FEATURE_NATIVEAOT
+        MODE_PREEMPTIVE;
+#endif
+    }
+    CONTRACTL_END;
+
+    int yieldCount = (int)(measureDurationUs * 1000 / s_rawYieldNsPerYield) + 1;
+    int64_t ticksPerS = s_performanceCounterTicksPerS;
+    int64_t measureDurationTicks = ticksPerS * measureDurationUs / (1000 * 1000);
+
+    int64_t startTicks = minipal_hires_ticks();
+
+    for (int i = 0; i < yieldCount; ++i)
+    {
+#ifdef FEATURE_NATIVEAOT
+        PalYieldProcessor();
+#else
+        YieldProcessor();
+#endif
+    }
+
+    int64_t elapsedTicks = minipal_hires_ticks() - startTicks;
+    while (elapsedTicks < measureDurationTicks)
+    {
+        int nextYieldCount =
+            max(4,
+                elapsedTicks == 0
+                    ? yieldCount / 4
+                    : (int)(yieldCount * (measureDurationTicks - elapsedTicks) / (double)elapsedTicks) + 1);
+        for (int i = 0; i < nextYieldCount; ++i)
+        {
+#ifdef FEATURE_NATIVEAOT
+            PalYieldProcessor();
+#else
+            YieldProcessor();
+#endif
+        }
+
+        elapsedTicks = minipal_hires_ticks() - startTicks;
+        yieldCount += nextYieldCount;
+    }
+
+    const double MinNsPerYield = 0.1;
+    const double MaxNsPerYield = YieldProcessorNormalization::TargetMaxNsPerSpinIteration / 1.5 + 1;
+
+    return max(MinNsPerYield, min((double)elapsedTicks * NsPerS / ((double)yieldCount * ticksPerS), MaxNsPerYield));
+}
+#endif // HOST_ARM64 && !_MSC_VER
+
 void YieldProcessorNormalization::PerformMeasurement()
 {
     CONTRACTL
@@ -149,6 +227,72 @@ void YieldProcessorNormalization::PerformMeasurement()
 #ifndef FEATURE_NATIVEAOT
         s_performanceCounterTicksPerS = freq;
 #endif
+
+#if defined(HOST_ARM64) && !defined(_MSC_VER)
+        // Configure ARM64 yield type for spin-wait.
+        // Read DOTNET_Arm64YieldType: 0=auto, 1=yield, 2=wfet, 3=isb
+        // Read DOTNET_Arm64WfetDelayNs: WFET delay in nanoseconds (default 37, range 1-1000)
+        // These use getenv() directly so both CoreCLR and NativeAOT can read them.
+        {
+            Arm64YieldType requestedType = Arm64YieldType::Auto;
+            const char* yieldTypeEnv = getenv("DOTNET_Arm64YieldType");
+            if (yieldTypeEnv != nullptr)
+            {
+                int val = atoi(yieldTypeEnv);
+                if (val >= 0 && val <= 2)
+                {
+                    requestedType = (Arm64YieldType)val;
+                }
+            }
+
+            uint32_t wfetDelayNs = YieldProcessorNormalization::TargetNsPerNormalizedYield;
+            const char* delayEnv = getenv("DOTNET_Arm64WfetDelayNs");
+            if (delayEnv != nullptr)
+            {
+                int val = atoi(delayEnv);
+                if (val >= 1 && val <= 1000)
+                {
+                    wfetDelayNs = (uint32_t)val;
+                }
+            }
+
+            int cpuFeatures = minipal_getcpufeatures();
+            bool wfetHwAvailable = ((cpuFeatures & ARM64IntrinsicConstants_WFxT) != 0) &&
+                                   ((cpuFeatures & ARM64IntrinsicConstants_Ecv) != 0);
+
+            if (wfetHwAvailable)
+            {
+                // Validate that the counter frequency is at least 1GHz (mandated by ARMv8.6+).
+                uint64_t cntfrq;
+                __asm__ __volatile__("mrs %0, cntfrq_el0" : "=r" (cntfrq));
+                if (cntfrq < 1000000000ULL)
+                {
+                    wfetHwAvailable = false;
+                }
+            }
+
+            bool enableWfet = false;
+            switch (requestedType)
+            {
+                case Arm64YieldType::Auto:
+                    enableWfet = wfetHwAvailable;
+                    break;
+                case Arm64YieldType::Yield:
+                    enableWfet = false;
+                    break;
+                case Arm64YieldType::Wfet:
+                    enableWfet = wfetHwAvailable;
+                    break;
+            }
+
+            if (enableWfet)
+            {
+                // Write delay first, then publish the flag (memory ordering on ARM64 weak model).
+                g_arm64WfetDelayNs = wfetDelayNs;
+                VolatileStore(&g_arm64UseWfet, true);
+            }
+        }
+#endif // HOST_ARM64 && !_MSC_VER
 
         unsigned int measureDurationUs = DetermineMeasureDurationUs();
         for (int i = 0; i < NsPerYieldMeasurementCount; ++i)
@@ -201,7 +345,23 @@ void YieldProcessorNormalization::PerformMeasurement()
         max(1u, (unsigned int)(TargetMaxNsPerSpinIteration / (yieldsPerNormalizedYield * establishedNsPerYield) + 0.5));
     _ASSERTE(s_optimalMaxNormalizedYieldsPerSpinIteration <= MaxOptimalMaxNormalizedYieldsPerSpinIteration);
 
-    GCHeapUtilities::GetGCHeap()->SetYieldProcessorScalingFactor((float)yieldsPerNormalizedYield);
+#if defined(HOST_ARM64) && !defined(_MSC_VER)
+    if (g_arm64UseWfet)
+    {
+        // When WFET is active, the GC still uses raw YIELD (not WFET) in its own
+        // YieldProcessor() calls. We must pass a scaling factor based on raw YIELD
+        // timing to prevent the GC's spin counts from collapsing.
+        unsigned int measureDurationUsForGc = DetermineMeasureDurationUs();
+        double rawNsPerYield = MeasureRawNsPerYield(measureDurationUsForGc);
+        s_rawYieldNsPerYield = rawNsPerYield;
+        unsigned int rawYieldsPerNormalizedYield = max(1u, (unsigned int)(TargetNsPerNormalizedYield / rawNsPerYield + 0.5));
+        GCHeapUtilities::GetGCHeap()->SetYieldProcessorScalingFactor((float)rawYieldsPerNormalizedYield);
+    }
+    else
+#endif // HOST_ARM64 && !_MSC_VER
+    {
+        GCHeapUtilities::GetGCHeap()->SetYieldProcessorScalingFactor((float)yieldsPerNormalizedYield);
+    }
 
     s_previousNormalizationTimeMs = minipal_lowres_ticks();
     s_normalizationState = NormalizationState::Initialized;
