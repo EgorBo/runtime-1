@@ -1694,7 +1694,79 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
 
     if ((genActualType(vnStore->TypeOfVN(op1VN)) != TYP_INT) || (genActualType(vnStore->TypeOfVN(op2VN)) != TYP_INT))
     {
-        // For now, we don't have consumers for assertions derived from non-int32 comparisons
+        // For now, we don't have consumers for assertions derived from non-int32 comparisons.
+        //
+        // However, recognize the unsigned-long Span<T>.Slice / ReadOnlySpan<T>.Slice idiom emitted
+        // on 64-bit:
+        //
+        //   JTRUE LE/LE_UN(ADD(CAST<long<-uint>(idx), CNS_long(k)), CAST<long<-uint>(len))
+        //                                        |                                  |
+        //                                        v                                  v
+        //                                     "(uint)idx + k"                  "(uint)len"
+        //
+        // and tag `len`'s int VN as a checked bound. This lets later JTRUEs (such as the
+        // surrounding loop guard `i < len - K`) generate CHECKED_BOUND_ADD_CNS assertions that
+        // RangeCheck::OptimizeJTrueUnsignedSliceCheck can use to prove the throw is unreachable.
+        if (isUnsignedRelop && relopFuncApp.FuncIs(VNF_LE_UN, VNF_GT_UN) &&
+            (genActualType(vnStore->TypeOfVN(op1VN)) == TYP_LONG) &&
+            (genActualType(vnStore->TypeOfVN(op2VN)) == TYP_LONG))
+        {
+            auto getCastLongFromUInt = [this](ValueNum vn, ValueNum* innerVN) -> bool {
+                VNFuncApp funcApp;
+                if (vnStore->GetVNFunc(vn, &funcApp) && (funcApp.m_func == VNF_Cast))
+                {
+                    var_types castToType;
+                    bool      srcIsUnsigned;
+                    vnStore->GetCastOperFromVN(funcApp.m_args[1], &castToType, &srcIsUnsigned);
+                    if (srcIsUnsigned && ((castToType == TYP_LONG) || (castToType == TYP_ULONG)))
+                    {
+                        *innerVN = funcApp.m_args[0];
+                        return (genActualType(vnStore->TypeOfVN(*innerVN)) == TYP_INT);
+                    }
+                }
+                return false;
+            };
+
+            // The "ADD" side (the one with the constant offset) and the "len" side may appear
+            // on either operand depending on whether the relop is LE_UN or GT_UN.
+            ValueNum  addSideVN = op1VN;
+            ValueNum  lenSideVN = op2VN;
+            VNFuncApp addFuncApp;
+            ValueNum  lenIntVN;
+            if (vnStore->GetVNFunc(addSideVN, &addFuncApp) && (addFuncApp.m_func == (VNFunc)GT_ADD) &&
+                getCastLongFromUInt(lenSideVN, &lenIntVN))
+            {
+                // ADD must be (CAST_long<-uint(idx_int), CNS_long(positive))
+                ValueNum castIdxVN = ValueNumStore::NoVN;
+                INT64    addCns    = 0;
+                for (int i = 0; i < 2; i++)
+                {
+                    ValueNum a = addFuncApp.m_args[i];
+                    ValueNum b = addFuncApp.m_args[1 - i];
+                    if (vnStore->IsVNConstant(a) && (vnStore->TypeOfVN(a) == TYP_LONG))
+                    {
+                        addCns    = vnStore->GetConstantInt64(a);
+                        castIdxVN = b;
+                        break;
+                    }
+                }
+
+                ValueNum idxIntVN;
+                if ((castIdxVN != ValueNumStore::NoVN) && (addCns > 0) && (addCns <= INT32_MAX) &&
+                    getCastLongFromUInt(castIdxVN, &idxIntVN))
+                {
+                    if (!vnStore->IsVNCheckedBound(lenIntVN) && !vnStore->IsVNConstant(lenIntVN))
+                    {
+                        JITDUMP("Tagging len VN " FMT_VN
+                                " as a checked bound (Span.Slice idiom) so the surrounding loop "
+                                "guard can produce CHECKED_BOUND_ADD_CNS assertions.\n",
+                                lenIntVN);
+                        vnStore->SetVNIsCheckedBound(lenIntVN);
+                    }
+                }
+            }
+        }
+
         return NO_ASSERTION_INDEX;
     }
 

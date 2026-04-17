@@ -789,6 +789,14 @@ private:
     // contain the tree.
     void OptimizeRangeCheck(BasicBlock* block, Statement* stmt, GenTree* tree);
 
+    // Try to fold the slice-style throw check emitted by Span<T>.Slice on 64-bit:
+    //
+    //   JTRUE LE/LE_UN/GT/GT_UN(ADD(CAST_long_uint(idx), CNS_long(k)),
+    //                           CAST_long_uint(len))
+    //
+    // when the no-throw branch is provably always taken.
+    bool OptimizeJTrueUnsignedSliceCheck(BasicBlock* block);
+
     // Internal worker for GetRange.
     Range GetRangeWorker(BasicBlock* block, GenTree* expr, bool monIncreasing DEBUGARG(int indent));
 

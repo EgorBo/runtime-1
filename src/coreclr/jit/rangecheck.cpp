@@ -14,11 +14,14 @@
 //
 PhaseStatus Compiler::rangeCheckPhase()
 {
-    if (!doesMethodHaveBoundsChecks() || (fgSsaPassesCompleted == 0))
+    if (fgSsaPassesCompleted == 0)
     {
         return PhaseStatus::MODIFIED_NOTHING;
     }
 
+    // We run unconditionally (even when there are no GT_BOUNDS_CHECK nodes), because
+    // OptimizeRangeChecks also tries to fold the long-domain throw check emitted by
+    // Span<T>.Slice on 64-bit, which is a JTRUE node, not a GT_BOUNDS_CHECK.
     const bool madeChanges = GetRangeCheck()->OptimizeRangeChecks();
     return madeChanges ? PhaseStatus::MODIFIED_EVERYTHING : PhaseStatus::MODIFIED_NOTHING;
 }
@@ -2180,7 +2183,388 @@ bool RangeCheck::OptimizeRangeChecks()
                 madeChanges = true;
             }
         }
+
+        // Try to fold the long-domain throw check emitted by Span<T>.Slice on 64-bit
+        // (a JTRUE → ThrowHelper.ThrowArgumentOutOfRangeException pattern) when we can
+        // prove the no-throw branch is always taken.
+        if (OptimizeJTrueUnsignedSliceCheck(block))
+        {
+            madeChanges = true;
+        }
     }
 
     return madeChanges;
+}
+
+//------------------------------------------------------------------------
+// OptimizeJTrueUnsignedSliceCheck: Try to fold the slice-style throw check
+//   emitted by Span<T>.Slice on 64-bit:
+//
+//     JTRUE LE/LE_UN/GT/GT_UN(ADD(CAST_long_uint(idx), CNS_long(k)),
+//                             CAST_long_uint(len))
+//
+//   When the comparison provably has a constant value, fold the relop and let
+//   fgMorphBlockStmt rewrite the BBJ_COND to a BBJ_ALWAYS to the no-throw side.
+//
+// Arguments:
+//    block - block to consider
+//
+// Return Value:
+//    true if the block was modified
+//
+bool RangeCheck::OptimizeJTrueUnsignedSliceCheck(BasicBlock* block)
+{
+    if (!block->KindIs(BBJ_COND))
+    {
+        return false;
+    }
+
+    Statement* lastStmt = block->lastStmt();
+    if (lastStmt == nullptr)
+    {
+        return false;
+    }
+
+    GenTree* jtrue = lastStmt->GetRootNode();
+    if (!jtrue->OperIs(GT_JTRUE))
+    {
+        return false;
+    }
+
+    GenTree* relop = jtrue->gtGetOp1();
+    if (!relop->OperIs(GT_LE, GT_GT))
+    {
+        return false;
+    }
+
+    GenTree* opAdd = relop->gtGetOp1();
+    GenTree* opLen = relop->gtGetOp2();
+
+    if (!opAdd->TypeIs(TYP_LONG) || !opLen->TypeIs(TYP_LONG))
+    {
+        return false;
+    }
+
+    ValueNumStore* vnStore = m_compiler->vnStore;
+
+    // Pattern (post-CSE-friendly, working on VNs):
+    //   opAdd VN: ADD(CAST_long_uint(idxIntVN), CNS_long(k))
+    //   opLen VN: CAST_long_uint(lenIntVN)
+    //
+    // The trees themselves may have been wrapped in COMMAs and LCL_VARs by CSE/hoisting,
+    // so we work primarily in the VN domain and only descend into the trees to find a
+    // suitable GenTree we can pass to TryGetRange.
+    ValueNum opAddVN = vnStore->VNConservativeNormalValue(opAdd->gtVNPair);
+    ValueNum opLenVN = vnStore->VNConservativeNormalValue(opLen->gtVNPair);
+
+    // Helper: check if a VN is a CAST to (u)long with unsigned source.
+    auto isCastToLong = [vnStore](ValueNum vn, ValueNum* innerVN) -> bool {
+        VNFuncApp funcApp;
+        if (vnStore->GetVNFunc(vn, &funcApp) && (funcApp.m_func == VNF_Cast))
+        {
+            var_types castToType;
+            bool      srcIsUnsigned;
+            vnStore->GetCastOperFromVN(funcApp.m_args[1], &castToType, &srcIsUnsigned);
+            if (srcIsUnsigned && ((castToType == TYP_LONG) || (castToType == TYP_ULONG)))
+            {
+                *innerVN = funcApp.m_args[0];
+                return true;
+            }
+        }
+        return false;
+    };
+
+    ValueNum lenIntVN;
+    if (!isCastToLong(opLenVN, &lenIntVN))
+    {
+        return false;
+    }
+
+    VNFuncApp addFunc;
+    if (!vnStore->GetVNFunc(opAddVN, &addFunc) || (addFunc.m_func != (VNFunc)GT_ADD))
+    {
+        return false;
+    }
+
+    ValueNum castIdxVN = ValueNumStore::NoVN;
+    INT64    addCns    = 0;
+    for (int i = 0; i < 2; i++)
+    {
+        ValueNum a = addFunc.m_args[i];
+        ValueNum b = addFunc.m_args[1 - i];
+        if (vnStore->IsVNConstant(a) && (vnStore->TypeOfVN(a) == TYP_LONG))
+        {
+            addCns    = vnStore->GetConstantInt64(a);
+            castIdxVN = b;
+            break;
+        }
+    }
+    if ((castIdxVN == ValueNumStore::NoVN) || (addCns <= 0) || (addCns > INT32_MAX))
+    {
+        return false;
+    }
+
+    ValueNum idxIntVN;
+    if (!isCastToLong(castIdxVN, &idxIntVN))
+    {
+        return false;
+    }
+
+    // Helper: try to prove `reachingIdxVN + addCns <= lenIntVN` (in unsigned 32-bit semantics)
+    // using the provided assertions.
+    auto proveSliceOk = [&](ValueNum reachingIdxVN, ASSERT_VALARG_TP edgeAssertions) -> bool {
+        // First, get a lower bound for `lenIntVN` from the edge assertions.
+        Range lenRange = Range(Limit(Limit::keConstant, INT32_MIN), Limit(Limit::keConstant, INT32_MAX));
+        MergeEdgeAssertions(m_compiler, lenIntVN, ValueNumStore::NoVN, edgeAssertions, &lenRange,
+                            /* canUseCheckedBounds */ false);
+
+        // MergeEdgeAssertions only matches assertions whose op1.vn == lenIntVN. Loop guards like
+        // `(len + cns) <relop> CONST` translate into assertions over the SUB/ADD VN and don't
+        // tighten `lenIntVN` directly. Walk the edge assertions ourselves looking for
+        // "(lenIntVN +/- K) <relop> CONST" so we can recover a lower bound on `lenIntVN`.
+        {
+            BitVecOps::Iter iter(m_compiler->apTraits, edgeAssertions);
+            unsigned        index = 0;
+            while (iter.NextElem(&index))
+            {
+                const Compiler::AssertionDsc& a = m_compiler->optGetAssertion(::GetAssertionIndex(index));
+                if (!a.IsRelop() || !a.GetOp2().KindIs(Compiler::O2K_CONST_INT))
+                {
+                    continue;
+                }
+                ValueNum innerVN;
+                int      innerCns;
+                if (!vnStore->IsVNBinFuncWithConst(a.GetOp1().GetVN(), VNF_ADD, &innerVN, &innerCns) &&
+                    !vnStore->IsVNBinFuncWithConst(a.GetOp1().GetVN(), VNF_SUB, &innerVN, &innerCns))
+                {
+                    continue;
+                }
+                if (innerVN != lenIntVN)
+                {
+                    continue;
+                }
+                bool         isUnsignedAssert;
+                genTreeOps   op = Compiler::AssertionDsc::ToCompareOper(a.GetKind(), &isUnsignedAssert);
+                if (isUnsignedAssert)
+                {
+                    continue;
+                }
+                // Re-derive an inclusive `cmpVal` such that `lenIntVN <op> cmpVal`.
+                INT64 rhs = a.GetOp2().GetIntConstant();
+                VNFuncApp opFunc;
+                vnStore->GetVNFunc(a.GetOp1().GetVN(), &opFunc);
+                if (opFunc.m_func == VNF_SUB)
+                {
+                    // (lenIntVN - innerCns) <op> rhs  =>  lenIntVN <op> rhs + innerCns
+                    rhs += innerCns;
+                }
+                else
+                {
+                    // (lenIntVN + innerCns) <op> rhs  =>  lenIntVN <op> rhs - innerCns
+                    rhs -= innerCns;
+                }
+                if ((rhs < INT32_MIN) || (rhs > INT32_MAX))
+                {
+                    continue;
+                }
+                // We only need lower bounds on len here.
+                INT64 derivedLower = INT32_MIN;
+                switch (op)
+                {
+                    case GT_GT: // lenIntVN > rhs
+                        derivedLower = rhs + 1;
+                        break;
+                    case GT_GE:
+                        derivedLower = rhs;
+                        break;
+                    default:
+                        break;
+                }
+                if ((derivedLower > INT32_MIN) && (derivedLower <= INT32_MAX))
+                {
+                    if (!lenRange.LowerLimit().IsConstant() ||
+                        (derivedLower > lenRange.LowerLimit().GetConstant()))
+                    {
+                        lenRange.lLimit = Limit(Limit::keConstant, (int)derivedLower);
+                    }
+                }
+            }
+        }
+
+        // Constant-value reaching idx (e.g. preheader edge: idx = 0).
+        int idxCns;
+        if (vnStore->IsVNIntegralConstant(reachingIdxVN, &idxCns))
+        {
+            if (idxCns < 0)
+            {
+                return false;
+            }
+            if (lenRange.LowerLimit().IsConstant() &&
+                ((INT64)idxCns + addCns <= (INT64)lenRange.LowerLimit().GetConstant()))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        // General case: derive an upper bound for `reachingIdxVN` of the form
+        // `BinOpArray(lenIntVN, ucns)` from assertions like `i < (len + cns)`.
+        Range idxRange = Range(Limit(Limit::keConstant, INT32_MIN), Limit(Limit::keConstant, INT32_MAX));
+        MergeEdgeAssertions(m_compiler, reachingIdxVN, lenIntVN, edgeAssertions, &idxRange,
+                            /* canUseCheckedBounds */ true);
+
+        // BinOpArray(lenIntVN, ucns) upper bound: idx <= len + ucns. Check ucns + addCns <= 0.
+        // For unsigned safety we also require lenRange.lower >= -ucns (i.e., len >= |ucns|),
+        // which combined with the loop being entered with a non-negative `idx` (anchored on the
+        // other phi-arg, see the constant case above) implies `(uint)idx + addCns <= (uint)len`.
+        if (idxRange.UpperLimit().IsBinOpArray() && (idxRange.UpperLimit().vn == lenIntVN))
+        {
+            const int ucns = idxRange.UpperLimit().GetConstant();
+            if (((INT64)ucns + addCns <= 0) && lenRange.LowerLimit().IsConstant() &&
+                (lenRange.LowerLimit().GetConstant() >= -ucns))
+            {
+                return true;
+            }
+        }
+
+        // Need idx >= 0 to safely compare in unsigned 32-bit (so the long-domain CAST agrees).
+        if (!idxRange.LowerLimit().IsConstant() || (idxRange.LowerLimit().GetConstant() < 0))
+        {
+            return false;
+        }
+
+        if (idxRange.UpperLimit().IsConstant() && lenRange.LowerLimit().IsConstant())
+        {
+            const INT64 idxUpper = idxRange.UpperLimit().GetConstant();
+            const INT64 lenLower = lenRange.LowerLimit().GetConstant();
+            if ((lenLower >= 0) && ((idxUpper + addCns) <= lenLower))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    bool provedLE = false;
+
+    // First, try the cheap fast path: assume `idxIntVN` is reachable in this block as-is and
+    // use `bbAssertionIn` directly. This works when there's no PHI (rare for our pattern).
+    if (proveSliceOk(idxIntVN, block->bbAssertionIn))
+    {
+        provedLE = true;
+    }
+    else
+    {
+        // Walk reaching VNs/assertions through the PHI defining `idxIntVN` (the common case
+        // for loop-carried indices). We can't use Compiler::optVisitReachingAssertions here
+        // because PHI_ARG nodes for back-edges often have stale (or unset) gtVNPair when SSA
+        // defs were renumbered after the initial phi numbering. Read the VN from the SSA def
+        // directly instead.
+        VNPhiDef phiDef;
+        if (m_compiler->vnStore->GetPhiDef(idxIntVN, &phiDef))
+        {
+            LclSsaVarDsc* const  ssaDef  = m_compiler->lvaGetDesc(phiDef.LclNum)->GetPerSsaData(phiDef.SsaDef);
+            GenTreeLclVarCommon* defNode = ssaDef->GetDefNode();
+            assert(defNode->IsPhiDefn());
+
+            BitVecTraits  traits(m_compiler->fgBBNumMax + 1, m_compiler);
+            BitVec        actualPreds   = BitVecOps::MakeEmpty(&traits);
+            BitVec        visitedBlocks = BitVecOps::MakeEmpty(&traits);
+            for (BasicBlock* const pred : ssaDef->GetBlock()->PredBlocks())
+            {
+                BitVecOps::AddElemD(&traits, actualPreds, pred->bbNum);
+            }
+
+            bool allEdgesProved = true;
+            for (GenTreePhi::Use& use : defNode->Data()->AsPhi()->Uses())
+            {
+                GenTreePhiArg* phiArg = use.GetNode()->AsPhiArg();
+                if (!BitVecOps::IsMember(&traits, actualPreds, phiArg->gtPredBB->bbNum))
+                {
+                    allEdgesProved = false;
+                    break;
+                }
+
+                LclSsaVarDsc* const argSsaDef =
+                    m_compiler->lvaGetDesc(phiArg)->GetPerSsaData(phiArg->GetSsaNum());
+                ValueNum  reachingVN         = vnStore->VNConservativeNormalValue(argSsaDef->m_vnPair);
+                ASSERT_TP reachingAssertions = m_compiler->optGetEdgeAssertions(ssaDef->GetBlock(), phiArg->gtPredBB);
+
+                if (!proveSliceOk(reachingVN, reachingAssertions))
+                {
+                    allEdgesProved = false;
+                    break;
+                }
+                BitVecOps::AddElemD(&traits, visitedBlocks, phiArg->gtPredBB->bbNum);
+            }
+
+            if (allEdgesProved && BitVecOps::Equal(&traits, visitedBlocks, actualPreds))
+            {
+                provedLE = true;
+            }
+        }
+    }
+
+    if (!provedLE)
+    {
+        return false;
+    }
+
+    // We proved (idx + addCns) <= len always. Determine the constant value of the relop.
+    // ADD is on the left, CAST(len) on the right, so:
+    //   LE / LE_UN  =>  TRUE  (1)
+    //   GT / GT_UN  =>  FALSE (0)
+    int relopValue;
+    switch (relop->OperGet())
+    {
+        case GT_LE:
+            relopValue = 1;
+            break;
+        case GT_GT:
+            relopValue = 0;
+            break;
+        default:
+            return false;
+    }
+
+    JITDUMP("\n[RangeCheck::OptimizeJTrueUnsignedSliceCheck] folding slice-style throw check in " FMT_BB
+            " to %d\n",
+            block->bbNum, relopValue);
+
+    // Be conservative about preserving exception side effects. The CAST nodes here are
+    // unsigned (zero-extend) and never throw; the ADD is on TYP_LONG and is non-overflow.
+    // If anything raised GTF_EXCEPT, fall back to keeping the relop tree alive.
+    bool keepTreeForSideEffects = false;
+    if ((relop->gtFlags & GTF_SIDE_EFFECT) != 0)
+    {
+        if ((relop->gtFlags & GTF_SIDE_EFFECT) != GTF_EXCEPT)
+        {
+            keepTreeForSideEffects = true;
+        }
+        else
+        {
+            // The exception set of the relop must be a no-op (ADD long + zero-extending CASTs).
+            ValueNum relopVN     = vnStore->VNConservativeNormalValue(relop->gtVNPair);
+            ValueNum relopExcVN  = vnStore->VNExceptionSet(relopVN);
+            if (relopExcVN != vnStore->VNForEmptyExcSet())
+            {
+                keepTreeForSideEffects = true;
+            }
+        }
+    }
+
+    if (keepTreeForSideEffects)
+    {
+        GenTree* relopComma   = m_compiler->gtNewOperNode(GT_COMMA, TYP_INT, relop, m_compiler->gtNewIconNode(relopValue));
+        jtrue->AsUnOp()->gtOp1 = relopComma;
+    }
+    else
+    {
+        relop->BashToConst(relopValue);
+    }
+
+    m_compiler->fgMorphBlockStmt(block, lastStmt DEBUGARG(__FUNCTION__), /* allowFGChange */ true,
+                                 /* invalidateDFSTreeOnFGChange */ true);
+    return true;
 }
