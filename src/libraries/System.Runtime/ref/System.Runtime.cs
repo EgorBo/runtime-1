@@ -460,7 +460,7 @@ namespace System
         public ArgumentNullException(string? paramName, string? message) { }
         public static void ThrowIfNull([System.Diagnostics.CodeAnalysis.NotNullAttribute] object? argument, [System.Runtime.CompilerServices.CallerArgumentExpressionAttribute("argument")] string? paramName = null) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static void ThrowIfNull([System.Diagnostics.CodeAnalysis.NotNullAttribute] void* argument, [System.Runtime.CompilerServices.CallerArgumentExpressionAttribute("argument")] string? paramName = null) { throw null; }
+        public static void ThrowIfNull([System.Diagnostics.CodeAnalysis.NotNullAttribute] void* argument, [System.Runtime.CompilerServices.CallerArgumentExpressionAttribute("argument")] string? paramName = null) { throw null; }
     }
     public partial class ArgumentOutOfRangeException : System.ArgumentException
     {
@@ -4196,12 +4196,12 @@ namespace System
     }
     public readonly partial struct IntPtr : System.IComparable, System.IComparable<nint>, System.IEquatable<nint>, System.IFormattable, System.IParsable<nint>, System.ISpanFormattable, System.ISpanParsable<nint>, System.IUtf8SpanFormattable, System.IUtf8SpanParsable<nint>, System.Numerics.IAdditionOperators<nint, nint, nint>, System.Numerics.IAdditiveIdentity<nint, nint>, System.Numerics.IBinaryInteger<nint>, System.Numerics.IBinaryNumber<nint>, System.Numerics.IBitwiseOperators<nint, nint, nint>, System.Numerics.IComparisonOperators<nint, nint, bool>, System.Numerics.IDecrementOperators<nint>, System.Numerics.IDivisionOperators<nint, nint, nint>, System.Numerics.IEqualityOperators<nint, nint, bool>, System.Numerics.IIncrementOperators<nint>, System.Numerics.IMinMaxValue<nint>, System.Numerics.IModulusOperators<nint, nint, nint>, System.Numerics.IMultiplicativeIdentity<nint, nint>, System.Numerics.IMultiplyOperators<nint, nint, nint>, System.Numerics.INumber<nint>, System.Numerics.INumberBase<nint>, System.Numerics.IShiftOperators<nint, int, nint>, System.Numerics.ISignedNumber<nint>, System.Numerics.ISubtractionOperators<nint, nint, nint>, System.Numerics.IUnaryNegationOperators<nint, nint>, System.Numerics.IUnaryPlusOperators<nint, nint>, System.Runtime.Serialization.ISerializable
     {
-        private readonly unsafe void* _dummyPrimitive;
+        private readonly void* _dummyPrimitive;
         public static readonly nint Zero;
         public IntPtr(int value) { throw null; }
         public IntPtr(long value) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe IntPtr(void* value) { throw null; }
+        public IntPtr(void* value) { throw null; }
         public static nint MaxValue { get { throw null; } }
         public static nint MinValue { get { throw null; } }
         public static int Size { get { throw null; } }
@@ -4247,9 +4247,9 @@ namespace System
         public static explicit operator int (nint value) { throw null; }
         public static explicit operator long (nint value) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static explicit operator void* (nint value) { throw null; }
+        public static explicit operator void* (nint value) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static explicit operator nint (void* value) { throw null; }
+        public static explicit operator nint (void* value) { throw null; }
         public static bool operator !=(nint value1, nint value2) { throw null; }
         public static nint operator -(nint pointer, int offset) { throw null; }
         public static nint Parse(System.ReadOnlySpan<byte> utf8Text, System.Globalization.NumberStyles style = System.Globalization.NumberStyles.Integer, System.IFormatProvider? provider = null) { throw null; }
@@ -4325,7 +4325,7 @@ namespace System
         public int ToInt32() { throw null; }
         public long ToInt64() { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe void* ToPointer() { throw null; }
+        public void* ToPointer() { throw null; }
         public override string ToString() { throw null; }
         public string ToString(System.IFormatProvider? provider) { throw null; }
         public string ToString([System.Diagnostics.CodeAnalysis.StringSyntaxAttribute("NumericFormat")] string? format) { throw null; }
@@ -7502,11 +7502,11 @@ namespace System
     [System.CLSCompliantAttribute(false)]
     public readonly partial struct UIntPtr : System.IComparable, System.IComparable<nuint>, System.IEquatable<nuint>, System.IFormattable, System.IParsable<nuint>, System.ISpanFormattable, System.ISpanParsable<nuint>, System.IUtf8SpanFormattable, System.IUtf8SpanParsable<nuint>, System.Numerics.IAdditionOperators<nuint, nuint, nuint>, System.Numerics.IAdditiveIdentity<nuint, nuint>, System.Numerics.IBinaryInteger<nuint>, System.Numerics.IBinaryNumber<nuint>, System.Numerics.IBitwiseOperators<nuint, nuint, nuint>, System.Numerics.IComparisonOperators<nuint, nuint, bool>, System.Numerics.IDecrementOperators<nuint>, System.Numerics.IDivisionOperators<nuint, nuint, nuint>, System.Numerics.IEqualityOperators<nuint, nuint, bool>, System.Numerics.IIncrementOperators<nuint>, System.Numerics.IMinMaxValue<nuint>, System.Numerics.IModulusOperators<nuint, nuint, nuint>, System.Numerics.IMultiplicativeIdentity<nuint, nuint>, System.Numerics.IMultiplyOperators<nuint, nuint, nuint>, System.Numerics.INumber<nuint>, System.Numerics.INumberBase<nuint>, System.Numerics.IShiftOperators<nuint, int, nuint>, System.Numerics.ISubtractionOperators<nuint, nuint, nuint>, System.Numerics.IUnaryNegationOperators<nuint, nuint>, System.Numerics.IUnaryPlusOperators<nuint, nuint>, System.Numerics.IUnsignedNumber<nuint>, System.Runtime.Serialization.ISerializable
     {
-        private readonly unsafe void* _dummyPrimitive;
+        private readonly void* _dummyPrimitive;
         public static readonly nuint Zero;
         public UIntPtr(uint value) { throw null; }
         public UIntPtr(ulong value) { throw null; }
-        public unsafe UIntPtr(void* value) { throw null; }
+        public UIntPtr(void* value) { throw null; }
         public static nuint MaxValue { get { throw null; } }
         public static nuint MinValue { get { throw null; } }
         public static int Size { get { throw null; } }
@@ -7544,8 +7544,8 @@ namespace System
         public static explicit operator nuint (ulong value) { throw null; }
         public static explicit operator uint (nuint value) { throw null; }
         public static explicit operator ulong (nuint value) { throw null; }
-        public unsafe static explicit operator void* (nuint value) { throw null; }
-        public unsafe static explicit operator nuint (void* value) { throw null; }
+        public static explicit operator void* (nuint value) { throw null; }
+        public static explicit operator nuint (void* value) { throw null; }
         public static bool operator !=(nuint value1, nuint value2) { throw null; }
         public static nuint operator -(nuint pointer, int offset) { throw null; }
         public static nuint Parse(System.ReadOnlySpan<byte> utf8Text, System.Globalization.NumberStyles style = System.Globalization.NumberStyles.Integer, System.IFormatProvider? provider = null) { throw null; }
@@ -7624,7 +7624,7 @@ namespace System
         static nuint System.Numerics.IUnaryNegationOperators<nuint, nuint>.operator -(nuint value) { throw null; }
         static nuint System.Numerics.IUnaryPlusOperators<nuint, nuint>.operator +(nuint value) { throw null; }
         void System.Runtime.Serialization.ISerializable.GetObjectData(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context) { }
-        public unsafe void* ToPointer() { throw null; }
+        public void* ToPointer() { throw null; }
         public override string ToString() { throw null; }
         public string ToString(System.IFormatProvider? provider) { throw null; }
         public string ToString([System.Diagnostics.CodeAnalysis.StringSyntaxAttribute("NumericFormat")] string? format) { throw null; }
@@ -7944,9 +7944,9 @@ namespace System.Buffers
         private object _dummy;
         private int _dummyPrimitive;
         [System.CLSCompliantAttribute(false)]
-        public unsafe MemoryHandle(void* pointer, System.Runtime.InteropServices.GCHandle handle = default(System.Runtime.InteropServices.GCHandle), System.Buffers.IPinnable? pinnable = null) { throw null; }
+        public MemoryHandle(void* pointer, System.Runtime.InteropServices.GCHandle handle = default(System.Runtime.InteropServices.GCHandle), System.Buffers.IPinnable? pinnable = null) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe void* Pointer { get { throw null; } }
+        public void* Pointer { get { throw null; } }
         public void Dispose() { }
     }
     public abstract partial class MemoryManager<T> : System.Buffers.IMemoryOwner<T>, System.Buffers.IPinnable, System.IDisposable
@@ -13010,11 +13010,11 @@ namespace System.Reflection
     public sealed partial class Pointer : System.Runtime.Serialization.ISerializable
     {
         internal Pointer() { }
-        public unsafe static object Box(void* ptr, System.Type type) { throw null; }
+        public static object Box(void* ptr, System.Type type) { throw null; }
         public override bool Equals([System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] object? obj) { throw null; }
         public override int GetHashCode() { throw null; }
         void System.Runtime.Serialization.ISerializable.GetObjectData(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context) { }
-        public unsafe static void* Unbox(object ptr) { throw null; }
+        public static void* Unbox(object ptr) { throw null; }
     }
     [System.FlagsAttribute]
     public enum PortableExecutableKinds
@@ -14238,7 +14238,8 @@ namespace System.Runtime.CompilerServices
         public static int OffsetToStringData { get { throw null; } }
         public static System.IntPtr AllocateTypeAssociatedMemory(System.Type type, int size) { throw null; }
         public static System.IntPtr AllocateTypeAssociatedMemory(System.Type type, int size, int alignment) { throw null; }
-        public static object? Box(ref byte target, System.RuntimeTypeHandle type) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static object? Box(ref byte target, System.RuntimeTypeHandle type) { throw null; }
         public static System.ReadOnlySpan<T> CreateSpan<T>(System.RuntimeFieldHandle fldHandle) { throw null; }
         public static void EnsureSufficientExecutionStack() { }
         public static new bool Equals(object? o1, object? o2) { throw null; }
@@ -14387,34 +14388,45 @@ namespace System.Runtime.CompilerServices
     }
     public static partial class Unsafe
     {
-        public static ref T AddByteOffset<T>(ref T source, System.IntPtr byteOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T AddByteOffset<T>(ref T source, System.IntPtr byteOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public static ref T AddByteOffset<T>(ref T source, nuint byteOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T AddByteOffset<T>(ref T source, nuint byteOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static void* Add<T>(void* source, int elementOffset) where T : allows ref struct { throw null; }
-        public static ref T Add<T>(ref T source, int elementOffset) where T : allows ref struct { throw null; }
-        public static ref T Add<T>(ref T source, System.IntPtr elementOffset) where T : allows ref struct { throw null; }
+        public static void* Add<T>(void* source, int elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Add<T>(ref T source, int elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Add<T>(ref T source, System.IntPtr elementOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public static ref T Add<T>(ref T source, nuint elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Add<T>(ref T source, nuint elementOffset) where T : allows ref struct { throw null; }
         public static bool AreSame<T>([System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T left, [System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T right) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static void* AsPointer<T>(ref readonly T value) where T : allows ref struct { throw null; }
+        public static void* AsPointer<T>(ref readonly T value) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static ref T AsRef<T>(void* source) where T : allows ref struct { throw null; }
-        public static ref T AsRef<T>(scoped ref readonly T source) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T AsRef<T>(scoped ref readonly T source) where T : allows ref struct { throw null; }
         [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNullAttribute("o")]
-        public static T? As<T>(object? o) where T : class? { throw null; }
-        public static ref TTo As<TFrom, TTo>(ref TFrom source) where TFrom : allows ref struct where TTo : allows ref struct { throw null; }
-        public static TTo BitCast<TFrom, TTo>(TFrom source) where TFrom : allows ref struct where TTo : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static T? As<T>(object? o) where T : class? { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref TTo As<TFrom, TTo>(ref TFrom source) where TFrom : allows ref struct where TTo : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static TTo BitCast<TFrom, TTo>(TFrom source) where TFrom : allows ref struct where TTo : allows ref struct { throw null; }
         public static System.IntPtr ByteOffset<T>([System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T origin, [System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T target) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public static void CopyBlock(ref byte destination, ref readonly byte source, uint byteCount) { }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void CopyBlock(ref byte destination, ref readonly byte source, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void CopyBlock(void* destination, void* source, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
-        public static void CopyBlockUnaligned(ref byte destination, ref readonly byte source, uint byteCount) { }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void CopyBlockUnaligned(ref byte destination, ref readonly byte source, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void CopyBlockUnaligned(void* destination, void* source, uint byteCount) { }
@@ -14425,12 +14437,14 @@ namespace System.Runtime.CompilerServices
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void Copy<T>(ref T destination, void* source) where T : allows ref struct { }
         [System.CLSCompliantAttribute(false)]
-        public static void InitBlock(ref byte startAddress, byte value, uint byteCount) { }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void InitBlock(ref byte startAddress, byte value, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void InitBlock(void* startAddress, byte value, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
-        public static void InitBlockUnaligned(ref byte startAddress, byte value, uint byteCount) { }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void InitBlockUnaligned(ref byte startAddress, byte value, uint byteCount) { }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void InitBlockUnaligned(void* startAddress, byte value, uint byteCount) { }
@@ -14440,7 +14454,8 @@ namespace System.Runtime.CompilerServices
         public static bool IsAddressLessThanOrEqualTo<T>([System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T left, [System.Diagnostics.CodeAnalysis.AllowNull] ref readonly T right) where T : allows ref struct { throw null; }
         public static bool IsNullRef<T>(ref readonly T source) where T : allows ref struct { throw null; }
         public static ref T NullRef<T>() where T : allows ref struct { throw null; }
-        public static T ReadUnaligned<T>(scoped ref readonly byte source) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static T ReadUnaligned<T>(scoped ref readonly byte source) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static T ReadUnaligned<T>(void* source) where T : allows ref struct { throw null; }
@@ -14448,18 +14463,26 @@ namespace System.Runtime.CompilerServices
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static T Read<T>(void* source) where T : allows ref struct { throw null; }
         public static int SizeOf<T>() where T : allows ref struct { throw null; }
-        public static void SkipInit<T>(out T value) where T : allows ref struct { throw null; }
-        public static ref T SubtractByteOffset<T>(ref T source, System.IntPtr byteOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void SkipInit<T>(out T value) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T SubtractByteOffset<T>(ref T source, System.IntPtr byteOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public static ref T SubtractByteOffset<T>(ref T source, nuint byteOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T SubtractByteOffset<T>(ref T source, nuint byteOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public unsafe static void* Subtract<T>(void* source, int elementOffset) where T : allows ref struct { throw null; }
-        public static ref T Subtract<T>(ref T source, int elementOffset) where T : allows ref struct { throw null; }
-        public static ref T Subtract<T>(ref T source, System.IntPtr elementOffset) where T : allows ref struct { throw null; }
+        public static void* Subtract<T>(void* source, int elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Subtract<T>(ref T source, int elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Subtract<T>(ref T source, System.IntPtr elementOffset) where T : allows ref struct { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public static ref T Subtract<T>(ref T source, nuint elementOffset) where T : allows ref struct { throw null; }
-        public static ref T Unbox<T>(object box) where T : struct { throw null; }
-        public static void WriteUnaligned<T>(ref byte destination, T value) where T : allows ref struct { }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Subtract<T>(ref T source, nuint elementOffset) where T : allows ref struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static ref T Unbox<T>(object box) where T : struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
+        public unsafe static void WriteUnaligned<T>(ref byte destination, T value) where T : allows ref struct { }
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static void WriteUnaligned<T>(void* destination, T value) where T : allows ref struct { }
@@ -14702,14 +14725,12 @@ namespace System.Runtime.InteropServices
     public static class GCHandleExtensions
     {
         [System.CLSCompliantAttribute(false)]
-        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static unsafe T* GetAddressOfArrayData<T>(
 #nullable disable
             this System.Runtime.InteropServices.PinnedGCHandle<T[]> handle)
 #nullable restore
             { throw null; }
         [System.CLSCompliantAttribute(false)]
-        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
 #nullable disable
         public static unsafe char* GetAddressOfStringData(
 #nullable disable
@@ -14738,15 +14759,21 @@ namespace System.Runtime.InteropServices
     }
     public static partial class MemoryMarshal
     {
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.ReadOnlySpan<byte> AsBytes<T>(System.ReadOnlySpan<T> span) where T : struct { throw null; }
         [System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute(1)]
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.Span<byte> AsBytes<T>(System.Span<T> span) where T : struct { throw null; }
         public static System.Memory<T> AsMemory<T>(System.ReadOnlyMemory<T> memory) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref readonly T AsRef<T>(System.ReadOnlySpan<byte> span) where T : struct { throw null; }
         [System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute(1)]
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref T AsRef<T>(System.Span<byte> span) where T : struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.ReadOnlySpan<TTo> Cast<TFrom, TTo>(System.ReadOnlySpan<TFrom> span) where TFrom : struct where TTo : struct { throw null; }
         [System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute(1)]
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.Span<TTo> Cast<TFrom, TTo>(System.Span<TFrom> span) where TFrom : struct where TTo : struct { throw null; }
         public static System.Memory<T> CreateFromPinnedArray<T>(T[]? array, int start, int length) { throw null; }
         [System.CLSCompliantAttribute(false)]
@@ -14755,20 +14782,30 @@ namespace System.Runtime.InteropServices
         [System.CLSCompliantAttribute(false)]
         [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public unsafe static System.ReadOnlySpan<char> CreateReadOnlySpanFromNullTerminated(char* value) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.ReadOnlySpan<T> CreateReadOnlySpan<T>(scoped ref readonly T reference, int length) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static System.Span<T> CreateSpan<T>(scoped ref T reference, int length) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref byte GetArrayDataReference(System.Array array) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref T GetArrayDataReference<T>(T[] array) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref T GetReference<T>(System.ReadOnlySpan<T> span) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static ref T GetReference<T>(System.Span<T> span) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static T Read<T>(System.ReadOnlySpan<byte> source) where T : struct { throw null; }
         public static System.Collections.Generic.IEnumerable<T> ToEnumerable<T>(System.ReadOnlyMemory<T> memory) { throw null; }
         public static bool TryGetArray<T>(System.ReadOnlyMemory<T> memory, out System.ArraySegment<T> segment) { throw null; }
         public static bool TryGetMemoryManager<T, TManager>(System.ReadOnlyMemory<T> memory, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out TManager? manager) where TManager : System.Buffers.MemoryManager<T> { throw null; }
         public static bool TryGetMemoryManager<T, TManager>(System.ReadOnlyMemory<T> memory, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out TManager? manager, out int start, out int length) where TManager : System.Buffers.MemoryManager<T> { throw null; }
         public static bool TryGetString(System.ReadOnlyMemory<char> memory, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out string? text, out int start, out int length) { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static bool TryRead<T>(System.ReadOnlySpan<byte> source, out T value) where T : struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static bool TryWrite<T>(System.Span<byte> destination, in T value) where T : struct { throw null; }
+        [System.Diagnostics.CodeAnalysis.RequiresUnsafeAttribute]
         public static void Write<T>(System.Span<byte> destination, in T value) where T : struct { }
     }
     public readonly partial struct OSPlatform : System.IEquatable<System.Runtime.InteropServices.OSPlatform>
@@ -14800,7 +14837,7 @@ namespace System.Runtime.InteropServices
         public readonly bool Equals(System.Runtime.InteropServices.PinnedGCHandle<T> other) { throw null; }
         public static System.Runtime.InteropServices.PinnedGCHandle<T> FromIntPtr(System.IntPtr value) { throw null; }
         [System.CLSCompliantAttribute(false)]
-        public readonly unsafe void* GetAddressOfObjectData() { throw null; }
+        public readonly void* GetAddressOfObjectData() { throw null; }
         public override readonly int GetHashCode() { throw null; }
         public readonly bool IsAllocated { get { throw null; } }
         public PinnedGCHandle(T target) { }
@@ -14822,7 +14859,7 @@ namespace System.Runtime.InteropServices
         [System.CLSCompliantAttribute(false)]
         public ulong ByteLength { get { throw null; } }
         [System.CLSCompliantAttribute(false)]
-        public unsafe void AcquirePointer(ref byte* pointer) { }
+        public void AcquirePointer(ref byte* pointer) { }
         [System.CLSCompliantAttribute(false)]
         public void Initialize(uint numElements, uint sizeOfEachElement) { }
         [System.CLSCompliantAttribute(false)]
@@ -15096,22 +15133,22 @@ namespace System.Runtime.InteropServices.Swift
     public readonly partial struct SwiftError
     {
         private readonly int _dummyPrimitive;
-        public unsafe SwiftError(void* value) { throw null; }
-        public unsafe void* Value { get { throw null; } }
+        public SwiftError(void* value) { throw null; }
+        public void* Value { get { throw null; } }
     }
     [System.CLSCompliantAttribute(false)]
     public readonly partial struct SwiftIndirectResult
     {
         private readonly int _dummyPrimitive;
-        public unsafe SwiftIndirectResult(void* value) { throw null; }
-        public unsafe void* Value { get { throw null; } }
+        public SwiftIndirectResult(void* value) { throw null; }
+        public void* Value { get { throw null; } }
     }
     [System.CLSCompliantAttribute(false)]
     public readonly partial struct SwiftSelf
     {
         private readonly int _dummyPrimitive;
-        public unsafe SwiftSelf(void* value) { throw null; }
-        public unsafe void* Value { get { throw null; } }
+        public SwiftSelf(void* value) { throw null; }
+        public void* Value { get { throw null; } }
     }
     public readonly partial struct SwiftSelf<T> where T: unmanaged
     {
