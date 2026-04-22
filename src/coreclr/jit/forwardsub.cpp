@@ -147,17 +147,23 @@ bool Compiler::fgForwardSubBlock(BasicBlock* block)
     {
         Statement* const prevStmt    = stmt->GetPrevStmt();
         Statement* const nextStmt    = stmt->GetNextStmt();
-        bool const       substituted = fgForwardSubStatement(stmt);
+        bool             keepDef     = false;
+        bool const       substituted = fgForwardSubStatement(stmt, &keepDef);
 
         if (substituted)
         {
-            fgRemoveStmt(block, stmt);
+            if (!keepDef)
+            {
+                fgRemoveStmt(block, stmt);
+            }
             changed = true;
         }
 
-        // Try backtracking if we substituted.
+        // Try backtracking if we substituted and removed the def. If the def was
+        // kept (address-exposed constant case), the current stmt is still in
+        // the block, so backtracking would re-process it.
         //
-        if (substituted && (prevStmt != lastStmt) && prevStmt->GetRootNode()->OperIs(GT_STORE_LCL_VAR))
+        if (substituted && !keepDef && (prevStmt != lastStmt) && prevStmt->GetRootNode()->OperIs(GT_STORE_LCL_VAR))
         {
             // Yep, bactrack.
             //
@@ -191,9 +197,10 @@ public:
         UseExecutionOrder = true
     };
 
-    ForwardSubVisitor(Compiler* compiler, unsigned lclNum)
+    ForwardSubVisitor(Compiler* compiler, unsigned lclNum, bool acceptAnyUse = false)
         : GenTreeVisitor(compiler)
         , m_lclNum(lclNum)
+        , m_acceptAnyUse(acceptAnyUse)
     {
         LclVarDsc* dsc = compiler->lvaGetDesc(m_lclNum);
         if (dsc->lvIsStructField)
@@ -229,7 +236,11 @@ public:
                     isCallTarget = (parentCall->gtCallType == CT_INDIRECT) && (parentCall->gtControlExpr == node);
                 }
 
-                if (!isCallTarget && IsLastUse(node->AsLclVar()))
+                // For an address-exposed constant def we keep the def, so accept
+                // the first use in execution order rather than the last use.
+                bool const accept = m_acceptAnyUse ? (m_node == nullptr) : IsLastUse(node->AsLclVar());
+
+                if (!isCallTarget && accept)
                 {
                     m_node          = node;
                     m_use           = use;
@@ -378,6 +389,7 @@ private:
 #endif
     GenTreeFlags m_useFlags         = GTF_EMPTY;
     GenTreeFlags m_accumulatedFlags = GTF_EMPTY;
+    bool         m_acceptAnyUse;
     // Precise exceptions thrown by the nodes that were visited so far. Note
     // that we stop updating this field once we find that two or more separate
     // exceptions.
@@ -437,17 +449,22 @@ private:
 //  computation to the next statement, if legal and profitable
 //
 // arguments:
-//    stmt - statement in question
+//    stmt    - statement in question
+//    keepDef - optional out-param. If non-null and forward-sub succeeds, may be
+//              set to true to indicate the caller must NOT remove the def
+//              statement (used when forward-subbing a constant out of an
+//              address-exposed local).
 //
 // Returns:
 //    true if statement computation was forwarded.
-//    caller is responsible for removing the now-dead statement.
+//    caller is responsible for removing the now-dead statement, unless
+//    *keepDef was set to true.
 //
 // Remarks:
 //    This requires locals to be linked (fgNodeThreading == AllLocals) and
 //    liveness information to be up-to-date (specifically GTF_VAR_DEATH).
 //
-bool Compiler::fgForwardSubStatement(Statement* stmt)
+bool Compiler::fgForwardSubStatement(Statement* stmt, bool* keepDef)
 {
     // Is this tree a def of a single use, unaliased local?
     //
@@ -472,12 +489,21 @@ bool Compiler::fgForwardSubStatement(Statement* stmt)
         return false;
     }
 
-    // And local is unalised
+    // Address-exposed locals are normally off-limits, but a pure constant value
+    // is independent of memory state, so we can still forward-sub it into the
+    // first use in the next statement (provided no GTF_ASG/GTF_CALL appears
+    // before the use; checked below). The def stmt is kept since the store may
+    // still be observed via an alias.
     //
+    bool addrExposedSub = false;
     if (varDsc->IsAddressExposed())
     {
-        JITDUMP(" not store (unaliased single-use lcl)\n");
-        return false;
+        if ((keepDef == nullptr) || !defNode->AsLclVarCommon()->Data()->OperIsConst())
+        {
+            JITDUMP(" not store (unaliased single-use lcl)\n");
+            return false;
+        }
+        addrExposedSub = true;
     }
 
     // Could handle this case --perhaps-- but we'd want to update ref counts.
@@ -533,14 +559,16 @@ bool Compiler::fgForwardSubStatement(Statement* stmt)
     //
     Statement* const nextStmt = stmt->GetNextStmt();
 
-    ForwardSubVisitor fsv(this, lclNum);
+    ForwardSubVisitor fsv(this, lclNum, addrExposedSub);
     // Do a quick scan through the linked locals list to see if there is a last use.
     bool found = false;
     for (GenTreeLclVarCommon* lcl : nextStmt->LocalsTreeList())
     {
         if (lcl->OperIs(GT_LCL_VAR) && (lcl->GetLclNum() == lclNum))
         {
-            if (fsv.IsLastUse(lcl->AsLclVar()))
+            // For an address-exposed constant def the def stays put, so any
+            // use of the local in the next statement is a valid target.
+            if (addrExposedSub || fsv.IsLastUse(lcl->AsLclVar()))
             {
                 found = true;
                 break;
@@ -592,6 +620,15 @@ bool Compiler::fgForwardSubStatement(Statement* stmt)
     if (fsv.GetNode() == nullptr)
     {
         JITDUMP(" no next stmt use\n");
+        return false;
+    }
+
+    // For an address-exposed local: a store or call before the use could write
+    // through an alias and stale the substituted constant.
+    //
+    if (addrExposedSub && ((fsv.GetFlags() & (GTF_ASG | GTF_CALL)) != 0))
+    {
+        JITDUMP(" address-exposed local: side effects before use may alias V%02u\n", lclNum);
         return false;
     }
 
@@ -855,7 +892,11 @@ bool Compiler::fgForwardSubStatement(Statement* stmt)
     //
     GenTree**            use    = fsv.GetUse();
     GenTreeLclVarCommon* useLcl = (*use)->AsLclVarCommon();
-    *use                        = fwdSubNode;
+
+    // For an address-exposed local the def stmt is kept; clone the constant
+    // so its original tree stays attached to the def.
+    *use = addrExposedSub ? gtCloneExpr(fwdSubNode) : fwdSubNode;
+    assert(*use != nullptr);
 
     // We expect the last local in the statement is the defined local and
     // replace the use of it with the rest from the statement.
@@ -863,23 +904,32 @@ bool Compiler::fgForwardSubStatement(Statement* stmt)
 
     GenTreeLclVarCommon* firstLcl = *stmt->LocalsTreeList().begin();
 
+    // For the addrExposedSub path the def's value is a constant (no embedded
+    // locals), so firstLcl == defNode and we fall into the simple unlink case.
     if (firstLcl == defNode)
     {
         nextStmt->LocalsTreeList().Remove(useLcl);
     }
     else
     {
+        assert(!addrExposedSub);
         nextStmt->LocalsTreeList().Replace(useLcl, useLcl, firstLcl, defNode->gtPrev->AsLclVarCommon());
 
         fgForwardSubUpdateLiveness(firstLcl, defNode->gtPrev);
     }
 
-    if ((fwdSubNode->gtFlags & GTF_ALL_EFFECT) != 0)
+    if (((*use)->gtFlags & GTF_ALL_EFFECT) != 0)
     {
         gtUpdateStmtSideEffects(nextStmt);
     }
 
-    JITDUMP(" -- fwd subbing [%06u]; new next stmt is\n", dspTreeID(fwdSubNode));
+    if (addrExposedSub)
+    {
+        assert(keepDef != nullptr);
+        *keepDef = true;
+    }
+
+    JITDUMP(" -- fwd subbing [%06u]%s; new next stmt is\n", dspTreeID(*use), addrExposedSub ? " (def kept)" : "");
     DISPSTMT(nextStmt);
 
     return true;
