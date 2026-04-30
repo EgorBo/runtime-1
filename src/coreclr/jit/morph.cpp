@@ -6943,6 +6943,24 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
     ASSERT_TP origAssertions = BitVecOps::UninitVal();
     ASSERT_TP thenAssertions = BitVecOps::UninitVal();
 
+    auto swapConstants = [](Compiler* comp, GenTree* tree) {
+        bool isCmp         = tree->OperIsCompare();
+        bool isCommutative = tree->OperIsCommutative();
+        if (isCmp || isCommutative)
+        {
+            auto op1 = tree->gtGetOp1();
+            auto op2 = tree->gtGetOp2();
+            if ((op1->OperIsConst() && (!op2->OperIsConst() || !op2->IsIconHandle())) && comp->gtCanSwapOrder(op1, op2))
+            {
+                std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
+                if (isCmp)
+                {
+                    tree->gtOper = GenTree::SwapRelop(tree->OperGet());
+                }
+            }
+        }
+    };
+    swapConstants(this, tree);
     genTreeOps oper = tree->OperGet();
     var_types  typ  = tree->TypeGet();
     GenTree*   op1  = tree->AsOp()->gtOp1;
@@ -7712,6 +7730,8 @@ DONE_MORPHING_CHILDREN:
         return tree;
     }
 
+    swapConstants(this, tree);
+
     /* gtFoldExpr could have used setOper to change the oper */
     oper = tree->OperGet();
     typ  = tree->TypeGet();
@@ -7783,16 +7803,6 @@ DONE_MORPHING_CHILDREN:
         case GT_LE:
         case GT_GE:
         case GT_GT:
-            // Change "CNS relop op2" to "op2 relop* CNS"
-            if (op1->IsIntegralConst() && tree->OperIsCompare() && gtCanSwapOrder(op1, op2))
-            {
-                std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
-                tree->gtOper = GenTree::SwapRelop(tree->OperGet());
-
-                oper = tree->OperGet();
-                op1  = tree->gtGetOp1();
-                op2  = tree->gtGetOp2();
-            }
 
             if (op1->OperIs(GT_CAST) || op2->OperIs(GT_CAST))
             {
