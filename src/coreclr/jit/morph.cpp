@@ -6944,19 +6944,15 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
     ASSERT_TP thenAssertions = BitVecOps::UninitVal();
 
     auto swapConstants = [](Compiler* comp, GenTree* tree) {
-        bool isCmp         = tree->OperIsCompare();
-        bool isCommutative = tree->OperIsCommutative();
-        if (isCmp || isCommutative)
+        bool isCmp = tree->OperIsCompare();
+        if (isCmp || tree->OperIsCommutative())
         {
             auto op1 = tree->gtGetOp1();
             auto op2 = tree->gtGetOp2();
             if ((op1->OperIsConst() && (!op2->OperIsConst() || !op2->IsIconHandle())) && comp->gtCanSwapOrder(op1, op2))
             {
                 std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
-                if (isCmp)
-                {
-                    tree->gtOper = GenTree::SwapRelop(tree->OperGet());
-                }
+                tree->gtOper = isCmp ? GenTree::SwapRelop(tree->OperGet()) : tree->OperGet();
             }
         }
     };
