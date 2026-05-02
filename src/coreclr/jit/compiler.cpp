@@ -4261,10 +4261,7 @@ void Compiler::compFunctionTraceEnd(void* methodCodePtr, ULONG methodCodeSize, b
 // Arguments:
 //    phase - the phase that is about to begin
 //
-void Compiler::BeginPhase(Phases phase)
-{
-    mostRecentlyActivePhase = phase;
-}
+// (BeginPhase is now inline in compiler.h)
 
 //------------------------------------------------------------------------
 // EndPhase: finish execution of a phase

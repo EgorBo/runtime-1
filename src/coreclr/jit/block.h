@@ -1747,7 +1747,10 @@ public:
         return bbNum - 1;
     }
 
-    Statement* firstStmt() const;
+    Statement* firstStmt() const
+    {
+        return bbStmtList;
+    }
     Statement* lastStmt() const;
     bool       hasSingleStmt() const;
 

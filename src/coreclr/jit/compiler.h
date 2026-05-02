@@ -12078,8 +12078,11 @@ private:
 #endif
 
 public:
-    void BeginPhase(Phases phase); // Indicate the start of the given phase.
-    void EndPhase(Phases phase);   // Indicate the end of the given phase.
+    void BeginPhase(Phases phase) // Indicate the start of the given phase.
+    {
+        mostRecentlyActivePhase = phase;
+    }
+    void EndPhase(Phases phase); // Indicate the end of the given phase.
 
 private:
 

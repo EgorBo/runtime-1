@@ -19230,11 +19230,6 @@ bool GenTree::IsPhiNode()
     return (OperGet() == GT_PHI_ARG) || (OperGet() == GT_PHI) || IsPhiDefn();
 }
 
-bool GenTree::IsPhiDefn()
-{
-    return OperIs(GT_STORE_LCL_VAR) && AsLclVar()->Data()->OperIs(GT_PHI);
-}
-
 bool GenTree::IsLclVarAddr() const
 {
     return OperIs(GT_LCL_ADDR) && (AsLclFld()->GetLclOffs() == 0);

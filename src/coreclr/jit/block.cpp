@@ -876,16 +876,6 @@ bool BasicBlock::IsLIR() const
 }
 
 //------------------------------------------------------------------------
-// firstStmt: Returns the first statement in the block
-//
-// Return Value:
-//    The first statement in the block's bbStmtList.
-//
-Statement* BasicBlock::firstStmt() const
-{
-    return bbStmtList;
-}
-
 //------------------------------------------------------------------------
 // hasSingleStmt: Returns true if block has a single statement
 //
@@ -895,24 +885,6 @@ Statement* BasicBlock::firstStmt() const
 bool BasicBlock::hasSingleStmt() const
 {
     return (firstStmt() != nullptr) && (firstStmt() == lastStmt());
-}
-
-//------------------------------------------------------------------------
-// lastStmt: Returns the last statement in the block
-//
-// Return Value:
-//    The last statement in the block's bbStmtList.
-//
-Statement* BasicBlock::lastStmt() const
-{
-    if (bbStmtList == nullptr)
-    {
-        return nullptr;
-    }
-
-    Statement* result = bbStmtList->GetPrevStmt();
-    assert(result != nullptr && result->GetNextStmt() == nullptr);
-    return result;
 }
 
 //------------------------------------------------------------------------
@@ -1655,34 +1627,6 @@ weight_t BasicBlock::getCalledCount(Compiler* comp)
         }
     }
     return calledCount;
-}
-
-//------------------------------------------------------------------------
-// getBBWeight: get the normalized weight of this block
-//
-// Arguments:
-//    compiler - Compiler instance
-//
-// Notes:
-//    With profile data: number of expected executions of this block, given
-//    one call to the method.
-//
-weight_t BasicBlock::getBBWeight(Compiler* comp) const
-{
-    if (this->bbWeight == BB_ZERO_WEIGHT)
-    {
-        return BB_ZERO_WEIGHT;
-    }
-    else
-    {
-        weight_t calledCount = getCalledCount(comp);
-
-        // Normalize the bbWeight.
-        //
-        weight_t fullResult = (this->bbWeight / calledCount) * BB_UNITY_WEIGHT;
-
-        return fullResult;
-    }
 }
 
 //------------------------------------------------------------------------

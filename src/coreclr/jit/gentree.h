@@ -2486,7 +2486,7 @@ public:
     bool IsPhiNode();
 
     // Returns "true" iff "*this" is a store (GT_STORE_LCL_VAR) tree that defines an SSA name (lcl = phi(...));
-    bool IsPhiDefn();
+    inline bool IsPhiDefn();
 
     // Because of the fact that we hid the assignment operator of "BitSet" (in DEBUG),
     // we can't synthesize an assignment operator.
@@ -9991,6 +9991,11 @@ inline GenTree*& GenTree::Data()
 {
     assert(OperIsStore());
     return OperIsLocalStore() ? AsLclVarCommon()->Data() : AsIndir()->Data();
+}
+
+inline bool GenTree::IsPhiDefn()
+{
+    return OperIs(GT_STORE_LCL_VAR) && AsLclVar()->Data()->OperIs(GT_PHI);
 }
 
 inline GenTree* GenTree::gtEffectiveVal()

@@ -3598,8 +3598,9 @@ void Compiler::lvaComputePreciseRefCounts(bool isRecompute, bool setSlotNumbers)
         // that was set by past phases.
         if (!isRecompute)
         {
-            varDsc->lvSingleDef             = varDsc->lvIsParam || varDsc->lvIsParamRegTarget;
-            varDsc->lvSingleDefRegCandidate = varDsc->lvIsParam || varDsc->lvIsParamRegTarget;
+            const bool isParamLike          = varDsc->lvIsParam || varDsc->lvIsParamRegTarget;
+            varDsc->lvSingleDef             = isParamLike;
+            varDsc->lvSingleDefRegCandidate = isParamLike;
 
             varDsc->lvAllDefsAreNoGc = (varDsc->lvImplicitlyReferenced == false);
         }

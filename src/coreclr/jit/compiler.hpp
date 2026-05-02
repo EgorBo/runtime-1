@@ -795,6 +795,30 @@ inline bool BasicBlock::HasPotentialEHSuccs(Compiler* comp)
     return hndDesc->InFilterRegionBBRange(this);
 }
 
+inline Statement* BasicBlock::lastStmt() const
+{
+    if (bbStmtList == nullptr)
+    {
+        return nullptr;
+    }
+
+    Statement* result = bbStmtList->GetPrevStmt();
+    assert(result != nullptr && result->GetNextStmt() == nullptr);
+    return result;
+}
+
+inline weight_t BasicBlock::getBBWeight(Compiler* comp) const
+{
+    if (this->bbWeight == BB_ZERO_WEIGHT)
+    {
+        return BB_ZERO_WEIGHT;
+    }
+    weight_t calledCount = getCalledCount(comp);
+
+    // Normalize the bbWeight.
+    return (this->bbWeight / calledCount) * BB_UNITY_WEIGHT;
+}
+
 /*****************************************************************************
  *  Get the FuncInfoDsc for the funclet we are currently generating code for.
  *  This is only valid during codegen.
