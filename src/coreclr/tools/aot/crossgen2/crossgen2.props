@@ -31,6 +31,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Cap Server GC at 8 heaps. On big build machines (CI, dev boxes with 16-128 logical cores)
+      Server GC otherwise creates one heap per CPU, and most of the wall time goes to t_join
+      synchronizing idle GC threads while crossgen2's allocation rate is small enough that 8
+      heaps suffice. The runtime auto-clamps this to the active CPU count
+      (src/coreclr/gc/interface.cpp: nhp_from_config = min(nhp_from_config, g_num_active_processors)),
+      so on 1-8 core boxes the setting is a no-op.
+    -->
+    <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="8" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ILCompiler.DependencyAnalysisFramework\ILCompiler.DependencyAnalysisFramework.csproj" />
     <ProjectReference Include="..\ILCompiler.TypeSystem\ILCompiler.TypeSystem.csproj" />
     <ProjectReference Include="..\ILCompiler.ReadyToRun\ILCompiler.ReadyToRun.csproj" />

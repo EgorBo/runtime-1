@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -28,15 +29,17 @@ namespace ILCompiler.PettisHansenSort
                 phEdges[i] = dict;
             }
 
-            void AddEdge(int a, int b, long weight)
+            // Returns the new total weight stored for (a, b). Returns 0 if a == b (no-op).
+            long AddEdge(int a, int b, long weight)
             {
                 if (a == b)
-                    return;
+                    return 0;
 
-                if (phEdges[a].TryGetValue(b, out long curWeight))
-                    phEdges[a][b] = curWeight + weight;
-                else
-                    phEdges[a].Add(b, weight);
+                // One hash/probe instead of two: get a ref to the slot
+                // (inserted as 0 if missing) and update in place.
+                ref long slot = ref CollectionsMarshal.GetValueRefOrAddDefault(phEdges[a], b, out _);
+                slot += weight;
+                return slot;
             }
             // Now add edges.
             for (int i = 0; i < phNodes.Length; i++)
@@ -92,11 +95,22 @@ namespace ILCompiler.PettisHansenSort
                     return ab + ba;
                 }
 
-                // Transfer all method names from loser to winner, preferring highest weight between endpoints
-                long wff = OrigWeight(phNodes[winner].First(), phNodes[loser].First());
-                long wfl = OrigWeight(phNodes[winner].First(), phNodes[loser].Last());
-                long wlf = OrigWeight(phNodes[winner].Last(), phNodes[loser].First());
-                long wll = OrigWeight(phNodes[winner].Last(), phNodes[loser].Last());
+                // Transfer all method names from loser to winner, preferring highest weight between endpoints.
+                // Cache endpoints once and reuse OrigWeight results when components collapse (single-node sets
+                // cause the four endpoint pairs to alias each other).
+                List<int> winnerNodes = phNodes[winner];
+                List<int> loserNodes = phNodes[loser];
+                int wFirst = winnerNodes[0];
+                int wLast = winnerNodes[winnerNodes.Count - 1];
+                int lFirst = loserNodes[0];
+                int lLast = loserNodes[loserNodes.Count - 1];
+                bool winnerSingle = wFirst == wLast;
+                bool loserSingle = lFirst == lLast;
+
+                long wff = OrigWeight(wFirst, lFirst);
+                long wfl = loserSingle  ? wff : OrigWeight(wFirst, lLast);
+                long wlf = winnerSingle ? wff : OrigWeight(wLast,  lFirst);
+                long wll = winnerSingle ? wfl : (loserSingle ? wlf : OrigWeight(wLast, lLast));
                 if (wlf >= wff && wlf >= wfl && wlf >= wll)
                 {
                     // Already in right order
@@ -134,11 +148,10 @@ namespace ILCompiler.PettisHansenSort
                     Debug.Assert(removed);
 
                     // Add edge and counter edge, coalescing when necessary.
-                    AddEdge(winner, edge.Key, edge.Value);
+                    long newWeight = AddEdge(winner, edge.Key, edge.Value);
                     AddEdge(edge.Key, winner, edge.Value);
                     // Add a new entry in the queue as the edge could have changed weight from coalescing.
-                    long weight = phEdges[winner][edge.Key];
-                    queue.Enqueue((winner, edge.Key), -weight); // Priority queue gives lowest priority first
+                    queue.Enqueue((winner, edge.Key), -newWeight); // Priority queue gives lowest priority first
                 }
 
                 phEdges[loser].Clear();
