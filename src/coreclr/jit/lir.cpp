@@ -1725,17 +1725,7 @@ bool LIR::Range::CheckLIR(Compiler* compiler, bool checkUnusedValues) const
 #endif // DEBUG
 
 //------------------------------------------------------------------------
-// LIR::AsRange: Returns an LIR view of the given basic block.
-//
-LIR::Range& LIR::AsRange(BasicBlock* block)
-{
-    return *static_cast<Range*>(block);
-}
-
-const LIR::Range& LIR::AsRange(const BasicBlock* block)
-{
-    return *static_cast<const Range*>(block);
-}
+// LIR::AsRange: now inline in compiler.hpp (needs full BasicBlock definition).
 
 //------------------------------------------------------------------------
 // LIR::EmptyRange: Constructs and returns an empty range.

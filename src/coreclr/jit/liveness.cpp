@@ -1026,6 +1026,7 @@ void Liveness<TLiveness>::MarkUseDef(GenTreeLclVarCommon* tree)
     const unsigned   lclNum = tree->GetLclNum();
     LclVarDsc* const varDsc = m_compiler->lvaGetDesc(lclNum);
 
+#ifdef DEBUG
     // We should never encounter a reference to a lclVar that has a zero refCnt.
     if (varDsc->lvRefCnt(m_compiler->lvaRefCountState) == 0 && (!varTypeIsPromotable(varDsc) || !varDsc->lvPromoted))
     {
@@ -1033,6 +1034,7 @@ void Liveness<TLiveness>::MarkUseDef(GenTreeLclVarCommon* tree)
         assert(!"We should never encounter a reference to a lclVar that has a zero refCnt.");
         varDsc->setLvRefCnt(1);
     }
+#endif
 
     const bool isDef     = ((tree->gtFlags & GTF_VAR_DEF) != 0);
     const bool isFullDef = isDef && ((tree->gtFlags & GTF_VAR_USEASG) == 0);

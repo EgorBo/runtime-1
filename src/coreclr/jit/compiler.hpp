@@ -807,6 +807,35 @@ inline Statement* BasicBlock::lastStmt() const
     return result;
 }
 
+inline weight_t BasicBlock::getCalledCount(Compiler* comp)
+{
+    // when we don't have profile data then fgCalledCount will be BB_UNITY_WEIGHT (100)
+    weight_t calledCount = comp->fgCalledCount;
+
+    // If we haven't yet reach the place where we setup fgCalledCount it could still be zero
+    // so return a reasonable value to use until we set it.
+    //
+    if (calledCount == 0)
+    {
+        if (comp->fgIsUsingProfileWeights())
+        {
+            // When we use profile data block counts we have exact counts,
+            // not multiples of BB_UNITY_WEIGHT (100)
+            calledCount = 1;
+        }
+        else
+        {
+            calledCount = comp->fgFirstBB->bbWeight;
+
+            if (calledCount == 0)
+            {
+                calledCount = BB_UNITY_WEIGHT;
+            }
+        }
+    }
+    return calledCount;
+}
+
 inline weight_t BasicBlock::getBBWeight(Compiler* comp) const
 {
     if (this->bbWeight == BB_ZERO_WEIGHT)
@@ -817,6 +846,19 @@ inline weight_t BasicBlock::getBBWeight(Compiler* comp) const
 
     // Normalize the bbWeight.
     return (this->bbWeight / calledCount) * BB_UNITY_WEIGHT;
+}
+
+// LIR::AsRange: Inline version. Has to be here (not in lir.h) because
+// BasicBlock's `private LIR::Range` inheritance is only visible once the
+// full BasicBlock definition has been seen.
+inline LIR::Range& LIR::AsRange(BasicBlock* block)
+{
+    return *static_cast<Range*>(block);
+}
+
+inline const LIR::Range& LIR::AsRange(const BasicBlock* block)
+{
+    return *static_cast<const Range*>(block);
 }
 
 /*****************************************************************************
