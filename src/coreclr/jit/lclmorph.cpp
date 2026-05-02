@@ -867,6 +867,7 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
     bool                            m_stmtModified    = false;
     bool                            m_madeChanges     = false;
     bool                            m_propagatedAddrs = false;
+    bool                            m_trackEarlyRefCounts;
     LocalSequencer*                 m_sequencer;
     LocalEqualsLocalAddrAssertions* m_lclAddrAssertions;
 
@@ -884,6 +885,12 @@ public:
         , m_sequencer(sequencer)
         , m_lclAddrAssertions(assertions)
     {
+        // RCS_EARLY counts are only consumed by fgRetypeImplicitByRefArgs, and
+        // only when an implicit byref local has lvPromoted set. Promotion phases
+        // (fgPromoteStructs, PhysicalPromotion) only run when CLFLG_STRUCTPROMOTE
+        // is set, which is never the case in MinOpts/Tier0. So in those modes
+        // there is no point in incrementing the RCS_EARLY ref counts at all.
+        m_trackEarlyRefCounts = comp->opts.OptEnabled(CLFLG_STRUCTPROMOTE);
     }
 
     bool MadeChanges() const
@@ -975,9 +982,12 @@ public:
         if (block->endsWithJmpMethod(m_compiler))
         {
             // GT_JMP has implicit uses of all arguments.
-            for (unsigned lclNum = 0; lclNum < m_compiler->info.compArgsCount; lclNum++)
+            if (m_trackEarlyRefCounts)
             {
-                UpdateEarlyRefCount(lclNum, nullptr, nullptr);
+                for (unsigned lclNum = 0; lclNum < m_compiler->info.compArgsCount; lclNum++)
+                {
+                    UpdateEarlyRefCount(lclNum, nullptr, nullptr);
+                }
             }
         }
 
@@ -1003,14 +1013,18 @@ public:
             case GT_BLK:
             case GT_STOREIND:
             case GT_STORE_BLK:
-                if (MorphStructField(node->AsIndir(), user))
+                // MorphStructField only succeeds when the underlying local is promoted.
+                // In MinOpts/Tier0 promotion never runs, so skip the call entirely.
+                if (m_trackEarlyRefCounts && MorphStructField(node->AsIndir(), user))
                 {
                     goto LOCAL_NODE;
                 }
                 break;
 
             case GT_FIELD_ADDR:
-                if (MorphStructFieldAddress(node, ValueSize(0)) != BAD_VAR_NUM)
+                // MorphStructFieldAddress only succeeds when the underlying local is promoted.
+                // In MinOpts/Tier0 promotion never runs, so skip the call entirely.
+                if (m_trackEarlyRefCounts && MorphStructFieldAddress(node, ValueSize(0)) != BAD_VAR_NUM)
                 {
                     goto LOCAL_NODE;
                 }
@@ -1018,7 +1032,11 @@ public:
 
             case GT_LCL_FLD:
             case GT_STORE_LCL_FLD:
-                MorphLocalField(node->AsLclVarCommon(), user);
+                // MorphLocalField only does work when the local is promoted.
+                if (m_trackEarlyRefCounts)
+                {
+                    MorphLocalField(node->AsLclVarCommon(), user);
+                }
                 goto LOCAL_NODE;
 
             case GT_LCL_VAR:
@@ -1026,6 +1044,11 @@ public:
             case GT_STORE_LCL_VAR:
             LOCAL_NODE:
             {
+                if (!m_trackEarlyRefCounts)
+                {
+                    break;
+                }
+
                 unsigned const   lclNum = node->AsLclVarCommon()->GetLclNum();
                 LclVarDsc* const varDsc = m_compiler->lvaGetDesc(lclNum);
 
