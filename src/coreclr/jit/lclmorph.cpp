@@ -867,6 +867,7 @@ class LocalAddressVisitor final : public GenTreeVisitor<LocalAddressVisitor>
     bool                            m_stmtModified    = false;
     bool                            m_madeChanges     = false;
     bool                            m_propagatedAddrs = false;
+    bool                            m_trackEarlyRefCounts;
     LocalSequencer*                 m_sequencer;
     LocalEqualsLocalAddrAssertions* m_lclAddrAssertions;
 
@@ -884,6 +885,12 @@ public:
         , m_sequencer(sequencer)
         , m_lclAddrAssertions(assertions)
     {
+        // RCS_EARLY counts are only consumed by fgRetypeImplicitByRefArgs, and
+        // only when an implicit byref local has lvPromoted set. Promotion phases
+        // (fgPromoteStructs, PhysicalPromotion) only run when CLFLG_STRUCTPROMOTE
+        // is set, which is never the case in MinOpts/Tier0. So in those modes
+        // there is no point in incrementing the RCS_EARLY ref counts at all.
+        m_trackEarlyRefCounts = comp->opts.OptEnabled(CLFLG_STRUCTPROMOTE);
     }
 
     bool MadeChanges() const
@@ -975,9 +982,12 @@ public:
         if (block->endsWithJmpMethod(m_compiler))
         {
             // GT_JMP has implicit uses of all arguments.
-            for (unsigned lclNum = 0; lclNum < m_compiler->info.compArgsCount; lclNum++)
+            if (m_trackEarlyRefCounts)
             {
-                UpdateEarlyRefCount(lclNum, nullptr, nullptr);
+                for (unsigned lclNum = 0; lclNum < m_compiler->info.compArgsCount; lclNum++)
+                {
+                    UpdateEarlyRefCount(lclNum, nullptr, nullptr);
+                }
             }
         }
 
@@ -1029,25 +1039,28 @@ public:
                 unsigned const   lclNum = node->AsLclVarCommon()->GetLclNum();
                 LclVarDsc* const varDsc = m_compiler->lvaGetDesc(lclNum);
 
-                UpdateEarlyRefCount(lclNum, node, user);
-
-                if (varDsc->lvIsStructField)
+                if (m_trackEarlyRefCounts)
                 {
-                    // Promoted field, increase count for the parent lclVar.
-                    //
-                    assert(!m_compiler->lvaIsImplicitByRefLocal(lclNum));
-                    unsigned parentLclNum = varDsc->lvParentLcl;
-                    UpdateEarlyRefCount(parentLclNum, node, user);
-                }
+                    UpdateEarlyRefCount(lclNum, node, user);
 
-                if (varDsc->lvPromoted)
-                {
-                    // Promoted struct, increase count for each promoted field.
-                    //
-                    for (unsigned childLclNum = varDsc->lvFieldLclStart;
-                         childLclNum < varDsc->lvFieldLclStart + varDsc->lvFieldCnt; ++childLclNum)
+                    if (varDsc->lvIsStructField)
                     {
-                        UpdateEarlyRefCount(childLclNum, node, user);
+                        // Promoted field, increase count for the parent lclVar.
+                        //
+                        assert(!m_compiler->lvaIsImplicitByRefLocal(lclNum));
+                        unsigned parentLclNum = varDsc->lvParentLcl;
+                        UpdateEarlyRefCount(parentLclNum, node, user);
+                    }
+
+                    if (varDsc->lvPromoted)
+                    {
+                        // Promoted struct, increase count for each promoted field.
+                        //
+                        for (unsigned childLclNum = varDsc->lvFieldLclStart;
+                             childLclNum < varDsc->lvFieldLclStart + varDsc->lvFieldCnt; ++childLclNum)
+                        {
+                            UpdateEarlyRefCount(childLclNum, node, user);
+                        }
                     }
                 }
             }
