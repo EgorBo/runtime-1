@@ -807,6 +807,17 @@ inline Statement* BasicBlock::lastStmt() const
     return result;
 }
 
+inline Statement* BasicBlock::FirstNonPhiDef() const
+{
+    Statement* stmt = firstStmt();
+    while ((stmt != nullptr) && stmt->IsPhiDefnStmt())
+    {
+        stmt = stmt->GetNextStmt();
+    }
+
+    return stmt;
+}
+
 inline weight_t BasicBlock::getCalledCount(Compiler* comp)
 {
     // when we don't have profile data then fgCalledCount will be BB_UNITY_WEIGHT (100)

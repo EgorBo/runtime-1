@@ -1040,16 +1040,7 @@ bool BasicBlock::isValid() const
     }
 }
 
-Statement* BasicBlock::FirstNonPhiDef() const
-{
-    Statement* stmt = firstStmt();
-    while ((stmt != nullptr) && stmt->IsPhiDefnStmt())
-    {
-        stmt = stmt->GetNextStmt();
-    }
-
-    return stmt;
-}
+// FirstNonPhiDef is now inline in compiler.hpp.
 
 Statement* BasicBlock::FirstNonPhiDefOrCatchArgStore() const
 {
