@@ -4784,11 +4784,55 @@ protected:
 
     void impResolveToken(const BYTE* addr, CORINFO_RESOLVED_TOKEN* pResolvedToken, CorInfoTokenKind kind);
 
-    void impPushOnStack(GenTree* tree, typeInfo ti);
-    StackEntry impPopStack();
-    void impPopStack(unsigned n);
-    StackEntry& impStackTop(unsigned n = 0);
-    unsigned impStackHeight();
+    void impPushOnStack(GenTree* tree, typeInfo ti)
+    {
+        // Check for overflow. If inlining, we may be using a bigger stack.
+        if ((stackState.esStackDepth >= info.compMaxStack) &&
+            (stackState.esStackDepth >= impStkSize || !compCurBB->HasFlag(BBF_IMPORTED)))
+        {
+            BADCODE("stack overflow");
+        }
+
+        stackState.esStack[stackState.esStackDepth].seTypeInfo = ti;
+        stackState.esStack[stackState.esStackDepth++].val      = tree;
+
+        if (tree->TypeIs(TYP_LONG))
+        {
+            compLongUsed = true;
+        }
+        else if (tree->TypeIs(TYP_FLOAT) || tree->TypeIs(TYP_DOUBLE))
+        {
+            compFloatingPointUsed = true;
+        }
+    }
+    StackEntry impPopStack()
+    {
+        if (stackState.esStackDepth == 0)
+        {
+            BADCODE("stack underflow");
+        }
+        return stackState.esStack[--stackState.esStackDepth];
+    }
+    void impPopStack(unsigned n)
+    {
+        if (stackState.esStackDepth < n)
+        {
+            BADCODE("stack underflow");
+        }
+        stackState.esStackDepth -= n;
+    }
+    StackEntry& impStackTop(unsigned n = 0)
+    {
+        if (stackState.esStackDepth <= n)
+        {
+            BADCODE("stack underflow");
+        }
+        return stackState.esStack[stackState.esStackDepth - n - 1];
+    }
+    unsigned impStackHeight()
+    {
+        return stackState.esStackDepth;
+    }
 
     void impSaveStackState(SavedStack* savePtr, bool copy);
     void impRestoreStackState(SavedStack* savePtr);

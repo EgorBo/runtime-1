@@ -24,28 +24,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
  *  Pushes the given tree on the stack.
  */
 
-void Compiler::impPushOnStack(GenTree* tree, typeInfo ti)
-{
-    /* Check for overflow. If inlining, we may be using a bigger stack */
-
-    if ((stackState.esStackDepth >= info.compMaxStack) &&
-        (stackState.esStackDepth >= impStkSize || !compCurBB->HasFlag(BBF_IMPORTED)))
-    {
-        BADCODE("stack overflow");
-    }
-
-    stackState.esStack[stackState.esStackDepth].seTypeInfo = ti;
-    stackState.esStack[stackState.esStackDepth++].val      = tree;
-
-    if (tree->TypeIs(TYP_LONG))
-    {
-        compLongUsed = true;
-    }
-    else if (tree->TypeIs(TYP_FLOAT) || tree->TypeIs(TYP_DOUBLE))
-    {
-        compFloatingPointUsed = true;
-    }
-}
+// impPushOnStack is now inline in compiler.h.
 
 // helper function that will tell us if the IL instruction at the addr passed
 // by param consumes an address at the top of the stack. We use it to save
@@ -83,57 +62,7 @@ void Compiler::impResolveToken(const BYTE* addr, CORINFO_RESOLVED_TOKEN* pResolv
 // Returns:
 //   The stack entry for the popped tree.
 //
-StackEntry Compiler::impPopStack()
-{
-    if (stackState.esStackDepth == 0)
-    {
-        BADCODE("stack underflow");
-    }
-
-    return stackState.esStack[--stackState.esStackDepth];
-}
-
-//------------------------------------------------------------------------
-// impPopStack: Pop a variable number of trees from the stack.
-//
-// Arguments:
-//   n - The number of trees to pop.
-//
-void Compiler::impPopStack(unsigned n)
-{
-    if (stackState.esStackDepth < n)
-    {
-        BADCODE("stack underflow");
-    }
-
-    stackState.esStackDepth -= n;
-}
-
-/*****************************************************************************
- *
- *  Peep at n'th (0-based) tree on the top of the stack.
- */
-
-StackEntry& Compiler::impStackTop(unsigned n)
-{
-    if (stackState.esStackDepth <= n)
-    {
-        BADCODE("stack underflow");
-    }
-
-    return stackState.esStack[stackState.esStackDepth - n - 1];
-}
-
-unsigned Compiler::impStackHeight()
-{
-    return stackState.esStackDepth;
-}
-
-/*****************************************************************************
- *  Some of the trees are spilled specially. While unspilling them, or
- *  making a copy, these need to be handled specially. The function
- *  enumerates the operators possible after spilling.
- */
+// Helpers impPopStack(), impStackTop(), and impStackHeight() are now inline in compiler.h.
 
 #ifdef DEBUG // only used in asserts
 static bool impValidSpilledStackEntry(GenTree* tree)
