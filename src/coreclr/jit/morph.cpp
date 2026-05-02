@@ -7474,20 +7474,16 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optA
 
         case GT_GT:
         {
-            // Try and optimize nullable boxes feeding compares
-            GenTree* optimizedTree = gtFoldBoxNullable(tree);
-
-            if (optimizedTree->OperGet() != tree->OperGet())
+            // Try and optimize nullable boxes feeding compares.
+            // gtFoldBoxNullable only does work when one side is a constant integer 0
+            // and the other side is a CORINFO_HELP_BOX_NULLABLE call. Avoid the call
+            // overhead in the common case where neither side is a call.
+            if (op1->IsCall() || op2->IsCall())
             {
-                return optimizedTree;
+                gtFoldBoxNullable(tree);
+                op1 = tree->AsOp()->gtOp1;
+                op2 = tree->AsOp()->gtOp2;
             }
-            else
-            {
-                tree = optimizedTree;
-            }
-
-            op1 = tree->AsOp()->gtOp1;
-            op2 = tree->gtGetOp2IfPresent();
 
             break;
         }
