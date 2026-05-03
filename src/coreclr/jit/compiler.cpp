@@ -4819,6 +4819,14 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
                 DoPhase(this, PHASE_OPTIMIZE_INDEX_CHECKS, &Compiler::rangeCheckPhase);
             }
 
+            // In a static constructor, promote allocations that are
+            // published once into a static-readonly field to the
+            // *_MAYBEFROZEN allocator helpers so the VM may put the object
+            // on the Frozen Object Heap. Runs in the SSA/VN-valid window
+            // (post-rangecheck, pre-VN-dead-store-removal) and uses SSA
+            // def-use to find each allocation.
+            DoPhase(this, PHASE_PROMOTE_FROZEN_ALLOCS, &Compiler::fgPromoteFrozenAllocations);
+
             if (doOptimizeIVs)
             {
                 // Simplify and optimize induction variables used in natural loops
@@ -6975,6 +6983,18 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         if (reason != nullptr)
         {
             fgSwitchToOptimized(reason);
+        }
+
+        // For static constructors, switch to FullOpts so we can run
+        // PHASE_PROMOTE_FROZEN_ALLOCS (and benefit from the rest of the
+        // optimizer for the cctor itself). Cctors normally run at Tier-0
+        // only; the knob `JitOptimizeStaticConstructors` (default on) gates
+        // this. Always honor explicit debug code requests.
+        if ((reason == nullptr) && !opts.compDbgCode &&
+            ((info.compFlags & FLG_CCTOR) == FLG_CCTOR) &&
+            (JitConfig.JitOptimizeStaticConstructors() != 0))
+        {
+            fgSwitchToOptimized("static constructor");
         }
     }
 

@@ -120,6 +120,7 @@ set( JIT_SOURCES
   fgstmt.cpp
   flowgraph.cpp
   forwardsub.cpp
+  frozenallocs.cpp
   gcinfo.cpp
   gentree.cpp
   gschecks.cpp

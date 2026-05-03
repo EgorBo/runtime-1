@@ -5642,6 +5642,8 @@ public:
 
     PhaseStatus fgResolveGDVs();
 
+    PhaseStatus fgPromoteFrozenAllocations();
+
     PhaseStatus fgRemoveEmptyTry();
 
     PhaseStatus fgRemoveEmptyTryCatchOrTryFault();

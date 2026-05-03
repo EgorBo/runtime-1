@@ -1641,6 +1641,14 @@ GenTree* ObjectAllocator::MorphAllocObjNodeIntoHelperCall(GenTreeAllocObj* alloc
         helperCall->AsCall()->gtCallMoreFlags |= GTF_CALL_M_ALLOC_SIDE_EFFECTS;
     }
 
+    // Stash the originally-allocated class handle on the resulting call so
+    // later phases (e.g. fgPromoteFrozenAllocations) can recover it after
+    // morphing has lost the GT_ALLOCOBJ shape. This is especially important
+    // for R2R, where the helper has no class-handle arg (the entry point
+    // encodes the class).
+    helperCall->AsCall()->compileTimeHelperArgumentHandle =
+        (CORINFO_GENERIC_HANDLE)allocObj->gtAllocObjClsHnd;
+
 #ifdef FEATURE_READYTORUN
     if (entryPoint.addr != nullptr)
     {
@@ -4871,3 +4879,4 @@ ClassLayout* ObjectAllocator::GetByrefLayout(ClassLayout* layout)
 
     return m_compiler->typGetCustomLayout(b);
 }
+

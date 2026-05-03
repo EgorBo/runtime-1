@@ -706,6 +706,10 @@ RELEASE_CONFIG_INTEGER(JitObjectStackAllocationTrackFields, "JitObjectStackAlloc
 CONFIG_STRING(JitObjectStackAllocationTrackFieldsRange, "JitObjectStackAllocationTrackFieldsRange")
 CONFIG_INTEGER(JitObjectStackAllocationDumpConnGraph, "JitObjectStackAllocationDumpConnGraph", 0)
 
+// Promote allocations in static constructors to use the *_MAYBEFROZEN allocator
+// helpers so they can land on the Frozen Object Heap.
+RELEASE_CONFIG_INTEGER(JitOptimizeStaticConstructors, "JitOptimizeStaticConstructors", 1)
+
 RELEASE_CONFIG_INTEGER(JitEECallTimingInfo, "JitEECallTimingInfo", 0)
 
 CONFIG_INTEGER(JitEnableFinallyCloning, "JitEnableFinallyCloning", 1)
