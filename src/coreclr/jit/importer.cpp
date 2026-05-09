@@ -9997,6 +9997,27 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                 optMethodFlags |= OMF_HAS_NEWARRAY;
                 block->SetFlags(BBF_HAS_NEWARR);
 
+                // PROTOTYPE: For value-profile-based escape analysis (consumed by
+                // ObjectAllocator), tag every variable-size newarr call with its IL
+                // offset via the dedicated gtValueProfileILOffset field.
+                //
+                // In Instrumented Tier0 we also set BBF_HAS_VALUE_PROFILE so the
+                // value-histogram instrumentor (fgprofile.cpp) inserts a probe.
+                //
+                // In Tier1+PGO the same tag lets ObjectAllocator look the histogram
+                // up by IL offset.
+                if (JitConfig.JitProfileValues() && !isFrozenAllocator && !compIsForInlining() &&
+                    op1->IsHelperCall() && !op2->OperIsConst())
+                {
+                    op1->AsCall()->gtValueProfileILOffset = opcodeOffs;
+                    if (opts.IsInstrumented())
+                    {
+                        compCurBB->SetFlags(BBF_HAS_VALUE_PROFILE);
+                        JITDUMP("\n ... marking newarr [%06u] in " FMT_BB " for value profile instrumentation\n",
+                                dspTreeID(op1), compCurBB->bbNum);
+                    }
+                }
+
                 if (opts.OptimizationEnabled())
                 {
                     // We assign the newly allocated object (by a GT_CALL to newarr node)

@@ -1956,6 +1956,33 @@ static bool IsValueHistogramProbeCandidate(Compiler*  compiler,
         }
     }
 
+    // PROTOTYPE: newarr helper calls flagged for value-profile by the importer hook.
+    // These use gtValueProfileILOffset (a dedicated field) rather than the union slot
+    // that conflicts with compileTimeHelperArgumentHandle.
+    if (node->IsCall() && node->AsCall()->IsHelperCall() &&
+        (node->AsCall()->gtValueProfileILOffset != BAD_IL_OFFSET))
+    {
+        switch (node->AsCall()->GetHelperNum())
+        {
+            case CORINFO_HELP_NEWARR_1_VC:
+            case CORINFO_HELP_NEWARR_1_PTR:
+            case CORINFO_HELP_NEWARR_1_DIRECT:
+            case CORINFO_HELP_NEWARR_1_ALIGN8:
+                if (ilOffset != nullptr)
+                {
+                    *ilOffset = node->AsCall()->gtValueProfileILOffset;
+                }
+                if (operandUseRef != nullptr)
+                {
+                    // newarr(handle, len) -- profile len.
+                    *operandUseRef = &node->AsCall()->gtArgs.GetUserArgByIndex(1)->EarlyNodeRef();
+                }
+                return true;
+            default:
+                break;
+        }
+    }
+
     return false;
 }
 

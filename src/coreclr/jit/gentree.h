@@ -5922,6 +5922,12 @@ struct GenTreeCall final : public GenTree
 
     class InlineContext* gtInlineContext;
 
+    // PROTOTYPE: IL offset used as the schema key for value-profile probes
+    // attached to this call. We can't reuse gtHandleHistogramProfileCandidateInfo
+    // here because that field shares a union with compileTimeHelperArgumentHandle
+    // (which newarr helpers need). BAD_IL_OFFSET means "no value-profile attached".
+    IL_OFFSET gtValueProfileILOffset = BAD_IL_OFFSET;
+
     bool IsHelperCall() const
     {
         return gtCallType == CT_HELPER;

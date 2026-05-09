@@ -258,6 +258,9 @@ private:
                                                unsigned int         blockSize,
                                                BasicBlock*          block,
                                                Statement*           stmt);
+    bool MorphProfiledNewArrNodeIntoStackAllocGuard(AllocationCandidate& candidate,
+                                                    GenTreeCall*         newArr,
+                                                    CORINFO_CLASS_HANDLE clsHnd);
     struct BuildConnGraphVisitorCallbackData;
     void AnalyzeParentStack(ArrayStack<GenTree*>* parentStack, unsigned int lclNum, BasicBlock* block);
     void UpdateAncestorTypes(

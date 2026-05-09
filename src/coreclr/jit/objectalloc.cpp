@@ -1206,9 +1206,21 @@ ObjectAllocator::ObjectAllocationType ObjectAllocator::AllocationKind(GenTree* t
             case CORINFO_HELP_NEWARR_1_DIRECT:
             case CORINFO_HELP_NEWARR_1_ALIGN8:
             {
-                if ((call->gtArgs.CountUserArgs() == 2) && call->gtArgs.GetUserArgByIndex(1)->GetNode()->IsCnsIntOrI())
+                if (call->gtArgs.CountUserArgs() == 2)
                 {
-                    allocType = OAT_NEWARR;
+                    GenTree* const lenArg = call->gtArgs.GetUserArgByIndex(1)->GetNode();
+                    if (lenArg->IsCnsIntOrI())
+                    {
+                        allocType = OAT_NEWARR;
+                    }
+                    // PROTOTYPE: non-const length but with PGO value-profile data attached
+                    // -> consider it an OAT_NEWARR candidate; the per-candidate path
+                    // will generate a guarded fast-path stack allocation for the popular size.
+                    else if ((call->gtValueProfileILOffset != BAD_IL_OFFSET) &&
+                             m_compiler->opts.IsOptimizedWithProfile())
+                    {
+                        allocType = OAT_NEWARR;
+                    }
                 }
                 break;
             }
@@ -1512,8 +1524,11 @@ bool ObjectAllocator::MorphAllocObjNodeHelperArr(AllocationCandidate& candidate)
 
     if (!len->IsCnsIntOrI())
     {
-        candidate.m_onHeapReason = "[non-constant array size]";
-        return false;
+        // PROTOTYPE: profiled non-const length. We come here only when escape
+        // analysis already approved the temp (otherwise this path wouldn't be
+        // reached with allocType == OAT_NEWARR) and the call carries value-profile
+        // candidate info from the importer's instrumentation hook.
+        return MorphProfiledNewArrNodeIntoStackAllocGuard(candidate, data->AsCall(), clsHnd);
     }
 
     if (!CanAllocateLclVarOnStack(candidate.m_lclNum, clsHnd, candidate.m_allocType, len->AsIntCon()->IconValue(),
@@ -1533,6 +1548,114 @@ bool ObjectAllocator::MorphAllocObjNodeHelperArr(AllocationCandidate& candidate)
     m_HeapLocalToStackArrLocalMap.AddOrUpdate(candidate.m_lclNum, stackLclNum);
     m_compiler->Metrics.StackAllocatedArrays++;
 
+    return true;
+}
+
+//------------------------------------------------------------------------
+// MorphProfiledNewArrNodeIntoStackAllocGuard: PROTOTYPE - rewrite a non-constant
+//   newarr call into a guarded stack-allocation when PGO has identified a
+//   popular length and the result doesn't escape.
+//
+// Arguments:
+//    candidate - allocation candidate (already known not to escape)
+//    newArr    - the non-constant-length newarr helper call
+//    clsHnd    - exact array class handle
+//
+// Return Value:
+//    True if the candidate was specialized.
+//
+// Notes:
+//    Generates IR of the form:
+//
+//        STORE_LCL_VAR tmp = QMARK(varLen == popular,
+//                                  COLON(stackArrCall(handle, popular, &stackLcl),
+//                                        heapCall(handle, varLen)))
+//
+//    where stackArrCall is the same helper but mutated to write into the
+//    pre-allocated stack local (returns TYP_I_IMPL pointing at the stack local).
+//
+//    PROTOTYPE: this is intentionally rough. Open issues:
+//    * Type mismatch between fast (TYP_I_IMPL) and slow (TYP_REF) arms; the
+//      enclosing temp is currently retyped to TYP_I_IMPL by RewriteUses, but
+//      that breaks GC-tracking on the slow heap-allocated arm. A correct
+//      version probably needs two temps and a phi-like merge, or both arms
+//      retyped to TYP_REF with a deliberately untracked lvStackAllocatedObject.
+//    * No metric counter, no codegen verification on multiple architectures.
+//
+bool ObjectAllocator::MorphProfiledNewArrNodeIntoStackAllocGuard(AllocationCandidate& candidate,
+                                                                 GenTreeCall*         newArr,
+                                                                 CORINFO_CLASS_HANDLE clsHnd)
+{
+    GenTree* const lenArg = newArr->gtArgs.GetUserArgByIndex(1)->GetNode();
+    assert(!lenArg->IsCnsIntOrI());
+
+    if (newArr->gtValueProfileILOffset == BAD_IL_OFFSET)
+    {
+        candidate.m_onHeapReason = "[non-constant array size, no profile data]";
+        return false;
+    }
+
+    ssize_t  profiledValue = 0;
+    uint32_t likelihood    = 0;
+    if (!m_compiler->pickProfiledValue(newArr->gtValueProfileILOffset, &likelihood, &profiledValue) ||
+        (likelihood < 50))
+    {
+        candidate.m_onHeapReason = "[non-constant array size, profile not actionable]";
+        return false;
+    }
+
+    if ((profiledValue <= 0) || !FitsIn<int>(profiledValue))
+    {
+        candidate.m_onHeapReason = "[profiled length out of range]";
+        return false;
+    }
+
+    unsigned int blockSize = 0;
+    if (!CanAllocateLclVarOnStack(candidate.m_lclNum, clsHnd, candidate.m_allocType, profiledValue, &blockSize,
+                                  &candidate.m_onHeapReason))
+    {
+        return false;
+    }
+
+    JITDUMP("PROTOTYPE: profiled-length stack alloc for V%02u (popular len = %zd, %u%%)\n", candidate.m_lclNum,
+            profiledValue, likelihood);
+
+    // Build the slow-path heap call: clone of the original, with the non-const length spilled.
+    GenTreeCall* slowCall = m_compiler->gtCloneExprCallHelper(newArr);
+
+    // Mutate the original call into the stack-allocating fast call. This swaps
+    // the length operand to the constant popular value and pushes the stack
+    // local addr argument onto the call.
+    GenTree* constLen = m_compiler->gtNewIconNode(profiledValue, lenArg->TypeGet());
+    newArr->gtArgs.GetUserArgByIndex(1)->SetEarlyNode(constLen);
+
+    const unsigned int stackLclNum = MorphNewArrNodeIntoStackAlloc(newArr, clsHnd, (unsigned int)profiledValue,
+                                                                   blockSize, candidate.m_block, candidate.m_statement);
+
+    // Build the guard: (varLen == popular) ? newArr : slowCall
+    GenTree* lenClone = m_compiler->gtCloneExpr(lenArg);
+    GenTree* cond     = m_compiler->gtNewOperNode(GT_EQ, TYP_INT, lenClone,
+                                                  m_compiler->gtNewIconNode(profiledValue, lenArg->TypeGet()));
+
+    // Note: type mismatch -- newArr is now TYP_I_IMPL after MorphNewArrNodeIntoStackAlloc;
+    // slowCall is TYP_REF. Make both TYP_I_IMPL so the QMARK has a coherent type;
+    // GC tracking of the slow-path result is the caller's problem (see notes).
+    slowCall->ChangeType(TYP_I_IMPL);
+    slowCall->gtReturnType = TYP_I_IMPL;
+
+    GenTreeColon* colon = new (m_compiler, GT_COLON) GenTreeColon(TYP_I_IMPL, newArr, slowCall);
+    GenTreeQmark* qmark = m_compiler->gtNewQmarkNode(TYP_I_IMPL, cond, colon);
+    qmark->SetThenNodeLikelihood(likelihood);
+
+    // Replace the data of the original STORE_LCL_VAR with the QMARK.
+    candidate.m_tree->AsLclVar()->Data() = qmark;
+    m_compiler->gtUpdateNodeSideEffects(candidate.m_tree);
+
+    JITDUMP("New tree:\n");
+    DISPTREE(candidate.m_tree);
+
+    m_HeapLocalToStackArrLocalMap.AddOrUpdate(candidate.m_lclNum, stackLclNum);
+    m_compiler->Metrics.StackAllocatedArrays++;
     return true;
 }
 
