@@ -712,8 +712,8 @@ bool RangeCheck::TryFoldRelopOfAddByOneFromAssertions(Compiler*        comp,
     // assertion-table scan proportional to cases that can actually benefit.
     ValueNum base;
     int      addCns;
-    if (!comp->vnStore->IsVNBinFuncWithConst(op1VN, VNF_ADD, &base, &addCns) || (addCns != 1) ||
-        (base == op2VN) || !comp->optAssertionHasAssertionsForVN(base))
+    if (!comp->vnStore->IsVNBinFuncWithConst(op1VN, VNF_ADD, &base, &addCns) || (addCns != 1) || (base == op2VN) ||
+        !comp->optAssertionHasAssertionsForVN(base))
     {
         return false;
     }
