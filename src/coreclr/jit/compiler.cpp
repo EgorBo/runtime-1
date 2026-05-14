@@ -4445,6 +4445,15 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
     // Record "start" values for post-inlining cycles and elapsed time.
     RecordStateAtEndOfInlining();
 
+    // After inlining, try to recognize inlined Task-returning calls that can be
+    // turned into direct runtime-async calls (i.e. eliminate
+    // AsyncHelpers.Await(F()) when F has a non-thunk async variant).
+    //
+    if (compIsAsync())
+    {
+        DoPhase(this, PHASE_OPTIMIZE_AWAIT_AFTER_INLINE, &Compiler::optOptimizeAwaitsAfterInlining);
+    }
+
     if (opts.OptimizationEnabled())
     {
         // Try and resolve GDV checks if improved types were found during inlining

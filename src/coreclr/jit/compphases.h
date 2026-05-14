@@ -35,6 +35,7 @@ CompPhaseNameMacro(PHASE_INCPROFILE,                 "Profile incorporation",   
 CompPhaseNameMacro(PHASE_RESOLVE_GDVS,               "Resolve GDV Checks",             false, -1, false)
 CompPhaseNameMacro(PHASE_MORPH_INIT,                 "Morph - Init",                   false, -1, false)
 CompPhaseNameMacro(PHASE_MORPH_INLINE,               "Morph - Inlining",               false, -1, true)
+CompPhaseNameMacro(PHASE_OPTIMIZE_AWAIT_AFTER_INLINE,"Optimize awaits after inlining", false, -1, false)
 CompPhaseNameMacro(PHASE_MORPH_ADD_INTERNAL,         "Morph - Add internal blocks",    false, -1, true)
 CompPhaseNameMacro(PHASE_SWIFT_ERROR_RET,            "Add Swift error returns",        false, -1, true)
 CompPhaseNameMacro(PHASE_ALLOCATE_OBJECTS,           "Allocate Objects",               false, -1, false)

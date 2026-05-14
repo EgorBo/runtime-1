@@ -6054,6 +6054,10 @@ public:
     void AddContextArgsToAsyncCalls(BasicBlock* block);
     BasicBlock* CreateReturnBB(unsigned* mergedReturnLcl);
     PhaseStatus TransformAsync();
+    PhaseStatus optOptimizeAwaitsAfterInlining();
+    GenTreeCall* optTransformAwaitedCallToAsyncCall(GenTreeCall*          awaitCall,
+                                                    GenTreeCall*          innerCall,
+                                                    CORINFO_METHOD_HANDLE asyncVariant);
 
     // This field keep the R2R helper call that would be inserted to trigger the constructor
     // of the static class. It is set as nongc or gc static base if they are imported, so
