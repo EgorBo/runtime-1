@@ -609,69 +609,31 @@ PhaseStatus Compiler::optOptimizeAwaitsAfterInlining()
             }
 
             GenTree* taskNode = taskArg->GetNode();
-            if (!taskNode->IsCall())
+            if (taskNode->IsCall())
             {
+                // Simple case: Await(call). Rewrite the inner call to be the
+                // async variant directly and drop the Await wrapper.
+                if (m_compiler->optTryOptimizeDirectAwait(awaitCall, taskNode->AsCall(), use))
+                {
+                    MadeChanges = true;
+                }
                 return WALK_CONTINUE;
             }
 
-            GenTreeCall* innerCall = taskNode->AsCall();
-            if (!CanRetargetInnerCallToAsyncVariant(innerCall))
+            if (taskNode->OperIs(GT_LCL_VAR))
             {
+                // Indirect case: Await(LCL_VAR v). This is what we see after
+                // inlining a Task-returning wrapper that has multiple return
+                // points (the inliner routes each return through a temp
+                // local). If every store to v is a retargetable async call
+                // we can sink the await into each store.
+                if (m_compiler->optTryOptimizeIndirectAwait(awaitCall, taskNode->AsLclVar(), use))
+                {
+                    MadeChanges = true;
+                }
                 return WALK_CONTINUE;
             }
 
-            CORINFO_METHOD_HANDLE innerMethHnd = innerCall->gtCallMethHnd;
-            if (innerMethHnd == NO_METHOD_HANDLE)
-            {
-                return WALK_CONTINUE;
-            }
-
-            bool                  variantIsThunk = false;
-            CORINFO_METHOD_HANDLE asyncVariant =
-                m_compiler->info.compCompHnd->getAsyncOtherVariant(innerMethHnd, &variantIsThunk);
-
-            if ((asyncVariant == nullptr) || variantIsThunk)
-            {
-                return WALK_CONTINUE;
-            }
-
-            // Get the signature of the async variant to validate the new return type.
-            CORINFO_SIG_INFO asyncSig;
-            m_compiler->eeGetMethodSig(asyncVariant, &asyncSig);
-            assert(asyncSig.isAsyncCall());
-
-            // The async variant must not require any extra parameters that we
-            // can't synthesize (e.g. a type instantiation parameter that the
-            // Task-returning thunk did not need).
-            if (asyncSig.hasTypeArg() || asyncSig.isVarArg())
-            {
-                return WALK_CONTINUE;
-            }
-
-            var_types newRetType = JITtype2varType(asyncSig.retType);
-
-            // For now, restrict to the simple cases we can safely handle in-place.
-            if (varTypeIsStruct(newRetType) || (newRetType == TYP_UNKNOWN))
-            {
-                return WALK_CONTINUE;
-            }
-
-            // The Await call's return type must agree with what the async
-            // variant returns; otherwise consumers of the Await result would
-            // see the wrong type after we replace the node.
-            if (genActualType(newRetType) != genActualType(awaitCall->TypeGet()))
-            {
-                return WALK_CONTINUE;
-            }
-
-            JITDUMP("Optimizing AsyncHelpers.Await wrapper [%06u] around inner call [%06u] into a direct async call to "
-                    "the async variant of the inner method\n",
-                    Compiler::dspTreeID(awaitCall), Compiler::dspTreeID(innerCall));
-
-            *use        = m_compiler->optTransformAwaitedCallToAsyncCall(awaitCall, innerCall, asyncVariant);
-            MadeChanges = true;
-
-            // Continue walk over the children of the new node.
             return WALK_CONTINUE;
         }
 
@@ -689,14 +651,16 @@ PhaseStatus Compiler::optOptimizeAwaitsAfterInlining()
                 return false;
             }
 
-            // Skip tail calls / tail-prefixed: we can't reliably move that intent to a different node.
+            // Skip tail calls / tail-prefixed: we can't reliably move that
+            // intent to a different node.
             if (call->IsTailCall() || call->IsTailPrefixedCall())
             {
                 return false;
             }
 
-            // Quick filter: AsyncHelpers.Await is marked [Intrinsic]. Avoid the
-            // (potentially expensive) name lookup if the method isn't an intrinsic at all.
+            // Quick filter: AsyncHelpers.Await is marked [Intrinsic]. Avoid
+            // the (potentially expensive) name lookup if the method isn't an
+            // intrinsic at all.
             if (!m_compiler->eeIsIntrinsic(call->gtCallMethHnd))
             {
                 return false;
@@ -704,88 +668,6 @@ PhaseStatus Compiler::optOptimizeAwaitsAfterInlining()
 
             return m_compiler->lookupNamedIntrinsic(call->gtCallMethHnd) ==
                    NI_System_Runtime_CompilerServices_AsyncHelpers_Await;
-        }
-
-        bool CanRetargetInnerCallToAsyncVariant(GenTreeCall* call)
-        {
-            if (call->gtCallType != CT_USER_FUNC)
-            {
-                return false;
-            }
-
-            // Already async (e.g. recursive Await wrapping?): nothing to do.
-            if (call->IsAsync())
-            {
-                return false;
-            }
-
-            // Skip virtual dispatch (covers both vtable and virtual stub / interface
-            // dispatch), fat-pointer, indirect, GDV-marked, delegate-invoke, expanded-
-            // early, and unmanaged calls. These all have non-trivial dispatch we
-            // don't want to retarget here.
-            if (call->IsVirtual() || call->IsFatPointerCandidate() || call->IsGuardedDevirtualizationCandidate() ||
-                call->IsDelegateInvoke() || call->IsExpandedEarly() || call->IsUnmanaged() || call->IsNoReturn())
-            {
-                return false;
-            }
-
-            // Don't retarget calls with non-trivial well-known args. We only
-            // support adding the async helper args ourselves; if other
-            // well-known args are present (InstParam, VarArgs, RetBuffer) we
-            // bail to avoid mismatched calling conventions.
-            for (CallArg& arg : call->gtArgs.Args())
-            {
-                switch (arg.GetWellKnownArg())
-                {
-                    case WellKnownArg::None:
-                    case WellKnownArg::ThisPointer:
-                        break;
-                    default:
-                        return false;
-                }
-            }
-
-            // The inner call's return type must currently be a managed
-            // reference (a Task-returning call). This is what the JIT-EE
-            // contract guarantees for `getAsyncOtherVariant` retargeting.
-            if (!call->TypeIs(TYP_REF))
-            {
-                return false;
-            }
-
-            // Tail-prefixed / tail call: skip. The asyncInfo pointer shares
-            // its union slot with tailCallInfo, so we must not have either set.
-            if (call->IsTailCall() || call->IsTailPrefixedCall())
-            {
-                return false;
-            }
-
-            // ABI must not yet have been determined.
-            if (call->gtArgs.AreArgsComplete() || call->gtArgs.IsAbiInformationDetermined())
-            {
-                return false;
-            }
-
-            // Skip shared generic methods. `getAsyncOtherVariant` resolves the
-            // async variant based on the post-resolution method handle alone
-            // and may not preserve the IL token's lookup context that shared
-            // generics depend on. Token-based resolution (the importer's
-            // CORINFO_TOKENKIND_Await path) is required to handle these
-            // correctly. Be conservative for now.
-            uint32_t methAttr = m_compiler->info.compCompHnd->getMethodAttribs(call->gtCallMethHnd);
-            if ((methAttr & CORINFO_FLG_SHAREDINST) != 0)
-            {
-                return false;
-            }
-
-            // gtControlExpr is only used for indirect/virtual call expansion;
-            // CT_USER_FUNC + non-virtual + !IsExpandedEarly should imply it is null.
-            if (call->gtControlExpr != nullptr)
-            {
-                return false;
-            }
-
-            return true;
         }
     };
 
@@ -802,113 +684,505 @@ PhaseStatus Compiler::optOptimizeAwaitsAfterInlining()
 }
 
 //------------------------------------------------------------------------
-// Compiler::optTransformAwaitedCallToAsyncCall:
-//   Mutate `innerCall` in place into a direct runtime-async call to
-//   `asyncVariant`, adopting the async helper args from `awaitCall`. The
-//   modified `innerCall` is returned to be installed in place of `awaitCall`.
+// Compiler::optTryGetAsyncRetargetInfo:
+//   Determine whether a Task-returning call can be retargeted to its
+//   runtime-async variant in place.
 //
 // Parameters:
-//   awaitCall    - The AsyncHelpers.Await<T> wrapper call.
-//   innerCall    - The inner Task-returning user call inside `awaitCall`.
-//   asyncVariant - Method handle for the async variant of `innerCall`'s method.
+//   call          - The Task-returning user call to inspect.
+//   awaitRetType  - The return type produced by the surrounding
+//                   AsyncHelpers.Await call. The async variant must agree
+//                   with this type (unwrapped T vs Task<T>).
+//   asyncVariant  - [out] The async variant method handle on success.
+//   newRetType    - [out] The async variant's return type on success.
 //
 // Returns:
-//   The mutated `innerCall`, now an async call ready to take `awaitCall`'s
-//   place in the parent edge.
+//   true if `call` can be retargeted to its async variant.
 //
-GenTreeCall* Compiler::optTransformAwaitedCallToAsyncCall(GenTreeCall*          awaitCall,
-                                                          GenTreeCall*          innerCall,
-                                                          CORINFO_METHOD_HANDLE asyncVariant)
+bool Compiler::optTryGetAsyncRetargetInfo(GenTreeCall*           call,
+                                          var_types              awaitRetType,
+                                          CORINFO_METHOD_HANDLE* asyncVariant,
+                                          var_types*             newRetType)
 {
-    assert(awaitCall->IsAsync());
-    assert(!innerCall->IsAsync());
+    *asyncVariant = nullptr;
+    *newRetType   = TYP_UNKNOWN;
+
+    if (call->gtCallType != CT_USER_FUNC)
+    {
+        return false;
+    }
+
+    // Already async or otherwise unsupported call shapes: skip.
+    if (call->IsAsync())
+    {
+        return false;
+    }
+
+    // Skip virtual dispatch (vtable + VSD interface), fat-pointer, indirect,
+    // GDV-marked, delegate-invoke, expanded-early, unmanaged, and no-return
+    // calls. These have non-trivial dispatch we don't want to retarget here.
+    if (call->IsVirtual() || call->IsFatPointerCandidate() || call->IsGuardedDevirtualizationCandidate() ||
+        call->IsDelegateInvoke() || call->IsExpandedEarly() || call->IsUnmanaged() || call->IsNoReturn())
+    {
+        return false;
+    }
+
+    // Only accept calls without unusual well-known args.
+    for (CallArg& arg : call->gtArgs.Args())
+    {
+        switch (arg.GetWellKnownArg())
+        {
+            case WellKnownArg::None:
+            case WellKnownArg::ThisPointer:
+                break;
+            default:
+                return false;
+        }
+    }
+
+    if (!call->TypeIs(TYP_REF))
+    {
+        return false;
+    }
+
+    if (call->IsTailCall() || call->IsTailPrefixedCall())
+    {
+        return false;
+    }
+
+    if (call->gtArgs.AreArgsComplete() || call->gtArgs.IsAbiInformationDetermined())
+    {
+        return false;
+    }
+
+    // Shared generics use a canonical method handle; getAsyncOtherVariant
+    // doesn't preserve the IL token's lookup context. Token-based resolution
+    // (the importer's CORINFO_TOKENKIND_Await path) is required for these.
+    uint32_t methAttr = info.compCompHnd->getMethodAttribs(call->gtCallMethHnd);
+    if ((methAttr & CORINFO_FLG_SHAREDINST) != 0)
+    {
+        return false;
+    }
+
+    if (call->gtControlExpr != nullptr)
+    {
+        return false;
+    }
+
+    CORINFO_METHOD_HANDLE innerMethHnd = call->gtCallMethHnd;
+    if (innerMethHnd == NO_METHOD_HANDLE)
+    {
+        return false;
+    }
+
+    bool                  variantIsThunk = false;
+    CORINFO_METHOD_HANDLE variant        = info.compCompHnd->getAsyncOtherVariant(innerMethHnd, &variantIsThunk);
+
+    if ((variant == nullptr) || variantIsThunk)
+    {
+        return false;
+    }
+
+    CORINFO_SIG_INFO asyncSig;
+    eeGetMethodSig(variant, &asyncSig);
+    assert(asyncSig.isAsyncCall());
+
+    // The async variant must not require extra parameters we can't
+    // synthesize (e.g. a type instantiation parameter for shared generics).
+    if (asyncSig.hasTypeArg() || asyncSig.isVarArg())
+    {
+        return false;
+    }
+
+    var_types retType = JITtype2varType(asyncSig.retType);
+
+    // Restrict to simple return types we can rewrite in-place.
+    if (varTypeIsStruct(retType) || (retType == TYP_UNKNOWN))
+    {
+        return false;
+    }
+
+    // The async variant's return must agree with what callers expect from
+    // the surrounding Await.
+    if (genActualType(retType) != genActualType(awaitRetType))
+    {
+        return false;
+    }
+
+    *asyncVariant = variant;
+    *newRetType   = retType;
+    return true;
+}
+
+//------------------------------------------------------------------------
+// Compiler::optRetargetCallToAsyncVariant:
+//   Mutate `call` in place: change its method handle to `asyncVariant`,
+//   update its return type to `newRetType`, mark it as runtime-async, and
+//   attach the supplied well-known async args.
+//
+// Parameters:
+//   call             - The call to mutate.
+//   asyncVariant     - Async variant method handle.
+//   newRetType       - The variant's (unwrapped) return type.
+//   asyncCallInfo    - AsyncCallInfo to install on the call.
+//   execCtxArg       - GenTree node for AsyncExecutionContext arg (or null).
+//   syncCtxArg       - GenTree node for AsyncSynchronizationContext arg.
+//   continuationArg  - GenTree node for AsyncContinuation arg.
+//   sourceFlags      - Side-effect flags to OR onto the call.
+//
+void Compiler::optRetargetCallToAsyncVariant(GenTreeCall*          call,
+                                             CORINFO_METHOD_HANDLE asyncVariant,
+                                             var_types             newRetType,
+                                             AsyncCallInfo*        asyncCallInfo,
+                                             GenTree*              execCtxArg,
+                                             GenTree*              syncCtxArg,
+                                             GenTree*              continuationArg,
+                                             GenTreeFlags          sourceFlags)
+{
+    assert(!call->IsAsync());
     assert(asyncVariant != nullptr);
-    assert(innerCall->gtCallType == CT_USER_FUNC);
-    // The asyncInfo pointer aliases tailCallInfo; verify the inner call has
+    assert(call->gtCallType == CT_USER_FUNC);
+    // The asyncInfo pointer aliases tailCallInfo; verify the call has
     // neither set so we can safely write through the union.
-    assert(!innerCall->IsTailPrefixedCall() && !innerCall->IsTailCall());
+    assert(!call->IsTailPrefixedCall() && !call->IsTailCall());
 
-    // Update the call target to the async variant.
-    innerCall->gtCallMethHnd = asyncVariant;
+    call->gtCallMethHnd = asyncVariant;
 
-    // For ReadyToRun, refresh the entrypoint info. Reuse the static helper
-    // defined at the top of this file by inlining the equivalent logic here.
 #ifdef FEATURE_READYTORUN
     if (IsReadyToRun())
     {
         CORINFO_CONST_LOOKUP entryPoint;
         info.compCompHnd->getFunctionEntryPoint(asyncVariant, &entryPoint);
-        innerCall->setEntryPoint(entryPoint);
+        call->setEntryPoint(entryPoint);
     }
 #endif
 
-    // Refresh the return type. The async variant returns T directly while
-    // the Task-returning variant returns Task<T> (a managed reference).
-    CORINFO_SIG_INFO asyncSig;
-    eeGetMethodSig(asyncVariant, &asyncSig);
-    var_types newRetType = JITtype2varType(asyncSig.retType);
     assert(!varTypeIsStruct(newRetType));
-    innerCall->gtReturnType = newRetType;
-    innerCall->ChangeType(newRetType);
-    innerCall->gtRetClsHnd = NO_CLASS_HANDLE;
+    call->gtReturnType = newRetType;
+    call->ChangeType(newRetType);
+    call->gtRetClsHnd = NO_CLASS_HANDLE;
 #if FEATURE_MULTIREG_RET
-    innerCall->ResetReturnType();
+    call->ResetReturnType();
 #endif
 
-    // Clear stale inline / devirtualization state attached to the inner call.
-    // The original info described the synchronous task-returning method and
-    // is not valid for the async variant. Inlining is over, so this is just
-    // hygiene for any later phase that might query it.
-    innerCall->gtInlineInfoCount = 0;
-    innerCall->gtFlags &= ~GTF_CALL_INLINE_CANDIDATE;
-    innerCall->gtLateDevirtualizationInfo = nullptr;
+    // Clear stale inline / devirtualization state.
+    call->gtInlineInfoCount = 0;
+    call->gtFlags &= ~GTF_CALL_INLINE_CANDIDATE;
+    call->gtLateDevirtualizationInfo = nullptr;
 
-    // Mark the call as async, copying AsyncCallInfo from the Await call so
-    // that ContinuationContextHandling and tail-await semantics are preserved.
-    // SetIsAsync writes into the tailCallInfo/asyncInfo union; we asserted
-    // above that the union doesn't currently hold a tail-call payload.
-    innerCall->SetIsAsync(new (this, CMK_Async) AsyncCallInfo(awaitCall->GetAsyncInfo()));
+    call->SetIsAsync(asyncCallInfo);
 
-    // Move the well-known async args from the Await call to the inner call.
-    // Order them the way the importer would: AsyncExecutionContext and
-    // AsyncSynchronizationContext go to the front (as
-    // AddContextArgsToAsyncCalls does); AsyncContinuation follows the
-    // platform's argument order convention.
-    auto moveContextArgToFront = [&](WellKnownArg wka) {
-        CallArg* arg = awaitCall->gtArgs.FindWellKnownArg(wka);
-        if (arg != nullptr)
+    // Add the well-known async args. AsyncExecutionContext and
+    // AsyncSynchronizationContext go to the front (same as
+    // AddContextArgsToAsyncCalls does). AsyncContinuation follows the
+    // platform's argument order convention (front for R2L, back for L2R).
+    if (continuationArg != nullptr)
+    {
+        NewCallArg newArg = NewCallArg::Primitive(continuationArg, continuationArg->TypeGet())
+                                .WellKnown(WellKnownArg::AsyncContinuation);
+        if (Target::g_tgtArgOrder == Target::ARG_ORDER_R2L)
         {
-            GenTree* node = arg->GetNode();
-            awaitCall->gtArgs.Remove(arg);
-            innerCall->gtArgs.PushFront(this, NewCallArg::Primitive(node, node->TypeGet()).WellKnown(wka));
+            call->gtArgs.PushFront(this, newArg);
+        }
+        else
+        {
+            call->gtArgs.PushBack(this, newArg);
+        }
+    }
+    if (syncCtxArg != nullptr)
+    {
+        call->gtArgs.PushFront(this, NewCallArg::Primitive(syncCtxArg, syncCtxArg->TypeGet())
+                                         .WellKnown(WellKnownArg::AsyncSynchronizationContext));
+    }
+    if (execCtxArg != nullptr)
+    {
+        call->gtArgs.PushFront(this, NewCallArg::Primitive(execCtxArg, execCtxArg->TypeGet())
+                                         .WellKnown(WellKnownArg::AsyncExecutionContext));
+    }
+
+    call->gtFlags |= sourceFlags & (GTF_GLOB_REF | GTF_EXCEPT);
+}
+
+//------------------------------------------------------------------------
+// Compiler::optTryOptimizeDirectAwait:
+//   Handle the simple case where the await argument is itself a call we can
+//   retarget to its async variant. The inner call is mutated in place and
+//   the use is rewired to point at it (the await wrapper is dropped).
+//
+// Parameters:
+//   awaitCall - The AsyncHelpers.Await<T> wrapper call.
+//   innerCall - The Task-returning user call inside the await.
+//   use       - Edge pointing at the await call; will be re-pointed at
+//               innerCall on success.
+//
+// Returns:
+//   true if the transformation was applied.
+//
+bool Compiler::optTryOptimizeDirectAwait(GenTreeCall* awaitCall, GenTreeCall* innerCall, GenTree** use)
+{
+    CORINFO_METHOD_HANDLE asyncVariant;
+    var_types             newRetType;
+    if (!optTryGetAsyncRetargetInfo(innerCall, awaitCall->TypeGet(), &asyncVariant, &newRetType))
+    {
+        return false;
+    }
+
+    JITDUMP("Optimizing direct AsyncHelpers.Await wrapper [%06u] around inner call [%06u]: rewriting to a direct "
+            "async call to the inner method's async variant\n",
+            Compiler::dspTreeID(awaitCall), Compiler::dspTreeID(innerCall));
+
+    // Move (not clone) the well-known async args from the about-to-be-
+    // discarded await wrapper to the inner call.
+    GenTree* execCtx        = nullptr;
+    GenTree* syncCtx        = nullptr;
+    GenTree* continuationNd = nullptr;
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncExecutionContext))
+    {
+        execCtx = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncSynchronizationContext))
+    {
+        syncCtx = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncContinuation))
+    {
+        continuationNd = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+
+    AsyncCallInfo* clonedInfo = new (this, CMK_Async) AsyncCallInfo(awaitCall->GetAsyncInfo());
+
+    optRetargetCallToAsyncVariant(innerCall, asyncVariant, newRetType, clonedInfo, execCtx, syncCtx, continuationNd,
+                                  awaitCall->gtFlags);
+
+    *use = innerCall;
+    return true;
+}
+
+//------------------------------------------------------------------------
+// Compiler::optTryOptimizeIndirectAwait:
+//   Handle the case where the await argument is a LCL_VAR holding a Task
+//   value computed elsewhere (typically because an inlinee with multiple
+//   return points was inlined and the inliner routed each return through a
+//   temp local). If every store to that local is a retargetable Task-
+//   returning call, "sink" the await: retarget each call to its async
+//   variant, route each store to a new local of the unwrapped type T, and
+//   replace the await with a read of that new local.
+//
+// Parameters:
+//   awaitCall - The AsyncHelpers.Await<T> wrapper call.
+//   taskLcl   - The LCL_VAR node that is the await's task arg.
+//   use       - Edge pointing at the await call; will be re-pointed at
+//               LCL_VAR of the new local on success.
+//
+// Returns:
+//   true if the transformation was applied.
+//
+bool Compiler::optTryOptimizeIndirectAwait(GenTreeCall* awaitCall, GenTreeLclVar* taskLcl, GenTree** use)
+{
+    unsigned   taskLclNum = taskLcl->GetLclNum();
+    LclVarDsc* taskLclDsc = lvaGetDesc(taskLclNum);
+
+    // The temp must look like a normal local holding a Task value. Anything
+    // address-taken, aliased, or partially defined is out of scope.
+    if (taskLclDsc->IsAddressExposed() || taskLclDsc->lvHasLdAddrOp || taskLclDsc->lvIsStructField ||
+        taskLclDsc->lvPromoted)
+    {
+        return false;
+    }
+    if (!taskLclDsc->TypeIs(TYP_REF))
+    {
+        return false;
+    }
+
+    var_types unwrappedType = awaitCall->TypeGet();
+
+    // Walk all statements once to collect:
+    //   * every STORE_LCL_VAR whose target is taskLclNum (the "defs")
+    //   * every non-store reference to taskLclNum
+    // The only acceptable non-store reference is the await's task arg
+    // (`taskLcl`). Any other use means we'd have to keep the local alive
+    // with its original Task<T> type, blocking the rewire.
+    struct DefSite
+    {
+        Statement*            Stmt;
+        GenTreeLclVarCommon*  Store;
+        GenTreeCall*          Call;
+        CORINFO_METHOD_HANDLE AsyncVariant;
+        var_types             NewRetType;
+    };
+    ArrayStack<DefSite> defs(getAllocator(CMK_Async));
+
+    struct CollectVisitor : GenTreeVisitor<CollectVisitor>
+    {
+        enum
+        {
+            DoPreOrder = true,
+        };
+
+        unsigned             m_lclNum;
+        GenTreeLclVar*       m_allowedReadNode;
+        ArrayStack<DefSite>* m_defs;
+        Statement*           m_curStmt;
+        bool                 m_bail = false;
+
+        CollectVisitor(Compiler* comp, unsigned lclNum, GenTreeLclVar* allowedReadNode, ArrayStack<DefSite>* defs)
+            : GenTreeVisitor(comp)
+            , m_lclNum(lclNum)
+            , m_allowedReadNode(allowedReadNode)
+            , m_defs(defs)
+        {
+        }
+
+        fgWalkResult PreOrderVisit(GenTree** use, GenTree* user)
+        {
+            GenTree* tree = *use;
+
+            if (tree->OperIsLocalStore() && tree->AsLclVarCommon()->GetLclNum() == m_lclNum)
+            {
+                if (!tree->OperIs(GT_STORE_LCL_VAR))
+                {
+                    // Partial define (STORE_LCL_FLD): bail.
+                    m_bail = true;
+                    return WALK_ABORT;
+                }
+                GenTree* data = tree->Data();
+                if (data == nullptr || !data->IsCall())
+                {
+                    m_bail = true;
+                    return WALK_ABORT;
+                }
+                DefSite site;
+                site.Stmt  = m_curStmt;
+                site.Store = tree->AsLclVarCommon();
+                site.Call  = data->AsCall();
+                m_defs->Push(site);
+            }
+            else if (tree->OperIs(GT_LCL_VAR) && tree->AsLclVar()->GetLclNum() == m_lclNum)
+            {
+                if (tree != m_allowedReadNode)
+                {
+                    m_bail = true;
+                    return WALK_ABORT;
+                }
+            }
+            else if (tree->OperIs(GT_LCL_FLD, GT_LCL_ADDR) && tree->AsLclVarCommon()->GetLclNum() == m_lclNum)
+            {
+                m_bail = true;
+                return WALK_ABORT;
+            }
+
+            return WALK_CONTINUE;
         }
     };
 
-    auto moveAsyncContinuationArg = [&]() {
-        CallArg* arg = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncContinuation);
-        if (arg != nullptr)
+    CollectVisitor collector(this, taskLclNum, taskLcl, &defs);
+    for (BasicBlock* const block : Blocks())
+    {
+        for (Statement* const stmt : block->Statements())
         {
-            GenTree* node = arg->GetNode();
-            awaitCall->gtArgs.Remove(arg);
-            NewCallArg newArg = NewCallArg::Primitive(node, node->TypeGet()).WellKnown(WellKnownArg::AsyncContinuation);
-            if (Target::g_tgtArgOrder == Target::ARG_ORDER_R2L)
+            collector.m_curStmt = stmt;
+            collector.WalkTree(stmt->GetRootNodePointer(), nullptr);
+            if (collector.m_bail)
             {
-                innerCall->gtArgs.PushFront(this, newArg);
-            }
-            else
-            {
-                innerCall->gtArgs.PushBack(this, newArg);
+                return false;
             }
         }
+    }
+
+    if (defs.Empty())
+    {
+        return false;
+    }
+
+    // Every def must be retargetable. Mixed retargetable/non-retargetable
+    // defs would require leaving an Await wrapper on the non-retargetable
+    // branches; that adds suspension points and is out of scope for v1.
+    for (int i = 0; i < defs.Height(); i++)
+    {
+        DefSite& d = defs.BottomRef(i);
+        if (!optTryGetAsyncRetargetInfo(d.Call, unwrappedType, &d.AsyncVariant, &d.NewRetType))
+        {
+            return false;
+        }
+    }
+
+    JITDUMP("Optimizing indirect AsyncHelpers.Await wrapper [%06u] over V%02u with %d def(s): sinking the await into "
+            "each def as a direct async call\n",
+            Compiler::dspTreeID(awaitCall), taskLclNum, defs.Height());
+
+    unsigned newLclNum            = lvaGrabTemp(false DEBUGARG("Sunk Await result"));
+    lvaGetDesc(newLclNum)->lvType = unwrappedType;
+
+    // Each retargeted call needs its own copy of the well-known async args.
+    auto cloneContextArg = [&](WellKnownArg wka) -> GenTree* {
+        CallArg* a = awaitCall->gtArgs.FindWellKnownArg(wka);
+        if (a == nullptr)
+        {
+            return nullptr;
+        }
+        return gtCloneExpr(a->GetNode());
     };
 
-    moveAsyncContinuationArg();
-    moveContextArgToFront(WellKnownArg::AsyncSynchronizationContext);
-    moveContextArgToFront(WellKnownArg::AsyncExecutionContext);
+    for (int i = 0; i < defs.Height(); i++)
+    {
+        DefSite& d = defs.BottomRef(i);
 
-    // Carry over GTF_GLOB_REF / GTF_EXCEPT from the Await wrapper. The inner
-    // call already has these (it is a managed call), but be conservative.
-    innerCall->gtFlags |= awaitCall->gtFlags & (GTF_GLOB_REF | GTF_EXCEPT);
+        GenTree*       execCtx        = cloneContextArg(WellKnownArg::AsyncExecutionContext);
+        GenTree*       syncCtx        = cloneContextArg(WellKnownArg::AsyncSynchronizationContext);
+        GenTree*       continuationNd = cloneContextArg(WellKnownArg::AsyncContinuation);
+        AsyncCallInfo* clonedInfo     = new (this, CMK_Async) AsyncCallInfo(awaitCall->GetAsyncInfo());
+
+        optRetargetCallToAsyncVariant(d.Call, d.AsyncVariant, d.NewRetType, clonedInfo, execCtx, syncCtx,
+                                      continuationNd, awaitCall->gtFlags);
+
+        // Rewire the store to write the unwrapped value into the new local.
+        d.Store->SetLclNum(newLclNum);
+        d.Store->ChangeType(unwrappedType);
+    }
+
+    *use = gtNewLclvNode(newLclNum, unwrappedType);
+    return true;
+}
+
+//------------------------------------------------------------------------
+// Compiler::optTransformAwaitedCallToAsyncCall:
+//   Compatibility wrapper kept for the header declaration. Implements the
+//   direct-await transformation and returns the mutated inner call.
+//
+GenTreeCall* Compiler::optTransformAwaitedCallToAsyncCall(GenTreeCall*          awaitCall,
+                                                          GenTreeCall*          innerCall,
+                                                          CORINFO_METHOD_HANDLE asyncVariant)
+{
+    CORINFO_SIG_INFO sig;
+    eeGetMethodSig(asyncVariant, &sig);
+    var_types newRetType = JITtype2varType(sig.retType);
+
+    GenTree* execCtx        = nullptr;
+    GenTree* syncCtx        = nullptr;
+    GenTree* continuationNd = nullptr;
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncExecutionContext))
+    {
+        execCtx = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncSynchronizationContext))
+    {
+        syncCtx = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+    if (CallArg* a = awaitCall->gtArgs.FindWellKnownArg(WellKnownArg::AsyncContinuation))
+    {
+        continuationNd = a->GetNode();
+        awaitCall->gtArgs.Remove(a);
+    }
+
+    AsyncCallInfo* clonedInfo = new (this, CMK_Async) AsyncCallInfo(awaitCall->GetAsyncInfo());
+
+    optRetargetCallToAsyncVariant(innerCall, asyncVariant, newRetType, clonedInfo, execCtx, syncCtx, continuationNd,
+                                  awaitCall->gtFlags);
 
     return innerCall;
 }

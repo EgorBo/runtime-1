@@ -6055,6 +6055,20 @@ public:
     BasicBlock* CreateReturnBB(unsigned* mergedReturnLcl);
     PhaseStatus TransformAsync();
     PhaseStatus optOptimizeAwaitsAfterInlining();
+    bool optTryGetAsyncRetargetInfo(GenTreeCall*           call,
+                                    var_types              awaitRetType,
+                                    CORINFO_METHOD_HANDLE* asyncVariant,
+                                    var_types*             newRetType);
+    void optRetargetCallToAsyncVariant(GenTreeCall*          call,
+                                       CORINFO_METHOD_HANDLE asyncVariant,
+                                       var_types             newRetType,
+                                       AsyncCallInfo*        asyncCallInfo,
+                                       GenTree*              execCtxArg,
+                                       GenTree*              syncCtxArg,
+                                       GenTree*              continuationArg,
+                                       GenTreeFlags          sourceFlags);
+    bool         optTryOptimizeDirectAwait(GenTreeCall* awaitCall, GenTreeCall* innerCall, GenTree** use);
+    bool         optTryOptimizeIndirectAwait(GenTreeCall* awaitCall, GenTreeLclVar* taskLcl, GenTree** use);
     GenTreeCall* optTransformAwaitedCallToAsyncCall(GenTreeCall*          awaitCall,
                                                     GenTreeCall*          innerCall,
                                                     CORINFO_METHOD_HANDLE asyncVariant);
