@@ -117,8 +117,7 @@ const char* CodeGen::genInsDisplayName(emitter::instrDesc* id)
     const char* insName = genInsName(ins);
 
 #ifdef TARGET_XARCH
-    const emitter* emit      = GetEmitter();
-    const char*    vexPrefix = emit->UseVEXEncoding() ? "v" : "";
+    const emitter* emit = GetEmitter();
 
     auto AddSuffix = [&](const char* insName, const char* suffix1, const char* suffix2 = "") -> const char* {
         const int       TEMP_BUFFER_LEN = 40;

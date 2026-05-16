@@ -1760,7 +1760,6 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
     lastConsumedNode = nullptr;
     if (m_compiler->verbose)
     {
-        unsigned seqNum = treeNode->gtSeqNum; // Useful for setting a conditional break in Visual Studio
         m_compiler->gtDispLIRNode(treeNode, "Generating: ");
     }
 #endif // DEBUG
@@ -2202,10 +2201,9 @@ void CodeGen::genMultiRegStoreToSIMDLocal(GenTreeLclVar* lclNode)
 {
     assert(varTypeIsSIMD(lclNode));
 
-    regNumber dst       = lclNode->GetRegNum();
-    GenTree*  op1       = lclNode->gtGetOp1();
-    GenTree*  actualOp1 = op1->gtSkipReloadOrCopy();
-    unsigned  regCount  = actualOp1->GetMultiRegCount(m_compiler);
+    GenTree* op1       = lclNode->gtGetOp1();
+    GenTree* actualOp1 = op1->gtSkipReloadOrCopy();
+    unsigned regCount  = actualOp1->GetMultiRegCount(m_compiler);
     assert(op1->IsMultiRegNode());
     genConsumeRegs(op1);
 
@@ -4081,8 +4079,6 @@ void CodeGen::genClearStackVec3ArgUpperBits()
 #endif
 
     assert(m_compiler->compGeneratingProlog);
-
-    unsigned varNum = 0;
 
     for (unsigned varNum = 0; varNum < m_compiler->info.compArgsCount; varNum++)
     {
@@ -8763,8 +8759,6 @@ void CodeGen::genCodeForCCMP(GenTreeCCMP* ccmp)
 
 void CodeGen::genAmd64EmitterUnitTestsSse2()
 {
-    emitter* theEmitter = GetEmitter();
-
     //
     // Loads
     //
@@ -10953,7 +10947,6 @@ void CodeGen::genCaptureFuncletPrologEpilogInfo()
                                                                           // argument
 // slots if there are any calls in the function.
 #endif // UNIX_AMD64_ABI
-    unsigned offset = m_compiler->lvaOutgoingArgSpaceSize;
 
     // How much stack do we allocate in the funclet?
     // We need to 16-byte align the stack.

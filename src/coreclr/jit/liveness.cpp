@@ -979,8 +979,6 @@ void Liveness<TLiveness>::PerNodeLocalVarLiveness(GenTreeHWIntrinsic* hwintrinsi
 {
     if (TLiveness::ComputeMemoryLiveness)
     {
-        NamedIntrinsic intrinsicId = hwintrinsic->GetHWIntrinsicId();
-
         // We can't call fgMutateGcHeap unless the block has recorded a MemoryDef
         //
         if (hwintrinsic->OperIsMemoryStoreOrBarrier())

@@ -1638,9 +1638,6 @@ void ReplaceVisitor::CopyBetweenFields(GenTree*                    store,
     unsigned             dstBaseOffs = dstLcl != nullptr ? dstLcl->GetLclOffs() : 0;
     unsigned             srcBaseOffs = srcLcl != nullptr ? srcLcl->GetLclOffs() : 0;
 
-    LclVarDsc* dstDsc = dstLcl != nullptr ? m_compiler->lvaGetDesc(dstLcl) : nullptr;
-    LclVarDsc* srcDsc = srcLcl != nullptr ? m_compiler->lvaGetDesc(srcLcl) : nullptr;
-
     Replacement* dstRep = dstFirstRep;
     Replacement* srcRep = srcFirstRep;
 

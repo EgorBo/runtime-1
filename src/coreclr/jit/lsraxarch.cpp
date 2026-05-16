@@ -323,8 +323,8 @@ int LinearScan::BuildNode(GenTree* tree)
         case GT_RETURNTRAP:
         {
             // This just turns into a compare of its child with an int + a conditional call.
-            RefPosition* internalDef = buildInternalIntRegisterDefForNode(tree);
-            srcCount                 = BuildOperandUses(tree->gtGetOp1());
+            buildInternalIntRegisterDefForNode(tree);
+            srcCount = BuildOperandUses(tree->gtGetOp1());
             buildInternalRegisterUses();
             killMask = m_compiler->compHelperCallKillSet(CORINFO_HELP_STOP_FOR_GC);
             BuildKills(tree, killMask);
@@ -415,8 +415,8 @@ int LinearScan::BuildNode(GenTree* tree)
             if (varTypeIsFloating(tree))
             {
 
-                RefPosition* internalDef = buildInternalFloatRegisterDefForNode(tree, internalFloatRegCandidates());
-                srcCount                 = BuildOperandUses(tree->gtGetOp1());
+                buildInternalFloatRegisterDefForNode(tree, internalFloatRegCandidates());
+                srcCount = BuildOperandUses(tree->gtGetOp1());
                 buildInternalRegisterUses();
             }
             else
@@ -465,8 +465,8 @@ int LinearScan::BuildNode(GenTree* tree)
         case GT_CKFINITE:
         {
             assert(dstCount == 1);
-            RefPosition* internalDef = buildInternalIntRegisterDefForNode(tree);
-            srcCount                 = BuildOperandUses(tree->gtGetOp1());
+            buildInternalIntRegisterDefForNode(tree);
+            srcCount = BuildOperandUses(tree->gtGetOp1());
             buildInternalRegisterUses();
             BuildDef(tree);
         }

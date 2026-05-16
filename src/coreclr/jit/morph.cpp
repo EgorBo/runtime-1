@@ -1328,7 +1328,6 @@ void CallArgs::EvalArgsToTemps(Compiler* comp, GenTreeCall* call)
         numArgs <= ARRAY_SIZE(inlineTable) ? inlineTable : new (comp, CMK_CallArgs) CallArg*[numArgs];
     SortArgs(comp, call, sortedArgs);
 
-    unsigned regArgInx = 0;
     // Now go through the sorted argument table and perform the necessary evaluation into temps.
     CallArg** lateTail = &m_lateHead;
     for (size_t i = 0; i < numArgs; i++)
@@ -1423,8 +1422,7 @@ void CallArgs::EvalArgsToTemps(Compiler* comp, GenTreeCall* call)
                 setupArg = comp->gtNewTempStore(tmpVarNum, argx);
                 setupArg->SetMorphed(comp, /* doChildren */ true);
 
-                LclVarDsc* varDsc     = comp->lvaGetDesc(tmpVarNum);
-                var_types  lclVarType = genActualType(argx->gtType);
+                var_types lclVarType = genActualType(argx->gtType);
 
                 if (setupArg->OperIsCopyBlkOp())
                 {
@@ -3272,7 +3270,6 @@ GenTree* Compiler::fgMorphExpandStackArgForVarArgs(GenTreeLclVarCommon* lclNode)
         return nullptr;
     }
 
-    LclVarDsc*                   varDsc  = lvaGetDesc(lclNode);
     const ABIPassingInformation& abiInfo = lvaGetParameterABIInfo(lclNode->GetLclNum());
     assert(abiInfo.HasExactlyOneStackSegment());
 
@@ -3629,7 +3626,6 @@ GenTree* Compiler::fgMorphFieldAddr(GenTree* tree)
     assert(tree->OperIs(GT_FIELD_ADDR));
 
     GenTreeFieldAddr* fieldNode = tree->AsFieldAddr();
-    GenTree*          objRef    = fieldNode->GetFldObj();
     bool              isAddr    = ((tree->gtFlags & GTF_FLD_DEREFERENCED) == 0);
 
     if (fieldNode->IsInstance())
@@ -5903,9 +5899,8 @@ void Compiler::fgMorphTailCallViaJitHelper(GenTreeCall* call)
     // Inject a placeholder for the real call target that the Lowering phase will generate.
     // The constant will be replaced.
     GenTree* arg0Node = gtNewIconNode(7, TYP_I_IMPL);
-    CallArg* arg0 =
-        call->gtArgs.InsertAfter(this, arg1,
-                                 NewCallArg::Primitive(arg0Node).WellKnown(WellKnownArg::X86TailCallSpecialArg));
+    call->gtArgs.InsertAfter(this, arg1,
+                             NewCallArg::Primitive(arg0Node).WellKnown(WellKnownArg::X86TailCallSpecialArg));
 
     // It is now a varargs tail call.
     call->gtArgs.SetIsVarArgs();
@@ -8188,7 +8183,6 @@ DONE_MORPHING_CHILDREN:
             if (tree->OperIs(GT_NEG) && op1->OperIs(GT_MUL, GT_DIV))
             {
                 GenTreeOp* mulOrDiv = op1->AsOp();
-                GenTree*   op1op1   = mulOrDiv->gtGetOp1();
                 GenTree*   op1op2   = mulOrDiv->gtGetOp2();
 
                 if ((op1op2->IsCnsIntOrI() && !op1op2->IsIconHandle()) || op1op2->IsCnsFltOrDbl())
@@ -9927,10 +9921,6 @@ GenTree* Compiler::fgOptimizeHWIntrinsic(GenTreeHWIntrinsic* node)
 
                 GenTree* op1Clone = fgMakeMultiUse(&op1);
 
-                NamedIntrinsic addIntrinsic =
-                    GenTreeHWIntrinsic::GetHWIntrinsicIdForBinOp(this, GT_ADD, op1, op1Clone, simdBaseType, simdSize,
-                                                                 isScalar);
-
                 var_types simdType = getSIMDTypeForSize(simdSize);
 
                 GenTree* add = gtNewSimdBinOpNode(GT_ADD, simdType, op1, op1Clone, simdBaseType, simdSize);
@@ -11573,9 +11563,7 @@ GenTree* Compiler::fgMorphHWIntrinsic(GenTreeHWIntrinsic* tree)
     // Now do POST-ORDER processing
     //
 
-    var_types retType      = tree->TypeGet();
-    var_types simdBaseType = tree->GetSimdBaseType();
-    unsigned  simdSize     = tree->GetSimdSize();
+    var_types retType = tree->TypeGet();
 
     // Try to fold it, maybe we get lucky,
     GenTree* morphedTree = gtFoldExpr(tree);
@@ -11854,8 +11842,7 @@ GenTree* Compiler::fgMorphHWIntrinsicRequired(GenTreeHWIntrinsic* tree)
                     break;
                 }
 
-                FloatComparisonMode mode    = static_cast<FloatComparisonMode>(op3->AsIntConCommon()->IntegralValue());
-                FloatComparisonMode newMode = mode;
+                FloatComparisonMode mode = static_cast<FloatComparisonMode>(op3->AsIntConCommon()->IntegralValue());
 
                 switch (mode)
                 {
@@ -13029,7 +13016,7 @@ void Compiler::fgAssertionGen(GenTree* tree)
         {
             announce(ifFalseAssertionIndex, "[if false] ");
             unsigned const bvIndex = ifFalseAssertionIndex - 1;
-            BitVecOps::AddElemD(apTraits, apLocal, ifFalseAssertionIndex - 1);
+            BitVecOps::AddElemD(apTraits, apLocal, bvIndex);
             addImpliedAssertions(ifFalseAssertionIndex, apLocal);
         }
     }

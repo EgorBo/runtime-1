@@ -81,9 +81,8 @@ LikelyClassMethodHistogram::LikelyClassMethodHistogram(INT_PTR* histogramEntries
 template <typename ElemType>
 void LikelyClassMethodHistogram::LikelyClassMethodHistogramInner(ElemType* histogramEntries, unsigned entryCount)
 {
-    m_unknownHandles               = 0;
-    m_totalCount                   = 0;
-    uint32_t unknownTypeHandleMask = 0;
+    m_unknownHandles = 0;
+    m_totalCount     = 0;
 
     for (unsigned k = 0; k < entryCount; k++)
     {

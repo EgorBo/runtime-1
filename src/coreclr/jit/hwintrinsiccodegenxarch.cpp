@@ -3778,7 +3778,6 @@ void CodeGen::genFmaIntrinsic(GenTreeHWIntrinsic* node, insOpts instOptions)
 
     genConsumeMultiOpOperands(node);
 
-    regNumber op1NodeReg = op1->GetRegNum();
     regNumber op2NodeReg = op2->GetRegNum();
     regNumber op3NodeReg = op3->GetRegNum();
 
@@ -3887,9 +3886,7 @@ void CodeGen::genPermuteVar2x(GenTreeHWIntrinsic* node, insOpts instOptions)
 
     genConsumeMultiOpOperands(node);
 
-    regNumber op1NodeReg = op1->GetRegNum();
     regNumber op2NodeReg = op2->GetRegNum();
-    regNumber op3NodeReg = op3->GetRegNum();
 
     GenTree* emitOp1 = op1;
     GenTree* emitOp2 = op2;

@@ -629,7 +629,6 @@ void Rationalizer::RewriteHWIntrinsicBlendv(GenTree** use, Compiler::GenTreeStac
     // then we want to rewrite things to just directly produce TYP_SIMD instead.
 
     NamedIntrinsic intrinsic    = node->GetHWIntrinsicId();
-    var_types      retType      = node->TypeGet();
     var_types      simdBaseType = node->GetSimdBaseType();
     unsigned       simdSize     = node->GetSimdSize();
 
@@ -753,7 +752,6 @@ void Rationalizer::RewriteHWIntrinsicMaskOp(GenTree** use, Compiler::GenTreeStac
     // then we want to rewrite things to just directly produce TYP_SIMD instead.
 
     NamedIntrinsic intrinsic    = node->GetHWIntrinsicId();
-    var_types      retType      = node->TypeGet();
     var_types      simdBaseType = node->GetSimdBaseType();
     unsigned       simdSize     = node->GetSimdSize();
 
@@ -1332,10 +1330,12 @@ void Rationalizer::RewriteHWIntrinsicExtractMsb(GenTree** use, Compiler::GenTree
 {
     GenTreeHWIntrinsic* node = (*use)->AsHWIntrinsic();
 
-    NamedIntrinsic intrinsic    = node->GetHWIntrinsicId();
-    var_types      simdBaseType = node->GetSimdBaseType();
-    unsigned       simdSize     = node->GetSimdSize();
-    var_types      simdType     = Compiler::getSIMDTypeForSize(simdSize);
+#ifdef TARGET_ARM64
+    NamedIntrinsic intrinsic = node->GetHWIntrinsicId();
+#endif
+    var_types simdBaseType = node->GetSimdBaseType();
+    unsigned  simdSize     = node->GetSimdSize();
+    var_types simdType     = Compiler::getSIMDTypeForSize(simdSize);
 
     GenTree* op1 = node->Op(1);
 

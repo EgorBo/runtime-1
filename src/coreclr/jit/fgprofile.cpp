@@ -941,9 +941,9 @@ void Compiler::WalkSpanningTree(SpanningTreeVisitor* visitor)
             {
                 // See if we're leaving an EH handler region.
                 //
-                bool            isInTry     = false;
-                unsigned const  regionIndex = ehGetMostNestedRegionIndex(block, &isInTry);
-                EHblkDsc* const dsc         = ehGetBlockHndDsc(block);
+                bool isInTry = false;
+                ehGetMostNestedRegionIndex(block, &isInTry);
+                EHblkDsc* const dsc = ehGetBlockHndDsc(block);
 
                 if (isInTry || (dsc->ebdHandlerType == EH_HANDLER_CATCH))
                 {
@@ -4967,8 +4967,7 @@ bool Compiler::fgDebugCheckOutgoingProfileData(BasicBlock* block, ProfileChecks 
 
     if ((numSuccs > 0) && !block->KindIs(BBJ_EHFAULTRET, BBJ_EHFILTERRET))
     {
-        weight_t const blockWeight        = block->bbWeight;
-        weight_t       outgoingLikelihood = 0;
+        weight_t outgoingLikelihood = 0;
 
         // Walk successor edges and add up flow counts.
         //

@@ -3971,7 +3971,6 @@ void emitter::emitDispGCVarDelta()
     if (!VarSetOps::Equal(m_compiler, debugPrevGCrefVars, debugThisGCrefVars))
     {
         emitDispGCDeltaTitle("GC ptr vars");
-        VARSET_TP sameGCrefVars(VarSetOps::Intersection(m_compiler, debugPrevGCrefVars, debugThisGCrefVars));
         VARSET_TP GCrefVarsRemoved(VarSetOps::Diff(m_compiler, debugPrevGCrefVars, debugThisGCrefVars));
         VARSET_TP GCrefVarsAdded(VarSetOps::Diff(m_compiler, debugThisGCrefVars, debugPrevGCrefVars));
         if (!VarSetOps::IsEmpty(m_compiler, GCrefVarsRemoved))
@@ -7398,9 +7397,7 @@ unsigned emitter::emitEndCodeGen(Compiler*             comp,
         {
             for (unsigned cnt = ig->igInsCnt; cnt > 0; cnt--)
             {
-                size_t     curInstrAddr = (size_t)cp;
-                instrDesc* curInstrDesc = id;
-                size_t     insSize      = emitIssue1Instr(ig, id, &cp);
+                size_t insSize = emitIssue1Instr(ig, id, &cp);
                 emitAdvanceInstrDesc(&id, insSize);
             }
         }

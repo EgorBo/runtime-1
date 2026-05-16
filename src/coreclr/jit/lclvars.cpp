@@ -2663,7 +2663,6 @@ void Compiler::makeExtraStructQueries(CORINFO_CLASS_HANDLE structHandle, int lev
         for (unsigned int i = 0; i < fieldCnt; i++)
         {
             CORINFO_FIELD_HANDLE fieldHandle      = info.compCompHnd->getFieldInClass(structHandle, i);
-            unsigned             fldOffset        = info.compCompHnd->getFieldOffset(fieldHandle);
             CORINFO_CLASS_HANDLE fieldClassHandle = NO_CLASS_HANDLE;
             CorInfoType          fieldCorType     = info.compCompHnd->getFieldType(fieldHandle, &fieldClassHandle);
             var_types            fieldVarType     = JITtype2varType(fieldCorType);

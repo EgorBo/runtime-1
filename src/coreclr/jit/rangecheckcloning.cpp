@@ -644,10 +644,9 @@ PhaseStatus Compiler::optRangeCheckCloning()
         //
         Statement* lastStmt = firstGroup->Top().stmt;
 
-        int firstGroupStarts = firstGroup->Bottom().stmtIdx;
-        int firstGroupEnds   = firstGroup->Top().stmtIdx;
-        int lastGroupStarts  = lastGroup->Bottom().stmtIdx;
-        int lastGroupEnds    = lastGroup->Top().stmtIdx;
+        int firstGroupEnds  = firstGroup->Top().stmtIdx;
+        int lastGroupStarts = lastGroup->Bottom().stmtIdx;
+        int lastGroupEnds   = lastGroup->Top().stmtIdx;
 
         // The only requirement is that both groups must overlap - we don't want to
         // end up cloning unrelated statements between them (not a correctness issue,

@@ -208,10 +208,6 @@ bool Compiler::optUnmarkCSE(GenTree* tree)
 
 Compiler::fgWalkResult Compiler::optCSE_MaskHelper(GenTree** pTree, fgWalkData* walkData)
 {
-    GenTree*         tree      = *pTree;
-    Compiler*        comp      = walkData->m_compiler;
-    optCSE_MaskData* pUserData = (optCSE_MaskData*)(walkData->pCallbackData);
-
     return WALK_CONTINUE;
 }
 
@@ -2160,8 +2156,8 @@ void CSE_HeuristicRandom::ConsiderCandidates()
     CSEdsc** ptr = sortTab;
     for (; (k > 0); k--, ptr++)
     {
-        const int     attempt = m_compiler->optCSEattempt++;
-        CSEdsc* const dsc     = *ptr;
+        m_compiler->optCSEattempt++;
+        CSEdsc* const dsc = *ptr;
         CSE_Candidate candidate(this, dsc);
 
         JITDUMP("\nRandomly attempting " FMT_CSE "\n", candidate.CseIndex());
@@ -2274,8 +2270,8 @@ void CSE_HeuristicReplay::ConsiderCandidates()
             JITDUMP("Invalid candidate number %d\n", index + 1);
             continue;
         }
-        const int     attempt = m_compiler->optCSEattempt++;
-        CSEdsc* const dsc     = m_compiler->optCSEtab[index];
+        m_compiler->optCSEattempt++;
+        CSEdsc* const dsc = m_compiler->optCSEtab[index];
         CSE_Candidate candidate(this, dsc);
 
         JITDUMP("\nReplay attempting " FMT_CSE "\n", candidate.CseIndex());
@@ -3046,7 +3042,7 @@ void CSE_HeuristicRLHook::ConsiderCandidates()
                 continue;
             }
 
-            const int     attempt = m_compiler->optCSEattempt++;
+            m_compiler->optCSEattempt++;
             CSE_Candidate candidate(this, dsc);
 
             JITDUMP("\nRLHook attempting " FMT_CSE "\n", candidate.CseIndex());
@@ -3767,8 +3763,8 @@ void CSE_HeuristicRL::UpdateParameters()
         BuildChoices(choices);
         Softmax(choices);
 
-        const int     attempt = m_compiler->optCSEattempt++;
-        CSEdsc* const dsc     = sortTab[index];
+        m_compiler->optCSEattempt++;
+        CSEdsc* const dsc = sortTab[index];
 
         // purge this CSE so we don't consider it again when
         // building choices
@@ -3868,7 +3864,6 @@ void CSE_HeuristicRL::UpdateParametersStep(CSEdsc* dsc, ArrayStack<Choice>& choi
     // Eventually (with a well-trained policy) the current choice will
     // be (one of) the strongly preferred choice(s), if this is an optimal sequence.
     //
-    Choice* const currentChoice = FindChoice(dsc, choices);
     if (m_verbose)
     {
         DumpChoices(choices, dsc);
@@ -5672,7 +5667,6 @@ PhaseStatus Compiler::optOptimizeValnumCSEs()
 
     optValnumCSE_phase = true;
     optCSEweight       = -1.0f;
-    bool madeChanges   = false;
 
     optValnumCSE_Init();
 

@@ -716,8 +716,7 @@ bool Compiler::fgIsCommaThrow(GenTree* tree, bool forFolding /* = false */)
 //    The call node corresponding to the helper
 GenTreeCall* Compiler::fgGetStaticsCCtorHelper(CORINFO_CLASS_HANDLE cls, CorInfoHelpFunc helper, uint32_t typeIndex)
 {
-    bool         bNeedClassID = true;
-    GenTreeFlags callFlags    = GTF_EMPTY;
+    GenTreeFlags callFlags = GTF_EMPTY;
 
     var_types type = TYP_BYREF;
 
@@ -1837,7 +1836,6 @@ void Compiler::fgAddReversePInvokeEnterExit()
 
     lvaReversePInvokeFrameVar = lvaGrabTempWithImplicitUse(false DEBUGARG("Reverse Pinvoke FrameVar"));
 
-    LclVarDsc* varDsc = lvaGetDesc(lvaReversePInvokeFrameVar);
     lvaSetStruct(lvaReversePInvokeFrameVar, typGetBlkLayout(eeGetEEInfo()->sizeOfReversePInvokeFrame), false);
 
     // Add enter pinvoke exit callout at the start of prolog
@@ -2589,7 +2587,6 @@ PhaseStatus Compiler::fgAddInternal()
         // Lowering::InsertPInvokeMethodProlog will create a call with this local addr as an argument.
         lvaSetVarAddrExposed(lvaInlinedPInvokeFrameVar DEBUGARG(AddressExposedReason::ESCAPE_ADDRESS));
 
-        LclVarDsc* varDsc = lvaGetDesc(lvaInlinedPInvokeFrameVar);
         // Make room for the inlined frame.
         const CORINFO_EE_INFO* eeInfo = eeGetEEInfo();
         unsigned frameSize            = info.compPublishStubParam ? eeInfo->inlinedCallFrameInfo.sizeWithSecretStubArg
@@ -5230,7 +5227,6 @@ void FlowGraphNaturalLoop::Dump(FlowGraphNaturalLoop* loop)
     // Blocks can compacted be "[top .. bottom]" if lexically adjacent and no non-loop blocks in
     // the range. Otherwise, print a verbose list of blocks.
 
-    Compiler* comp = loop->GetDfsTree()->GetCompiler();
     printf(FMT_LP, loop->GetIndex());
 
     printf(" header: " FMT_BB, loop->GetHeader()->bbNum);
@@ -6228,7 +6224,6 @@ bool FlowGraphNaturalLoop::CanDuplicate(INDEBUG(const char** reason))
     }
 #endif
 
-    Compiler*       comp   = m_dfsTree->GetCompiler();
     BasicBlockVisit result = VisitLoopBlocks([=](BasicBlock* block) {
         if (!BasicBlock::sameEHRegion(block, GetHeader()))
         {

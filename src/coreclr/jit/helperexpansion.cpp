@@ -577,7 +577,6 @@ bool Compiler::fgExpandThreadLocalAccessForCallNativeAOT(BasicBlock** pBlock, St
     DebugInfo   debugInfo    = stmt->GetDebugInfo();
     block                    = fgSplitBlockBeforeTree(block, stmt, call, &newFirstStmt, &callUse);
     *pBlock                  = block;
-    var_types callType       = call->TypeGet();
     assert(prevBb != nullptr && block != nullptr);
 
     unsigned finalLclNum = lvaGrabTemp(true DEBUGARG("Final offset"));

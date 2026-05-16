@@ -1056,7 +1056,6 @@ void Compiler::optVisitBoundingExitingCondBlocks(FlowGraphNaturalLoop* loop, TFu
         }
     }
 
-    bool changed = false;
     while ((dominates != nullptr) && loop->ContainsBlock(dominates))
     {
         if (dominates->KindIs(BBJ_COND) &&
@@ -1780,7 +1779,6 @@ bool StrengthReductionContext::InitializeCursors(GenTreeLclVarCommon* primaryIVL
 //
 bool StrengthReductionContext::IsUseExpectedToBeRemoved(BasicBlock* block, Statement* stmt, GenTreeLclVarCommon* tree)
 {
-    unsigned primaryIVLclNum = tree->GetLclNum();
     if (m_compiler->optIsUpdateOfIVWithoutSideEffects(stmt->GetRootNode(), tree->GetLclNum()))
     {
         // Removal of unused IVs will get rid of this.

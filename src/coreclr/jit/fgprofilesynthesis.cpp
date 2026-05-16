@@ -696,10 +696,9 @@ void ProfileSynthesis::BlendLikelihoods()
             {
                 // Capture the existing weights and assign new likelihoods based on synthesis.
                 //
-                weight_t const sum        = SumOutgoingLikelihoods(block, &likelihoods);
-                bool const     unlikely   = Compiler::fgProfileWeightsEqual(sum, 0.0, epsilon);
-                bool const     consistent = Compiler::fgProfileWeightsEqual(sum, 1.0, epsilon);
-                bool const     zero       = Compiler::fgProfileWeightsEqual(block->bbWeight, 0.0, epsilon);
+                weight_t const sum      = SumOutgoingLikelihoods(block, &likelihoods);
+                bool const     unlikely = Compiler::fgProfileWeightsEqual(sum, 0.0, epsilon);
+                bool const     zero     = Compiler::fgProfileWeightsEqual(block->bbWeight, 0.0, epsilon);
 
                 if (block->KindIs(BBJ_COND))
                 {
@@ -1309,7 +1308,6 @@ void ProfileSynthesis::GaussSeidelSolver()
     // The algorithm.
     //
     bool                          converged            = false;
-    weight_t                      previousResidual     = 0;
     weight_t                      residual             = 0;
     weight_t                      relResidual          = 0;
     weight_t                      oldRelResidual       = 0;
@@ -1318,7 +1316,6 @@ void ProfileSynthesis::GaussSeidelSolver()
     BasicBlock*                   residualBlock        = nullptr;
     BasicBlock*                   relResidualBlock     = nullptr;
     const FlowGraphDfsTree* const dfs                  = m_loops->GetDfsTree();
-    unsigned const                blockCount           = dfs->GetPostOrderCount();
     bool                          checkEntryExitWeight = true;
     bool const                    showDetails          = false;
     bool const                    callFinalliesCreated = m_comp->fgImportDone;

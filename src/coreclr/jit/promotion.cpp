@@ -707,7 +707,6 @@ public:
         weight_t countOverlappedCallArgWtd        = 0;
         weight_t countOverlappedStoredFromCallWtd = 0;
 
-        bool overlap = false;
         for (const Access& otherAccess : m_accesses)
         {
             if (&otherAccess == &access)
@@ -1390,9 +1389,8 @@ private:
                                                    GenTreeLclVarCommon* regPromLcl,
                                                    BasicBlock*          block)
     {
-        unsigned regPromOffs   = regPromLcl->GetLclOffs();
-        unsigned candidateOffs = candidateLcl->GetLclOffs();
-        unsigned size          = regPromLcl->GetLayout(m_compiler)->GetSize();
+        unsigned regPromOffs = regPromLcl->GetLclOffs();
+        unsigned size        = regPromLcl->GetLayout(m_compiler)->GetSize();
 
         LclVarDsc* regPromDsc = m_compiler->lvaGetDesc(regPromLcl);
         for (unsigned fieldLcl = regPromDsc->lvFieldLclStart, i = 0; i < regPromDsc->lvFieldCnt; fieldLcl++, i++)

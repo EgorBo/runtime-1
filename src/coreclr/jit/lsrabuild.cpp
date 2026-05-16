@@ -587,8 +587,8 @@ RefPosition* LinearScan::newRefPosition(Interval*        theInterval,
 
     if (insertFixedRef)
     {
-        regNumber    physicalReg = genRegNumFromMask(mask, theInterval->registerType);
-        RefPosition* pos         = newRefPosition(physicalReg, theLocation, RefTypeFixedReg, nullptr, mask);
+        regNumber physicalReg = genRegNumFromMask(mask, theInterval->registerType);
+        newRefPosition(physicalReg, theLocation, RefTypeFixedReg, nullptr, mask);
         assert(theInterval != nullptr);
         assert((allRegs(theInterval->registerType) & mask) != 0);
     }
@@ -1172,9 +1172,9 @@ bool LinearScan::buildKillPositionsForNode(GenTree* tree, LsraLocation currentLo
 
     if (m_compiler->killGCRefs(tree))
     {
-        RefPosition* pos = newRefPosition((Interval*)nullptr, currentLoc, RefTypeKillGCRefs, tree,
-                                          (availableIntRegs & ~RBM_ARG_REGS.GetIntRegSet()));
-        insertedKills    = true;
+        newRefPosition((Interval*)nullptr, currentLoc, RefTypeKillGCRefs, tree,
+                       (availableIntRegs & ~RBM_ARG_REGS.GetIntRegSet()));
+        insertedKills = true;
     }
 
     return insertedKills;
@@ -2432,7 +2432,7 @@ void LinearScan::buildIntervals()
         // register positions for those exposed uses need to be recorded at
         // this point.
 
-        RefPosition* pos = newRefPosition((Interval*)nullptr, currentLoc, RefTypeBB, nullptr, RBM_NONE);
+        newRefPosition((Interval*)nullptr, currentLoc, RefTypeBB, nullptr, RBM_NONE);
         currentLoc += 2;
         JITDUMP("\n");
 
@@ -2763,7 +2763,7 @@ void LinearScan::buildIntervals()
 
     if (prevBlock->NumSucc() > 0)
     {
-        RefPosition* pos = newRefPosition((Interval*)nullptr, currentLoc, RefTypeBB, nullptr, RBM_NONE);
+        newRefPosition((Interval*)nullptr, currentLoc, RefTypeBB, nullptr, RBM_NONE);
     }
 
     needNonIntegerRegisters |= m_compiler->compFloatingPointUsed;
@@ -3698,7 +3698,6 @@ void LinearScan::AddDelayFreeUses(RefPosition* useRefPosition, GenTree* rmwNode)
 
     Interval* rmwInterval  = nullptr;
     bool      rmwIsLastUse = false;
-    GenTree*  addr         = nullptr;
     if ((rmwNode != nullptr) && isCandidateLocalRef(rmwNode))
     {
         rmwInterval = getIntervalForLocalVarNode(rmwNode->AsLclVar());

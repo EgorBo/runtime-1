@@ -1241,9 +1241,8 @@ bool ObjectAllocator::MorphAllocObjNodes()
 
     for (BasicBlock* const block : m_compiler->Blocks())
     {
-        const bool basicBlockHasNewObj       = block->HasFlag(BBF_HAS_NEWOBJ);
-        const bool basicBlockHasNewArr       = block->HasFlag(BBF_HAS_NEWARR);
-        const bool basicBlockHasBackwardJump = block->HasFlag(BBF_BACKWARD_JUMP);
+        const bool basicBlockHasNewObj = block->HasFlag(BBF_HAS_NEWOBJ);
+        const bool basicBlockHasNewArr = block->HasFlag(BBF_HAS_NEWARR);
 
         if (!basicBlockHasNewObj && !basicBlockHasNewArr)
         {
@@ -2141,8 +2140,6 @@ void ObjectAllocator::AnalyzeParentStack(ArrayStack<GenTree*>* parentStack, unsi
                         break;
                     }
                 }
-
-                GenTree* const addr = parent->AsIndir()->Addr();
 
                 // For loads from local structs we may be tracking the underlying fields.
                 //
@@ -3317,13 +3314,11 @@ GenTree* ObjectAllocator::IsGuard(BasicBlock* block, GuardInfo* info)
 
     // Passed the checks... fill in the info.
     //
-    info->m_local  = addr->AsLclVar()->GetLclNum();
-    bool isNonNull = false;
-    bool isExact   = false;
-    info->m_type   = (CORINFO_CLASS_HANDLE)op2->AsIntCon()->gtCompileTimeHandle;
-    info->m_block  = block;
-    info->m_stmt   = stmt;
-    info->m_relop  = tree;
+    info->m_local = addr->AsLclVar()->GetLclNum();
+    info->m_type  = (CORINFO_CLASS_HANDLE)op2->AsIntCon()->gtCompileTimeHandle;
+    info->m_block = block;
+    info->m_stmt  = stmt;
+    info->m_relop = tree;
 
     JITDUMP("... " FMT_BB " is guard for V%02u\n", block->bbNum, info->m_local);
     return tree;
@@ -3776,11 +3771,10 @@ bool ObjectAllocator::ShouldClone(CloneInfo* info)
 {
     // For now, use the same cloning size limit we use for loop cloning
     //
-    int const      sizeConfig  = JitConfig.JitCloneLoopsSizeLimit();
-    unsigned const sizeLimit   = (sizeConfig >= 0) ? (unsigned)sizeConfig : UINT_MAX;
-    unsigned       size        = 0;
-    bool           shouldClone = true;
-    auto           countNode   = [&size](GenTree* tree) -> unsigned {
+    int const      sizeConfig = JitConfig.JitCloneLoopsSizeLimit();
+    unsigned const sizeLimit  = (sizeConfig >= 0) ? (unsigned)sizeConfig : UINT_MAX;
+    unsigned       size       = 0;
+    auto           countNode  = [&size](GenTree* tree) -> unsigned {
         size++;
         return 1;
     };
@@ -4274,7 +4268,6 @@ bool ObjectAllocator::CheckCanClone(CloneInfo* info)
     }
 
     JITDUMP("total cloning including all enumerator uses: %u blocks\n", visited->size() - 1);
-    unsigned numberOfEHRegionsToClone = 0;
 
     // Now expand the clone block set to include any try regions that need cloning.
     //

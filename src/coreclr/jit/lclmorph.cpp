@@ -1595,7 +1595,6 @@ private:
         unsigned   lclNum    = val.LclNum();
         unsigned   offset    = val.Offset();
         LclVarDsc* varDsc    = m_compiler->lvaGetDesc(lclNum);
-        ValueSize  lclSize   = m_compiler->lvaLclValueSize(lclNum);
         ValueSize  indirSize = node->AsIndir()->ValueSize();
 
         if (indirSize.IsNull() || m_compiler->IsWideAccess(lclNum, offset, indirSize))
@@ -2122,16 +2121,6 @@ private:
                     // Access a promoted struct's field with an offset that doesn't correspond to any field.
                     // It can happen if the struct was cast to another struct with different offsets.
                     return BAD_VAR_NUM;
-                }
-
-                LclVarDsc* fieldVarDsc = m_compiler->lvaGetDesc(fieldLclNum);
-                ValueSize  fieldSize   = fieldVarDsc->lvValueSize();
-
-                // Span's Length is never negative unconditionally
-                if (isSpanLength && (accessSize.GetExact() == genTypeSize(TYP_INT)))
-                {
-                    unsigned exactSize      = accessSize.GetExact();
-                    unsigned exactFieldSize = fieldSize.GetExact();
                 }
 
                 if (!accessSize.IsNull() && m_compiler->IsWideAccess(fieldLclNum, 0, accessSize))

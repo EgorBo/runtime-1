@@ -4864,9 +4864,7 @@ GenTree* Lowering::LowerJTrue(GenTreeOp* jtrue)
 //
 GenTree* Lowering::LowerSelect(GenTreeConditional* select)
 {
-    GenTree* cond     = select->gtCond;
-    GenTree* trueVal  = select->gtOp1;
-    GenTree* falseVal = select->gtOp2;
+    GenTree* cond = select->gtCond;
 
     JITDUMP("Lowering select:\n");
     DISPTREERANGE(BlockRange(), select);
@@ -4895,6 +4893,8 @@ GenTree* Lowering::LowerSelect(GenTreeConditional* select)
     }
 
 #ifdef TARGET_ARM64
+    GenTree* trueVal  = select->gtOp1;
+    GenTree* falseVal = select->gtOp2;
     if (trueVal->OperIs(GT_NOT, GT_NEG, GT_ADD) || falseVal->OperIs(GT_NOT, GT_NEG, GT_ADD))
     {
         TryLowerCselToCSOp(select, cond);
@@ -4939,13 +4939,14 @@ bool Lowering::TryLowerConditionToFlagsNode(GenTree*      parent,
 
         GenTreeOp* relop = condition->AsOp();
 
-        *cond           = GenCondition::FromRelop(relop);
+        *cond = GenCondition::FromRelop(relop);
+
+#ifdef TARGET_XARCH
         bool optimizing = m_compiler->opts.OptimizationEnabled();
 
         GenTree* relopOp1 = relop->gtGetOp1();
         GenTree* relopOp2 = relop->gtGetOp2();
 
-#ifdef TARGET_XARCH
         // Optimize FP x != x to only check parity flag. This is a common way of
         // checking NaN and avoids two branches that we would otherwise emit.
         if (optimizing && (cond->GetCode() == GenCondition::FNEU) && relopOp1->OperIsLocal() &&
@@ -5331,8 +5332,7 @@ void Lowering::LowerRetFieldList(GenTreeOp* ret, GenTreeFieldList* fieldList)
 unsigned Lowering::StoreFieldListToNewLocal(ClassLayout* layout, GenTreeFieldList* fieldList)
 {
     JITDUMP("Spilling field list [%06u] to stack\n", Compiler::dspTreeID(fieldList));
-    unsigned   lclNum = m_compiler->lvaGrabTemp(true DEBUGARG("Spilled local for field list"));
-    LclVarDsc* varDsc = m_compiler->lvaGetDesc(lclNum);
+    unsigned lclNum = m_compiler->lvaGrabTemp(true DEBUGARG("Spilled local for field list"));
     m_compiler->lvaSetStruct(lclNum, layout, false);
     m_compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(DoNotEnregisterReason::LocalField));
 
@@ -6757,8 +6757,7 @@ GenTree* Lowering::SetGCState(int state)
 //
 GenTree* Lowering::CreateFrameLinkUpdate(FrameLinkAction action)
 {
-    const CORINFO_EE_INFO*                       pInfo         = m_compiler->eeGetEEInfo();
-    const CORINFO_EE_INFO::InlinedCallFrameInfo& callFrameInfo = pInfo->inlinedCallFrameInfo;
+    const CORINFO_EE_INFO* pInfo = m_compiler->eeGetEEInfo();
 
     GenTree* TCB = m_compiler->gtNewLclVarNode(m_compiler->info.compLvFrameListRoot, TYP_I_IMPL);
 
@@ -7730,10 +7729,10 @@ bool Lowering::TryCreateAddrMode(GenTree* addr, bool isContainable, GenTree* par
     ssize_t  offset = 0;
     bool     rev    = false;
 
-    var_types targetType = parent->OperIsIndir() ? parent->TypeGet() : TYP_UNDEF;
-
     unsigned naturalMul = 0;
 #ifdef TARGET_ARM64
+    var_types targetType = parent->OperIsIndir() ? parent->TypeGet() : TYP_UNDEF;
+
     // Multiplier should be a "natural-scale" power of two number which is equal to target's width.
     //
     //   *(ulong*)(data + index * 8); - can be optimized
@@ -8278,8 +8277,7 @@ bool Lowering::TryLowerConstIntUDivOrUMod(GenTreeOp* divMod)
 #endif
         }
 
-        const bool     requiresDividendMultiuse = !isDiv;
-        const weight_t curBBWeight              = m_block->getBBWeight(m_compiler);
+        const bool requiresDividendMultiuse = !isDiv;
 
         if (requiresDividendMultiuse)
         {

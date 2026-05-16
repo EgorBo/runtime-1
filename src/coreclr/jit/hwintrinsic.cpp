@@ -1914,12 +1914,14 @@ GenTree* Compiler::impHWIntrinsic(NamedIntrinsic        intrinsic,
         return nullptr;
     }
 
-    HWIntrinsicCategory    category     = HWIntrinsicInfo::lookupCategory(intrinsic);
-    CORINFO_InstructionSet isa          = HWIntrinsicInfo::lookupIsa(intrinsic);
-    int                    numArgs      = sig->numArgs;
-    var_types              retType      = genActualType(JITtype2varType(sig->retType));
-    var_types              simdBaseType = TYP_UNDEF;
-    GenTree*               retNode      = nullptr;
+    HWIntrinsicCategory category = HWIntrinsicInfo::lookupCategory(intrinsic);
+#ifdef TARGET_ARM64
+    CORINFO_InstructionSet isa = HWIntrinsicInfo::lookupIsa(intrinsic);
+#endif
+    int       numArgs      = sig->numArgs;
+    var_types retType      = genActualType(JITtype2varType(sig->retType));
+    var_types simdBaseType = TYP_UNDEF;
+    GenTree*  retNode      = nullptr;
 
     if (retType == TYP_STRUCT)
     {

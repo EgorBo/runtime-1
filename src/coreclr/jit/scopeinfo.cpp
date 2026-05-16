@@ -632,9 +632,6 @@ void CodeGenInterface::VariableLiveKeeper::VariableLiveRange::dumpVariableLiveRa
     // ("m_StartEmitLocation")
     codeGen->dumpSiVarLoc(&m_VarLocation);
 
-    // If this is an open "VariableLiveRange", "m_EndEmitLocation" is non-valid and print -1
-    UNATIVE_OFFSET endAssemblyOffset = m_EndEmitLocation.Valid() ? m_EndEmitLocation.CodeOffset(emit) : -1;
-
     printf(" [%X, %X)", m_StartEmitLocation.CodeOffset(emit), m_EndEmitLocation.CodeOffset(emit));
 }
 

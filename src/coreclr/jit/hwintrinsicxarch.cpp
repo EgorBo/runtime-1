@@ -1226,8 +1226,6 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
     GenTree* op3     = nullptr;
     GenTree* op4     = nullptr;
 
-    CORINFO_InstructionSet isa = HWIntrinsicInfo::lookupIsa(intrinsic);
-
     if (simdSize != 0)
     {
         assert(varTypeIsArithmetic(simdBaseType));
@@ -2147,8 +2145,6 @@ GenTree* Compiler::impSpecialIntrinsic(NamedIntrinsic        intrinsic,
 
                     case TYP_DOUBLE:
                     {
-                        double cnsVal = 0;
-
                         for (uint32_t index = 0; index < sig->numArgs; index++)
                         {
                             double cnsVal = static_cast<double>(impPopStack().val->AsDblCon()->DconValue());

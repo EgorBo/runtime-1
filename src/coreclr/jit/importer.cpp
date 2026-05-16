@@ -6324,9 +6324,6 @@ void Compiler::impImportBlockCode(BasicBlock* block)
 
     signed jmpDist;
 
-    /* remember the start of the delegate creation sequence (used for verification) */
-    const BYTE* delegateCreateStart = nullptr;
-
     int  prefixFlags = 0;
     bool explicitTailCall, constraintCall, readonlyCall;
 
@@ -8678,8 +8675,6 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     }
                 }
 
-                CORINFO_SIG_INFO& ftnSig = callInfo.sig;
-
                 /* Get the object-ref */
                 op1 = impPopStack().val;
                 assertImp(op1->TypeIs(TYP_REF));
@@ -8934,9 +8929,8 @@ void Compiler::impImportBlockCode(BasicBlock* block)
                     {
                         // If we're newing up a finalizable object, spill anything that can cause exceptions.
                         //
-                        bool            hasSideEffects = false;
-                        CorInfoHelpFunc newHelper =
-                            info.compCompHnd->getNewHelper(resolvedToken.hClass, &hasSideEffects);
+                        bool hasSideEffects = false;
+                        info.compCompHnd->getNewHelper(resolvedToken.hClass, &hasSideEffects);
 
                         if (hasSideEffects)
                         {

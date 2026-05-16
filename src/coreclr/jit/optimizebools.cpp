@@ -1326,8 +1326,7 @@ void OptBoolsDsc::optOptimizeBoolsGcStress()
     {
         return;
     }
-    GenTree* relop  = test.compTree;
-    bool     isBool = test.isBool;
+    GenTree* relop = test.compTree;
 
     if (comparand->gtFlags & (GTF_ASG | GTF_CALL | GTF_ORDER_SIDEEFF))
     {

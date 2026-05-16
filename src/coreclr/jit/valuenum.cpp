@@ -6714,9 +6714,8 @@ void Compiler::fgValueNumberArrayElemStore(GenTree* storeNode, VNFuncApp* addrFu
     ValueNum             inxVN      = addrFunc->m_args[2];
     ssize_t              offset     = vnStore->ConstantValue<ssize_t>(addrFunc->m_args[3]);
 
-    bool      invalidateArray = false;
-    var_types elemType        = DecodeElemType(elemTypeEq);
-    ValueNum  elemTypeEqVN    = vnStore->VNForHandle(ssize_t(elemTypeEq), GTF_ICON_CLASS_HDL);
+    var_types elemType     = DecodeElemType(elemTypeEq);
+    ValueNum  elemTypeEqVN = vnStore->VNForHandle(ssize_t(elemTypeEq), GTF_ICON_CLASS_HDL);
     JITDUMP("  Array element store: elemTypeEq is " FMT_VN " for %s[]\n", elemTypeEqVN,
             (elemType == TYP_STRUCT) ? eeGetClassName(elemTypeEq) : varTypeName(elemType));
 
@@ -10965,8 +10964,7 @@ void ValueNumStore::vnDumpMapPhysicalStore(Compiler* comp, VNFuncApp* mapPhysica
     ValueNum valueVN  = mapPhysicalStore->m_args[2];
 
     unsigned size;
-    unsigned offset    = DecodePhysicalSelector(selector, &size);
-    unsigned endOffset = offset + size;
+    DecodePhysicalSelector(selector, &size);
 
     comp->vnPrint(mapVN, 0);
     vnDumpPhysicalSelector(selector);
@@ -12508,11 +12506,10 @@ void Compiler::fgValueNumberStore(GenTree* store)
             ValueNum  addrVN       = addr->gtVNPair.GetLiberal();
             bool      addrIsVNFunc = vnStore->GetVNFunc(vnStore->VNNormalValue(addrVN), &funcApp);
 
-            GenTreeLclVarCommon* lclVarTree = nullptr;
-            ssize_t              offset     = 0;
-            ValueSize            storeSize  = store->AsIndir()->ValueSize();
-            GenTree*             baseAddr   = nullptr;
-            FieldSeq*            fldSeq     = nullptr;
+            ssize_t   offset    = 0;
+            ValueSize storeSize = store->AsIndir()->ValueSize();
+            GenTree*  baseAddr  = nullptr;
+            FieldSeq* fldSeq    = nullptr;
 
             if (addrIsVNFunc && (funcApp.m_func == VNF_PtrToStatic))
             {
@@ -13164,8 +13161,7 @@ void Compiler::fgValueNumberTree(GenTree* tree)
             }
             else
             {
-                var_types loadType = tree->TypeGet();
-                ssize_t   offset   = 0;
+                ssize_t   offset = 0;
                 VNFuncApp funcApp{VNF_COUNT};
 
                 if (fgValueNumberConstLoad(tree->AsIndir()))

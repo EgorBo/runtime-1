@@ -4914,9 +4914,6 @@ void Compiler::optComputeLoopSideEffects()
         m_loopSideEffects[loop->GetIndex()].VarUseDef = VarSetOps::MakeEmpty(this);
     }
 
-    BasicBlock** postOrder      = m_dfsTree->GetPostOrder();
-    unsigned     postOrderCount = m_dfsTree->GetPostOrderCount();
-
     // Iterate all blocks in loops.
     for (FlowGraphNaturalLoop* loop : m_loops->InReversePostOrder())
     {
@@ -5150,7 +5147,6 @@ void Compiler::optComputeLoopSideEffectsOfBlock(BasicBlock* blk, FlowGraphNatura
                 case GT_HWINTRINSIC:
                 {
                     GenTreeHWIntrinsic* hwintrinsic = tree->AsHWIntrinsic();
-                    NamedIntrinsic      intrinsicId = hwintrinsic->GetHWIntrinsicId();
 
                     if (hwintrinsic->OperIsMemoryStoreOrBarrier())
                     {

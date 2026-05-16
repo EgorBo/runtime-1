@@ -2272,7 +2272,6 @@ bool Compiler::optJumpThreadPhi(BasicBlock* block, GenTree* tree, ValueNum treeN
 
         // Find the PHI for lclNum local in the current block.
         //
-        GenTree* phiNode = nullptr;
         for (Statement* const stmt : block->Statements())
         {
             // If the tree is not an SSA def, break out of the loop: we're done.

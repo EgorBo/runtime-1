@@ -18574,8 +18574,10 @@ bool Compiler::gtSplitTree(BasicBlock* block,
 
         void SplitOutUse(const UseInfo& useInf, bool userIsReturned)
         {
-            GenTree** use  = useInf.Use;
-            GenTree*  user = useInf.User;
+            GenTree** use = useInf.Use;
+#ifndef TARGET_64BIT
+            GenTree* user = useInf.User;
+#endif
 
             if ((*use)->IsInvariant())
             {
@@ -28190,8 +28192,7 @@ GenTree* Compiler::gtNewSimdSumNode(var_types type, GenTree* op1, var_types simd
 
     assert(varTypeIsArithmetic(simdBaseType));
 
-    NamedIntrinsic intrinsic = NI_Illegal;
-    GenTree*       tmp       = nullptr;
+    GenTree* tmp = nullptr;
 
 #if defined(TARGET_XARCH)
 
@@ -28347,7 +28348,6 @@ GenTree* Compiler::gtNewSimdSumNode(var_types type, GenTree* op1, var_types simd
     assert(simdSize == 16);
 
     unsigned vectorLength = getSIMDVectorLength(simdSize, simdBaseType);
-    int      shiftCount   = genLog2(vectorLength);
     int      typeSize     = genTypeSize(simdBaseType);
     int      shiftVal     = (typeSize * vectorLength) / 2;
 
@@ -33681,8 +33681,6 @@ GenTree* Compiler::gtFoldExprHWIntrinsic(GenTreeHWIntrinsic* tree)
                 case NI_Vector512_ToScalar:
 #endif
                 {
-                    var_types simdType = getSIMDTypeForSize(simdSize);
-
                     if (varTypeIsFloating(retType))
                     {
                         double result = cnsNode->AsVecCon()->ToScalarFloating(simdBaseType);
@@ -33956,8 +33954,6 @@ GenTree* Compiler::gtFoldExprHWIntrinsic(GenTreeHWIntrinsic* tree)
                             // Nothing to fold for out of range indexes
                             break;
                         }
-
-                        var_types simdType = getSIMDTypeForSize(simdSize);
 
                         if (varTypeIsFloating(retType))
                         {
@@ -34919,8 +34915,6 @@ GenTree* Compiler::gtFoldExprHWIntrinsic(GenTreeHWIntrinsic* tree)
                     // Nothing to fold for out of range indexes
                     break;
                 }
-
-                var_types simdType = getSIMDTypeForSize(simdSize);
 
                 if (varTypeIsFloating(simdBaseType))
                 {

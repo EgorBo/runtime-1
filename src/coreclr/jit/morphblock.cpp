@@ -1158,8 +1158,7 @@ GenTree* MorphCopyBlockHelper::CopyFieldByField()
         // Note, at most one address may need to be spilled.
         addrSpillTemp = m_compiler->lvaGrabTemp(true DEBUGARG("BlockOp address local"));
 
-        LclVarDsc* addrSpillDsc = m_compiler->lvaGetDesc(addrSpillTemp);
-        addrSpillStore          = m_compiler->gtNewTempStore(addrSpillTemp, addrSpill);
+        addrSpillStore = m_compiler->gtNewTempStore(addrSpillTemp, addrSpill);
         // TODO: assertion prop?
         addrSpillStore->SetMorphed(m_compiler);
     }

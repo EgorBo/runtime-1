@@ -622,8 +622,7 @@ var_types RegSet::tmpNormalizeType(var_types type)
 
 TempDsc* RegSet::tmpGetTemp(var_types type)
 {
-    type          = tmpNormalizeType(type);
-    unsigned size = genTypeSize(type);
+    type = tmpNormalizeType(type);
 
     /* Find the slot to search for a free temp of the right size */
 
@@ -866,7 +865,6 @@ TempDsc* RegSet::tmpListNxt(TempDsc* curTemp, TEMP_USAGE_TYPE usageType /* = TEM
     assert(curTemp != nullptr);
 
     TempDsc* temp = curTemp->tdNext;
-    unsigned size = curTemp->tdTempSize();
 
     if (temp == nullptr)
     {

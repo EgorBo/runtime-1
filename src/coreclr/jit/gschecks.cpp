@@ -27,7 +27,6 @@ PhaseStatus Compiler::gsPhase()
 
     if (getNeedsGSSecurityCookie())
     {
-        unsigned const prevBBCount = fgBBcount;
         gsGSChecksInitCookie();
 
         if (compGSReorderStackLayout)
@@ -410,8 +409,6 @@ void Compiler::gsParamsToShadows()
     // Now insert code to copy the params to their shadow copy at the beginning of the function.
     for (unsigned lclNum = 0; lclNum < gsShadowVarInfoCount; lclNum++)
     {
-        const LclVarDsc* varDsc = lvaGetDesc(lclNum);
-
         const unsigned shadowLclNum = gsShadowVarInfo[lclNum].shadowCopy;
         if (shadowLclNum == BAD_VAR_NUM)
         {
@@ -442,8 +439,6 @@ void Compiler::gsParamsToShadows()
 
             for (unsigned lclNum = 0; lclNum < info.compArgsCount; lclNum++)
             {
-                const LclVarDsc* varDsc = lvaGetDesc(lclNum);
-
                 const unsigned shadowVarNum = gsShadowVarInfo[lclNum].shadowCopy;
                 if (shadowVarNum == BAD_VAR_NUM)
                 {

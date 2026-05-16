@@ -1691,7 +1691,7 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
                 GenTreeHWIntrinsic* userIntrin = user->AsHWIntrinsic();
 
                 bool       userIsScalar = false;
-                genTreeOps userOper     = userIntrin->GetOperForHWIntrinsicId(&isScalar);
+                genTreeOps userOper     = userIntrin->GetOperForHWIntrinsicId(&userIsScalar);
 
                 // userIntrin may have re-interpreted the base type
                 //
@@ -2026,7 +2026,6 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
         case NI_Vector512_GetUpper:
         {
             assert(m_compiler->compIsaSupportedDebugOnly(InstructionSet_AVX512));
-            var_types simdBaseType = node->GetSimdBaseType();
 
             intrinsicId = NI_AVX512_ExtractVector256;
 
@@ -2078,8 +2077,7 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
         case NI_Vector512_WithUpper:
         {
             assert(m_compiler->compIsaSupportedDebugOnly(InstructionSet_AVX512));
-            var_types simdBaseType = node->GetSimdBaseType();
-            int       index        = (intrinsicId == NI_Vector512_WithUpper) ? 1 : 0;
+            int index = (intrinsicId == NI_Vector512_WithUpper) ? 1 : 0;
 
             intrinsicId = NI_AVX512_InsertVector256;
 
@@ -3176,8 +3174,7 @@ GenTree* Lowering::LowerHWIntrinsicCmpOp(GenTreeHWIntrinsic* node, genTreeOps cm
 
             if (op1->OperIsHWIntrinsic())
             {
-                GenTreeHWIntrinsic* op1Intrinsic   = op1->AsHWIntrinsic();
-                NamedIntrinsic      op1IntrinsicId = op1Intrinsic->GetHWIntrinsicId();
+                GenTreeHWIntrinsic* op1Intrinsic = op1->AsHWIntrinsic();
 
                 bool       isScalar = false;
                 genTreeOps oper     = op1Intrinsic->GetOperForHWIntrinsicId(&isScalar);
@@ -3467,7 +3464,7 @@ GenTree* Lowering::LowerHWIntrinsicCmpOp(GenTreeHWIntrinsic* node, genTreeOps cm
     node->AsOp()->gtOp1 = msk;
     node->AsOp()->gtOp2 = mskCns;
 
-    GenTree* cc = LowerNodeCC(node, cmpCnd);
+    LowerNodeCC(node, cmpCnd);
 
     node->gtType = TYP_VOID;
     node->ClearUnusedValue();
@@ -3914,7 +3911,6 @@ GenTree* Lowering::LowerHWIntrinsicTernaryLogic(GenTreeHWIntrinsic* node)
                 // The TernaryLogic node normalizes small SIMD base types on import. To optimize
                 // to BlendVariableMask, we need to "un-normalize". We no longer have the original
                 // base type, so we use the mask base type instead.
-                NamedIntrinsic intrinsicId = node->GetHWIntrinsicId();
 
                 if (!condition->OperIsHWIntrinsic())
                 {
@@ -5127,7 +5123,6 @@ GenTree* Lowering::LowerHWIntrinsicGetElement(GenTreeHWIntrinsic* node)
     // Defined upfront to avoid naming conflicts, etc...
     GenTree* idx  = nullptr;
     GenTree* tmp1 = nullptr;
-    GenTree* tmp2 = nullptr;
 
     if (intrinsicId == NI_Vector512_GetElement)
     {
@@ -5369,7 +5364,6 @@ GenTree* Lowering::LowerHWIntrinsicWithElement(GenTreeHWIntrinsic* node)
     // Defined upfront to avoid naming conflicts, etc...
     GenTree*            idx    = nullptr;
     GenTree*            tmp1   = nullptr;
-    GenTree*            tmp2   = nullptr;
     GenTreeHWIntrinsic* result = node;
 
     if (intrinsicId == NI_Vector512_WithElement)
@@ -10121,7 +10115,6 @@ void Lowering::ContainCheckHWIntrinsic(GenTreeHWIntrinsic* node)
                             std::swap(node->Op(1), node->Op(3));
 
                             uint32_t elemSize  = genTypeSize(simdBaseType);
-                            uint32_t elemCount = simdSize / elemSize;
                             uint64_t toggleBit = 0;
 
                             switch (elemSize)

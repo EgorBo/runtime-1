@@ -6586,7 +6586,6 @@ void Compiler::impPopCallArgs(CORINFO_SIG_INFO* sig, GenTreeCall* call)
     for (unsigned i = sig->numArgs; i > 0; i--)
     {
         StackEntry se      = impPopStack();
-        typeInfo   ti      = se.seTypeInfo;
         GenTree*   argNode = se.val;
 
         var_types            jitSigType = JITtype2varType(params[i - 1].CorType);

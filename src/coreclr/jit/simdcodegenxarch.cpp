@@ -171,8 +171,6 @@ void CodeGen::genStoreLclTypeSimd12(GenTreeLclVarCommon* treeNode)
 {
     assert(treeNode->OperIs(GT_STORE_LCL_FLD, GT_STORE_LCL_VAR));
 
-    emitter* emit = GetEmitter();
-
     unsigned offs   = treeNode->GetLclOffs();
     unsigned varNum = treeNode->GetLclNum();
     assert(varNum < m_compiler->lvaCount);

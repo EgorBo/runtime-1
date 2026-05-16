@@ -800,8 +800,7 @@ private:
                 return;
             }
 
-            GenTreeRetExpr* const retExpr       = retExprNode->AsRetExpr();
-            bool const            noReturnValue = origCall->TypeIs(TYP_VOID);
+            bool const noReturnValue = origCall->TypeIs(TYP_VOID);
 
             // If there is a return value, search the next statement to see if we can find
             // retExprNode's parent. If we find it, see if retExprNode's value is unused.
@@ -1385,8 +1384,6 @@ private:
             const unsigned maxStatementDup   = JitConfig.JitGuardedDevirtualizationChainStatements();
             unsigned       chainStatementDup = 0;
             unsigned       chainNodeDup      = 0;
-            unsigned       chainLikelihood   = 0;
-            GenTreeCall*   chainedCall       = nullptr;
 
             // Helper class to check/fix a statement for clonability and count
             // the total number of nodes

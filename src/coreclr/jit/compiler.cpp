@@ -137,10 +137,6 @@ const BYTE genActualTypes[] = {
 #ifdef DEBUG
 /*****************************************************************************/
 
-static FILE* jitSrcFilePtr;
-
-static unsigned jitCurSrcLine;
-
 void Compiler::JitLogEE(unsigned level, const char* fmt, ...)
 {
     va_list args;
@@ -4575,7 +4571,6 @@ void Compiler::compCompile(void** methodCodePtr, uint32_t* methodCodeSize, JitFl
 
     // Morph the trees in all the blocks of the method
     //
-    unsigned const preMorphBBCount = fgBBcount;
     DoPhase(this, PHASE_MORPH_GLOBAL, &Compiler::fgMorphBlocks);
 
     auto postMorphPhase = [this]() {

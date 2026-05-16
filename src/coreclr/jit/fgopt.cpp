@@ -1852,7 +1852,6 @@ bool Compiler::fgOptimizeSwitchBranches(BasicBlock* block)
         BBswtDesc* switchDesc = block->GetSwitchTargets();
 
         FlowEdge*   defaultEdge   = switchDesc->GetDefaultCase();
-        BasicBlock* defaultDest   = defaultEdge->getDestinationBlock();
         FlowEdge*   firstCaseEdge = switchDesc->GetCase(0);
         BasicBlock* caseDest      = firstCaseEdge->getDestinationBlock();
 

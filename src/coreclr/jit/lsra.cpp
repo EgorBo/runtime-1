@@ -5101,7 +5101,6 @@ void LinearScan::allocateRegistersMinimal()
 
         // Identify the special cases where we decide up-front not to allocate
         bool allocate = true;
-        bool didDump  = false;
 
 #ifdef FEATURE_SIMD
 #if FEATURE_PARTIAL_SIMD_CALLEE_SAVE
@@ -9048,8 +9047,9 @@ void LinearScan::handleOutgoingCriticalEdges(BasicBlock* block)
         // We only need to check for these cases if sameToReg is an actual register (not REG_STK).
         if (sameToReg != REG_NA && sameToReg != REG_STK)
         {
+#ifdef TARGET_ARM
             var_types outVarRegType = getIntervalForLocalVar(outResolutionSetVarIndex)->registerType;
-
+#endif
             // If there's a path on which this var isn't live, it may use the original value in sameToReg.
             // In this case, sameToReg will be in the liveOutRegs of this block.
             // Similarly, if sameToReg is in sameWriteRegs, it has already been used (i.e. for a lclVar that's
@@ -10600,8 +10600,6 @@ void LinearScan::lsraGetOperandString(GenTree*          tree,
             break;
         case LinearScan::LSRA_DUMP_POST:
         {
-            Compiler* compiler = JitTls::GetCompiler();
-
             if (!tree->gtHasReg(m_compiler))
             {
                 _snprintf_s(operandString, operandStringLength, operandStringLength, "STK%s", lastUseChar);
@@ -10634,7 +10632,6 @@ void LinearScan::lsraGetOperandString(GenTree*          tree,
 }
 void LinearScan::lsraDispNode(GenTree* tree, LsraTupleDumpMode mode, bool hasDest)
 {
-    Compiler*      compiler            = JitTls::GetCompiler();
     const unsigned operandStringLength = 6 * MAX_MULTIREG_COUNT + 1;
     char           operandString[operandStringLength];
     const char*    emptyDestOperand = "               ";
@@ -12960,10 +12957,8 @@ void LinearScan::RegisterSelection::try_SPILL_COST()
     // The spill weight for 'refPosition' (the one we're allocating now).
     weight_t thisSpillWeight = linearScan->getWeight(refPosition);
     // The  spill weight for the best candidate we've found so far.
-    weight_t bestSpillWeight = FloatingPointUtils::infinite_double();
-    // True if we found registers with lower spill weight than this refPosition.
-    bool         foundLowerSpillWeight = false;
-    LsraLocation thisLocation          = refPosition->nodeLocation;
+    weight_t     bestSpillWeight = FloatingPointUtils::infinite_double();
+    LsraLocation thisLocation    = refPosition->nodeLocation;
 
     for (SingleTypeRegSet spillCandidates = candidates; spillCandidates != RBM_NONE;)
     {
@@ -13852,14 +13847,6 @@ SingleTypeRegSet LinearScan::RegisterSelection::selectMinimal(
     candidates = linearScan->stressLimitRegs(refPosition, regType, candidates);
 #endif
     assert(candidates != RBM_NONE);
-
-    bool avoidByteRegs = false;
-#ifdef TARGET_X86
-    if ((relatedPreferences & ~RBM_BYTE_REGS) != RBM_NONE)
-    {
-        avoidByteRegs = true;
-    }
-#endif
 
     // Is this a fixedReg?
     SingleTypeRegSet fixedRegMask = RBM_NONE;

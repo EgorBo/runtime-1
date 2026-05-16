@@ -482,7 +482,6 @@ private:
     void AttachStructInlineeToStore(GenTree* store, CORINFO_CLASS_HANDLE retClsHnd)
     {
         assert(store->OperIsStore());
-        GenTree* dst     = store;
         GenTree* inlinee = store->Data();
 
         // We need to force all stores from multi-reg nodes into the "lcl = node()" form.
