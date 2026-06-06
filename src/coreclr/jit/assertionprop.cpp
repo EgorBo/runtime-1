@@ -12,6 +12,7 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 #include "jitpch.h"
 #include "rangecheck.h"
+#include "knownbits.h"
 #ifdef _MSC_VER
 #pragma hdrstop
 #endif
@@ -1786,9 +1787,14 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
     ValueNum op1VN     = relopFuncApp.GetArg(0);
     ValueNum op2VN     = relopFuncApp.GetArg(1);
 
-    if ((genActualType(vnStore->TypeOfVN(op1VN)) != TYP_INT) || (genActualType(vnStore->TypeOfVN(op2VN)) != TYP_INT))
+    const var_types op1Type = genActualType(vnStore->TypeOfVN(op1VN));
+    const var_types op2Type = genActualType(vnStore->TypeOfVN(op2VN));
+    if (((op1Type != TYP_INT) && (op1Type != TYP_LONG)) || ((op2Type != TYP_INT) && (op2Type != TYP_LONG)))
     {
-        // For now, we don't have consumers for assertions derived from non-int32 comparisons
+        // We only have consumers for assertions derived from int32/int64 comparisons.
+        // Note: the checked-bound forms below are inherently int32 (array lengths), so they
+        // simply won't match for TYP_LONG; the "X relop CNS" form feeds Compute
+        // and the non-negativity checks for both widths.
         return NO_ASSERTION_INDEX;
     }
 
@@ -1882,7 +1888,8 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
     // operands already has assertions registered. Otherwise the new assertion has no other facts
     // it can chain with and is unlikely to enable any deduction, while still consuming a slot
     // (and potentially crowding out useful ones).
-    if (!isUnsignedRelop && (op1VN != op2VN) && !vnStore->IsVNConstant(op1VN) && !vnStore->IsVNConstant(op2VN) &&
+    if (!isUnsignedRelop && (op1Type == TYP_INT) && (op1VN != op2VN) && !vnStore->IsVNConstant(op1VN) &&
+        !vnStore->IsVNConstant(op2VN) &&
         (optAssertionHasAssertionsForVN(op1VN) || optAssertionHasAssertionsForVN(op2VN)))
     {
         AssertionDsc   dsc = AssertionDsc::CreateRelopVN(this, relopFunc, op1VN, op2VN);
@@ -4514,6 +4521,24 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
         }
     }
 
+    // See if we can fold the relop based on known bits. This complements the range-based folding
+    // above (which is limited to TYP_INT) by reasoning about individual bits and TYP_LONG values,
+    // and covers signed and unsigned ordering as well as equality.
+    if (varTypeIsIntegral(op1) && !varTypeIsGC(op1) && (op1VN != ValueNumStore::NoVN) && (op2VN != ValueNumStore::NoVN))
+    {
+        const unsigned  width = (genActualType(op1) == TYP_LONG) ? 64 : 32;
+        const KnownBits kb1   = KnownBits::Compute(this, op1VN, assertions);
+        const KnownBits kb2   = KnownBits::Compute(this, op2VN, assertions);
+
+        const int relopResult = KnownBitsOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), kb1, kb2, width);
+        if (relopResult >= 0)
+        {
+            JITDUMP("Folding relop [%06u] based on known bits.\n", dspTreeID(tree));
+            newTree = gtWrapWithSideEffects(relopResult == 1 ? gtNewTrue() : gtNewFalse(), tree, GTF_ALL_EFFECT);
+            return optAssertionProp_Update(newTree, tree, stmt);
+        }
+    }
+
     // Else check if we have an equality check involving a local or an indir
     if (!tree->OperIs(GT_EQ, GT_NE))
     {
@@ -4952,6 +4977,32 @@ GenTree* Compiler::optAssertionProp_Cast(ASSERT_VALARG_TP assertions,
                     cast->ClearOverflow();
                     return optAssertionProp_Update(cast, cast, stmt);
                 }
+            }
+        }
+
+        // Try the same proof using known bits. This also covers TYP_LONG cast operands (which the
+        // range-based path above does not handle) and bit patterns the range cannot express.
+        if (varTypeIsIntegral(cast->CastOp()) && !varTypeIsGC(cast->CastOp()))
+        {
+            const unsigned  width    = (genActualType(cast->CastOp()) == TYP_LONG) ? 64 : 32;
+            const ValueNum  castOpVN = optConservativeNormalVN(cast->CastOp());
+            const KnownBits kb       = KnownBits::Compute(this, castOpVN, assertions);
+
+            int64_t castFromLo;
+            int64_t castFromHi;
+            if (kb.TryGetSignedRange(width, &castFromLo, &castFromHi) && (castFromLo >= castLo) &&
+                (castFromHi <= castHi))
+            {
+                if (canDropCast)
+                {
+                    JITDUMP("Removing cast %06u as redundant based on VN known-bits.\n", dspTreeID(cast));
+                    return optAssertionProp_Update(cast->CastOp(), cast, stmt);
+                }
+
+                assert(cast->gtOverflow());
+                JITDUMP("Clearing overflow flag for cast %06u based on VN known-bits.\n", dspTreeID(cast));
+                cast->ClearOverflow();
+                return optAssertionProp_Update(cast, cast, stmt);
             }
         }
         return nullptr;
