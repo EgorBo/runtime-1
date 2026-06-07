@@ -104,6 +104,10 @@ CONFIG_INTEGER(JitHideAlignBehindJmp, "JitHideAlignBehindJmp", 1)
 CONFIG_INTEGER(JitOptimizeStructHiddenBuffer, "JitOptimizeStructHiddenBuffer", 1)
 RELEASE_CONFIG_INTEGER(JitEnableStoreLclFldCoalescing, "JitEnableStoreLclFldCoalescing", 1)
 
+// Enables the KnownBits (LLVM-style known zeros/ones) analysis and the assertion-prop optimizations
+// that consume it. Set to 0 to disable.
+RELEASE_CONFIG_INTEGER(JitEnableKnownBits, "JitEnableKnownBits", 1)
+
 CONFIG_INTEGER(JitUnrollLoopMaxIterationCount,
                "JitUnrollLoopMaxIterationCount",
                DEFAULT_UNROLL_LOOP_MAX_ITERATION_COUNT)

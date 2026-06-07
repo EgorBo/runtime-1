@@ -1787,14 +1787,17 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
     ValueNum op1VN     = relopFuncApp.GetArg(0);
     ValueNum op2VN     = relopFuncApp.GetArg(1);
 
-    const var_types op1Type = genActualType(vnStore->TypeOfVN(op1VN));
-    const var_types op2Type = genActualType(vnStore->TypeOfVN(op2VN));
-    if (((op1Type != TYP_INT) && (op1Type != TYP_LONG)) || ((op2Type != TYP_INT) && (op2Type != TYP_LONG)))
+    const var_types op1Type   = genActualType(vnStore->TypeOfVN(op1VN));
+    const var_types op2Type   = genActualType(vnStore->TypeOfVN(op2VN));
+    const bool      allow64   = (JitConfig.JitEnableKnownBits() != 0);
+    const bool      op1TypeOk = (op1Type == TYP_INT) || (allow64 && (op1Type == TYP_LONG));
+    const bool      op2TypeOk = (op2Type == TYP_INT) || (allow64 && (op2Type == TYP_LONG));
+    if (!op1TypeOk || !op2TypeOk)
     {
-        // We only have consumers for assertions derived from int32/int64 comparisons.
-        // Note: the checked-bound forms below are inherently int32 (array lengths), so they
-        // simply won't match for TYP_LONG; the "X relop CNS" form feeds Compute
-        // and the non-negativity checks for both widths.
+        // We only have consumers for assertions derived from int32 comparisons, plus int64 ones once
+        // KnownBits is enabled. Note: the checked-bound forms below are inherently int32 (array
+        // lengths), so they simply won't match for TYP_LONG; the "X relop CNS" form feeds Compute and
+        // the non-negativity checks for both widths.
         return NO_ASSERTION_INDEX;
     }
 
@@ -4090,6 +4093,79 @@ void Compiler::optAssertionProp_RangeProperties(ASSERT_VALARG_TP assertions,
             *isKnownNonZero = true;
         }
     }
+
+    // Known bits can also establish non-negativity (sign bit known 0) and non-zeroness (some bit
+    // known 1). This complements the interval range above: it additionally covers TYP_LONG (which
+    // has no range analysis) and bit patterns that an interval cannot express (e.g. "x & 7").
+    if (!*isKnownNonZero || !*isKnownNonNegative)
+    {
+        const unsigned  width   = (genActualType(tree) == TYP_LONG) ? 64 : 32;
+        const uint64_t  signBit = 1ull << (width - 1);
+        const KnownBits kb      = KnownBits::Compute(this, treeVN, assertions);
+        if ((kb.knownZero & signBit) != 0)
+        {
+            *isKnownNonNegative = true;
+        }
+        if (kb.knownOne != 0)
+        {
+            *isKnownNonZero = true;
+        }
+    }
+}
+
+//------------------------------------------------------------------------
+// knownBitsOperCannotOverflow: Determine whether ADD/SUB/MUL on operands with the given known bits
+//    cannot overflow at "width" bits with the given signedness, based purely on the operands' ranges.
+//
+template <typename T>
+static bool knownBitsOperCannotOverflowT(
+    genTreeOps oper, bool isUnsigned, const KnownBits& a, const KnownBits& b, unsigned width)
+{
+    if (isUnsigned)
+    {
+        const T aMax = (T)a.GetUMax(width);
+        const T bMax = (T)b.GetUMax(width);
+        switch (oper)
+        {
+            case GT_ADD:
+                return !CheckedOps::AddOverflows<T>(aMax, bMax, CheckedOps::Unsigned);
+            case GT_SUB:
+                // Unsigned a - b underflows iff a < b; safe iff umin(a) >= umax(b).
+                return a.GetUMin(width) >= b.GetUMax(width);
+            case GT_MUL:
+                return !CheckedOps::MulOverflows<T>(aMax, bMax, CheckedOps::Unsigned);
+            default:
+                return false;
+        }
+    }
+
+    const T aMin = (T)a.GetSMin(width);
+    const T aMax = (T)a.GetSMax(width);
+    const T bMin = (T)b.GetSMin(width);
+    const T bMax = (T)b.GetSMax(width);
+    switch (oper)
+    {
+        case GT_ADD:
+            return !CheckedOps::AddOverflows<T>(aMin, bMin, CheckedOps::Signed) &&
+                   !CheckedOps::AddOverflows<T>(aMax, bMax, CheckedOps::Signed);
+        case GT_SUB:
+            return !CheckedOps::SubOverflows<T>(aMin, bMax, CheckedOps::Signed) &&
+                   !CheckedOps::SubOverflows<T>(aMax, bMin, CheckedOps::Signed);
+        case GT_MUL:
+            return !CheckedOps::MulOverflows<T>(aMin, bMin, CheckedOps::Signed) &&
+                   !CheckedOps::MulOverflows<T>(aMin, bMax, CheckedOps::Signed) &&
+                   !CheckedOps::MulOverflows<T>(aMax, bMin, CheckedOps::Signed) &&
+                   !CheckedOps::MulOverflows<T>(aMax, bMax, CheckedOps::Signed);
+        default:
+            return false;
+    }
+}
+
+static bool knownBitsOperCannotOverflow(
+    genTreeOps oper, bool isUnsigned, const KnownBits& a, const KnownBits& b, unsigned width)
+{
+    return (width == 32) ? knownBitsOperCannotOverflowT<int32_t>(oper, isUnsigned, a, b, width)
+                         : knownBitsOperCannotOverflowT<int64_t>(oper, isUnsigned, a, b, width);
 }
 
 //------------------------------------------------------------------------
@@ -4133,6 +4209,20 @@ GenTree* Compiler::optAssertionProp_AddMulSub(ASSERT_VALARG_TP assertions, GenTr
         // If it produced a constant range for the result, we know the operation
         // cannot overflow for any values consistent with the current assertions.
         if (result.IsConstantRange())
+        {
+            tree->ClearOverflow();
+            return optAssertionProp_Update(tree, tree, stmt);
+        }
+    }
+
+    // Known-bits based no-overflow proof. This also covers TYP_LONG operations (which the range-based
+    // path above does not handle) and bit patterns an interval range cannot express.
+    if (!optLocalAssertionProp && tree->gtOverflow() && varTypeIsIntegral(tree))
+    {
+        const unsigned  width = (genActualType(tree) == TYP_LONG) ? 64 : 32;
+        const KnownBits kb1   = KnownBits::Compute(this, optConservativeNormalVN(tree->gtGetOp1()), assertions);
+        const KnownBits kb2   = KnownBits::Compute(this, optConservativeNormalVN(tree->gtGetOp2()), assertions);
+        if (knownBitsOperCannotOverflow(tree->OperGet(), tree->IsUnsigned(), kb1, kb2, width))
         {
             tree->ClearOverflow();
             return optAssertionProp_Update(tree, tree, stmt);

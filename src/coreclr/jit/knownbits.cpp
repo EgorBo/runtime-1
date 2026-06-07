@@ -10,7 +10,7 @@
 
 // Refine "pBits" using the assertions known about "num" (width is 32 or 64).
 static void MergeKnownBitsAssertions(
-    Compiler* comp, ValueNum num, ASSERT_VALARG_TP assertions, unsigned width, KnownBits* pBits)
+    Compiler* comp, ValueNum num, ASSERT_VALARG_TP assertions, unsigned width, int budget, KnownBits* pBits)
 {
     if (BitVecOps::MayBeUninit(assertions) || BitVecOps::IsEmpty(comp->apTraits, assertions) ||
         !comp->optAssertionHasAssertionsForVN(num))
@@ -33,6 +33,32 @@ static void MergeKnownBitsAssertions(
             if (comp->vnStore->IsVNIntegralConstant<int64_t>(curAssertion.GetOp2().GetVN(), &eqCns))
             {
                 *pBits = KnownBits::Intersect(*pBits, KnownBits::FromConstant((uint64_t)eqCns, width));
+            }
+            continue;
+        }
+
+        // "num != const": if all but one bit of num are already known, this pins the last bit.
+        if (curAssertion.KindIs(Compiler::OAK_NOT_EQUAL) && (curAssertion.GetOp1().GetVN() == num))
+        {
+            int64_t neCns;
+            if (comp->vnStore->IsVNIntegralConstant<int64_t>(curAssertion.GetOp2().GetVN(), &neCns))
+            {
+                const uint64_t mask    = KnownBits::WidthMask(width);
+                const uint64_t unknown = ~(pBits->knownZero | pBits->knownOne) & mask;
+                if ((unknown != 0) && ((unknown & (unknown - 1)) == 0)) // exactly one unknown bit
+                {
+                    const uint64_t cand0 = pBits->knownOne & mask;             // unknown bit = 0
+                    const uint64_t cand1 = (pBits->knownOne | unknown) & mask; // unknown bit = 1
+                    const uint64_t c     = (uint64_t)neCns & mask;
+                    if (c == cand0)
+                    {
+                        *pBits = KnownBits::FromConstant(cand1, width);
+                    }
+                    else if (c == cand1)
+                    {
+                        *pBits = KnownBits::FromConstant(cand0, width);
+                    }
+                }
             }
             continue;
         }
@@ -61,6 +87,31 @@ static void MergeKnownBitsAssertions(
             else if (curAssertion.KindIs(Compiler::OAK_GT) && (relCns >= -1))
             {
                 // num > -1 (signed)  =>  num >= 0  =>  sign bit is 0.
+                *pBits = KnownBits::Intersect(*pBits, KnownBits(signBit, 0));
+            }
+            continue;
+        }
+
+        // "num u< otherVN" / "num u<= otherVN": num is bounded above by otherVN's unsigned max, so it
+        // inherits otherVN's leading zero bits. This generalizes the never-negative checked-bound case
+        // below (e.g. "(uint)i < (uint)(x & 0xFFFF)" gives i the upper 16 bits as zero).
+        if ((budget > 0) && curAssertion.IsRelop() && (curAssertion.GetOp1().GetVN() == num) &&
+            curAssertion.KindIs(Compiler::OAK_LT_UN, Compiler::OAK_LE_UN) &&
+            curAssertion.GetOp2().KindIs(Compiler::O2K_VN_ADD_CNS) && (curAssertion.GetOp2().GetCns() == 0))
+        {
+            const ValueNum otherVN = curAssertion.GetOp2().GetVN();
+            if (otherVN != num)
+            {
+                const KnownBits otherKB   = KnownBits::Compute(comp, otherVN, assertions, budget - 1);
+                uint64_t        otherUMax = otherKB.GetUMax(width);
+                if (curAssertion.KindIs(Compiler::OAK_LT_UN) && (otherUMax > 0))
+                {
+                    otherUMax -= 1; // num u< other => num u<= other - 1
+                }
+                *pBits = KnownBits::Intersect(*pBits, KnownBits::FromUnsignedUpperBound(otherUMax, width));
+            }
+            if (curAssertion.GetOp2().IsVNNeverNegative())
+            {
                 *pBits = KnownBits::Intersect(*pBits, KnownBits(signBit, 0));
             }
             continue;
@@ -127,6 +178,49 @@ static KnownBits ComputeWorker(
                 {
                     assert(funcApp.FuncIs(VNF_UDIV));
                     result = KnownBitsOps::UDiv(a, b, width);
+                }
+                break;
+            }
+
+            case VNF_MUL:
+            {
+                KnownBits a = ComputeWorker(comp, funcApp.GetArg(0), assertions, --budget, visited);
+                KnownBits b = ComputeWorker(comp, funcApp.GetArg(1), assertions, --budget, visited);
+                result      = KnownBitsOps::Mul(a, b, width);
+                break;
+            }
+
+            case VNF_UMOD:
+            {
+                KnownBits a = ComputeWorker(comp, funcApp.GetArg(0), assertions, --budget, visited);
+                KnownBits b = ComputeWorker(comp, funcApp.GetArg(1), assertions, --budget, visited);
+                result      = KnownBitsOps::URem(a, b, width);
+                break;
+            }
+
+            case VNF_LSH:
+            case VNF_RSH:
+            case VNF_RSZ:
+            {
+                // Only constant, in-range shift amounts are handled (the high-value case).
+                int64_t shiftAmt;
+                if (comp->vnStore->IsVNIntegralConstant<int64_t>(funcApp.GetArg(1), &shiftAmt) && (shiftAmt >= 0) &&
+                    (shiftAmt < (int64_t)width))
+                {
+                    KnownBits      a   = ComputeWorker(comp, funcApp.GetArg(0), assertions, --budget, visited);
+                    const unsigned amt = (unsigned)shiftAmt;
+                    if (funcApp.FuncIs(VNF_LSH))
+                    {
+                        result = KnownBitsOps::ShlConst(a, amt, width);
+                    }
+                    else if (funcApp.FuncIs(VNF_RSZ))
+                    {
+                        result = KnownBitsOps::LshrConst(a, amt, width);
+                    }
+                    else
+                    {
+                        result = KnownBitsOps::AshrConst(a, amt, width);
+                    }
                 }
                 break;
             }
@@ -198,7 +292,7 @@ static KnownBits ComputeWorker(
     }
 
     // Refine using assertions about this VN.
-    MergeKnownBitsAssertions(comp, num, assertions, width, &result);
+    MergeKnownBitsAssertions(comp, num, assertions, width, budget, &result);
 
     return result.Truncate(width);
 }
@@ -210,6 +304,11 @@ static KnownBits ComputeWorker(
 //
 KnownBits KnownBits::Compute(Compiler* comp, ValueNum num, ASSERT_VALARG_TP assertions, int budget)
 {
+    if (!JitConfig.JitEnableKnownBits())
+    {
+        return KnownBits();
+    }
+
     ValueNumStore::SmallValueNumSet visited;
     return ComputeWorker(comp, num, assertions, budget, &visited);
 }

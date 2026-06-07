@@ -11,6 +11,7 @@
 #pragma once
 
 #include "compiler.h"
+
 //------------------------------------------------------------------------
 // KnownBits: an LLVM-style "known bits" lattice for an integral value, tracked over a 64-bit
 //    container. For bit i: set in knownZero => definitely 0; set in knownOne => definitely 1;
@@ -203,6 +204,23 @@ struct KnownBits
         return SignExtend(v, width);
     }
 
+    // Number of known-zero low bits, i.e. trailing bits known to be 0 (LLVM countMinTrailingZeros).
+    unsigned CountMinTrailingZeros() const
+    {
+        return (unsigned)BitOperations::TrailingZeroCount(~knownZero);
+    }
+    // Number of known low bits (each known 0 or 1) starting from bit 0.
+    unsigned CountMinTrailingKnown() const
+    {
+        return (unsigned)BitOperations::TrailingZeroCount(~(knownZero | knownOne));
+    }
+    // Number of known-zero high bits within "width" (LLVM countMinLeadingZeros).
+    unsigned CountMinLeadingZeros(unsigned width) const
+    {
+        const uint64_t top = (knownZero & WidthMask(width)) << (64 - width);
+        return (unsigned)BitOperations::LeadingZeroCount(~top);
+    }
+
     // Bit-level analog of RangeCheck::GetRangeFromAssertions: computes which bits of "num" are
     // known to be 0 or 1, based purely on its value-number structure and the incoming assertions.
     // Supports both 32- and 64-bit integral values.
@@ -248,6 +266,166 @@ struct KnownBitsOps
         }
         const unsigned leadZ = width - bitLen;
         return KnownBits(mask & ~KnownBits::LowMask(width - leadZ), 0);
+    }
+
+    static unsigned UMin(unsigned a, unsigned b)
+    {
+        return (a < b) ? a : b;
+    }
+
+    // Known bits of a * b. Port of LLVM's KnownBits::mul (leading-zeros + low-bits parts).
+    static KnownBits Mul(const KnownBits& a, const KnownBits& b, unsigned width)
+    {
+        const uint64_t mask = KnownBits::WidthMask(width);
+
+        // High known-0 bits: multiply the unsigned max of each side; valid only if it does not
+        // overflow "width" bits.
+        const uint64_t aMax  = a.GetUMax(width);
+        const uint64_t bMax  = b.GetUMax(width);
+        unsigned       leadZ = 0;
+        bool           overflow;
+        uint64_t       umaxResult;
+        if (width == 32)
+        {
+            umaxResult = aMax * bMax; // both < 2^32, so this fits in 64 bits
+            overflow   = (umaxResult >> 32) != 0;
+        }
+        else
+        {
+            overflow   = (aMax != 0) && (bMax > (UINT64_MAX / aMax));
+            umaxResult = aMax * bMax;
+        }
+        if (!overflow)
+        {
+            const unsigned bitLen =
+                (umaxResult == 0) ? 0 : (64 - (unsigned)BitOperations::LeadingZeroCount(umaxResult));
+            leadZ = width - bitLen;
+        }
+
+        // Low known bits: the bottom ResultBitsKnown bits of the product are determined by the
+        // bottom known bits of each operand (see LLVM KnownBits::mul for the derivation).
+        const unsigned trailBitsKnownA = a.CountMinTrailingKnown();
+        const unsigned trailBitsKnownB = b.CountMinTrailingKnown();
+        const unsigned trailZeroA      = a.CountMinTrailingZeros();
+        const unsigned trailZeroB      = b.CountMinTrailingZeros();
+        const unsigned trailZ          = UMin(trailZeroA + trailZeroB, width);
+        const unsigned smallest        = UMin(trailBitsKnownA - trailZeroA, trailBitsKnownB - trailZeroB);
+        const unsigned resultBitsKnown = UMin(smallest + trailZ, width);
+
+        const uint64_t bottomKnown = (a.knownOne & mask) * (b.knownOne & mask);
+        const uint64_t loMask      = KnownBits::LowMask(resultBitsKnown);
+
+        uint64_t z = ~bottomKnown & loMask;
+        if (leadZ > 0)
+        {
+            z |= ~KnownBits::LowMask(width - leadZ) & mask;
+        }
+        const uint64_t o = bottomKnown & loMask;
+        return KnownBits(z, o).Truncate(width);
+    }
+
+    // Known bits of "a << shiftAmt" for a constant shift amount.
+    static KnownBits ShlConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
+    {
+        if (shiftAmt >= width)
+        {
+            return KnownBits::FromConstant(0, width);
+        }
+        const uint64_t z = (a.knownZero << shiftAmt) | KnownBits::LowMask(shiftAmt); // shifted-in low bits are 0
+        const uint64_t o = (a.knownOne << shiftAmt);
+        return KnownBits(z, o).Truncate(width);
+    }
+
+    // Known bits of "(unsigned)a >> shiftAmt" (logical right shift) for a constant shift amount.
+    static KnownBits LshrConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
+    {
+        if (shiftAmt >= width)
+        {
+            return KnownBits::FromConstant(0, width);
+        }
+        const uint64_t mask     = KnownBits::WidthMask(width);
+        const uint64_t highZero = ~KnownBits::LowMask(width - shiftAmt) & mask; // shifted-in high bits are 0
+        const uint64_t z        = ((a.knownZero & mask) >> shiftAmt) | highZero;
+        const uint64_t o        = ((a.knownOne & mask) >> shiftAmt);
+        return KnownBits(z, o).Truncate(width);
+    }
+
+    // Known bits of "a >> shiftAmt" (arithmetic right shift) for a constant shift amount.
+    static KnownBits AshrConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
+    {
+        if (shiftAmt == 0)
+        {
+            return a;
+        }
+        const uint64_t mask    = KnownBits::WidthMask(width);
+        const uint64_t signBit = 1ull << (width - 1);
+        const bool     signZ   = (a.knownZero & signBit) != 0;
+        const bool     signO   = (a.knownOne & signBit) != 0;
+
+        if (shiftAmt >= width)
+        {
+            // Result is all copies of the sign bit.
+            if (signZ)
+            {
+                return KnownBits::FromConstant(0, width);
+            }
+            if (signO)
+            {
+                return KnownBits::FromConstant(mask, width);
+            }
+            return KnownBits();
+        }
+
+        const uint64_t highMask = ~KnownBits::LowMask(width - shiftAmt) & mask; // bits [width-shiftAmt, width-1]
+        uint64_t       z        = (a.knownZero & mask) >> shiftAmt;
+        uint64_t       o        = (a.knownOne & mask) >> shiftAmt;
+        if (signZ)
+        {
+            z |= highMask;
+        }
+        else if (signO)
+        {
+            o |= highMask;
+        }
+        return KnownBits(z, o).Truncate(width);
+    }
+
+    // Known bits of "a % b" (unsigned). Port of LLVM's KnownBits::urem (+ remGetLowBits).
+    static KnownBits URem(const KnownBits& a, const KnownBits& b, unsigned width)
+    {
+        const uint64_t mask = KnownBits::WidthMask(width);
+        KnownBits      result;
+
+        // If the divisor is a known multiple of 2^k (its low k bits are known 0 and it is not the
+        // zero constant), the remainder preserves the dividend's low k bits.
+        const bool bIsZeroConst = b.IsConstant(width) && (b.GetConstant(width) == 0);
+        if (!bIsZeroConst && b.IsBitZero(0))
+        {
+            const uint64_t lowMask = KnownBits::LowMask(b.CountMinTrailingZeros());
+            result                 = KnownBits(a.knownZero & lowMask, a.knownOne & lowMask);
+        }
+
+        if (b.IsConstant(width))
+        {
+            const uint64_t c = b.GetConstant(width);
+            if ((c != 0) && ((c & (c - 1)) == 0))
+            {
+                // x % 2^n: all bits at or above n are 0 (low bits already set above).
+                result.knownZero |= ~(c - 1) & mask;
+                return result.Truncate(width);
+            }
+        }
+
+        // The remainder is <= either operand, so any leading zeros common to either operand are
+        // leading zeros of the result.
+        const unsigned lzA   = a.CountMinLeadingZeros(width);
+        const unsigned lzB   = b.CountMinLeadingZeros(width);
+        const unsigned leadZ = (lzA > lzB) ? lzA : lzB;
+        if (leadZ > 0)
+        {
+            result.knownZero |= ~KnownBits::LowMask(width - leadZ) & mask;
+        }
+        return result.Truncate(width);
     }
 
     // KnownBits of a cast from a "srcWidth"-bit source to "castToType".
