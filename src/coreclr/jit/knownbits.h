@@ -7,6 +7,12 @@
 // value number from its value-number structure and the incoming assertions. This is the
 // bit-level analog of the range analysis in rangecheck.{h,cpp}.
 //
+// The transfer functions in KnownBitsOps are ports of the corresponding routines in LLVM's
+// llvm/lib/Support/KnownBits.cpp (cited per function). The lattice itself is a fixed-width
+// (32- or 64-bit) adaptation of LLVM's APInt-based KnownBits: it carries an explicit "width"
+// instead of an APInt bit-width, which avoids any allocation but is why the helpers below do
+// their own masking/sign-extension that APInt would otherwise handle.
+//
 
 #pragma once
 
@@ -111,6 +117,8 @@ struct KnownBits
     // Combine two facts about the *same* value (assertion refinement): a bit is known if it
     // is known in either input. Conflicting bits (one says 0, the other says 1) indicate a
     // dead code path; we conservatively drop them to "unknown" so we never assert a false fact.
+    // NOTE: this is LLVM's KnownBits::unionWith plus conflict-dropping. The name is the inverse
+    // of LLVM's because it describes the *intersection* of the two sets of possible values.
     static KnownBits Intersect(const KnownBits& a, const KnownBits& b)
     {
         const uint64_t z        = a.knownZero | b.knownZero;
@@ -121,6 +129,8 @@ struct KnownBits
 
     // Merge facts across two possible values (e.g. phi inputs): a bit is known in the result
     // only if it is known and equal in both inputs.
+    // NOTE: this is LLVM's KnownBits::intersectWith. The name is the inverse of LLVM's because
+    // it describes the *union* of the two sets of possible values.
     static KnownBits Union(const KnownBits& a, const KnownBits& b)
     {
         return KnownBits(a.knownZero & b.knownZero, a.knownOne & b.knownOne);
@@ -246,7 +256,9 @@ struct KnownBitsOps
         return KnownBits(a.knownZero & b.knownZero, a.knownOne | b.knownOne);
     }
 
-    // Known bits of unsigned division a / b. Port of LLVM's KnownBits::udiv (leading-zeros part).
+    // Known bits of unsigned division a / b. Port of LLVM KnownBits::udiv (llvm/lib/Support/
+    // KnownBits.cpp); we keep only the leading-zeros result and omit the exact-division low-bit
+    // refinement.
     static KnownBits UDiv(const KnownBits& a, const KnownBits& b, unsigned width)
     {
         const uint64_t mask     = KnownBits::WidthMask(width);
@@ -273,7 +285,8 @@ struct KnownBitsOps
         return (a < b) ? a : b;
     }
 
-    // Known bits of a * b. Port of LLVM's KnownBits::mul (leading-zeros + low-bits parts).
+    // Known bits of a * b. Port of LLVM KnownBits::mul (llvm/lib/Support/KnownBits.cpp): leading
+    // zeros from umax*umax plus the low known bits; we omit the NoUndefSelfMultiply special case.
     static KnownBits Mul(const KnownBits& a, const KnownBits& b, unsigned width)
     {
         const uint64_t mask = KnownBits::WidthMask(width);
@@ -324,7 +337,9 @@ struct KnownBitsOps
         return KnownBits(z, o).Truncate(width);
     }
 
-    // Known bits of "a << shiftAmt" for a constant shift amount.
+    // Known bits of "a << shiftAmt" for a constant shift amount. This is the constant-shift inner
+    // case of LLVM KnownBits::shl (llvm/lib/Support/KnownBits.cpp); the variable-shift-amount loop
+    // is intentionally omitted (measured to not pay off).
     static KnownBits ShlConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
     {
         if (shiftAmt >= width)
@@ -337,6 +352,7 @@ struct KnownBitsOps
     }
 
     // Known bits of "(unsigned)a >> shiftAmt" (logical right shift) for a constant shift amount.
+    // Constant-shift inner case of LLVM KnownBits::lshr (llvm/lib/Support/KnownBits.cpp).
     static KnownBits LshrConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
     {
         if (shiftAmt >= width)
@@ -351,6 +367,7 @@ struct KnownBitsOps
     }
 
     // Known bits of "a >> shiftAmt" (arithmetic right shift) for a constant shift amount.
+    // Constant-shift inner case of LLVM KnownBits::ashr (llvm/lib/Support/KnownBits.cpp).
     static KnownBits AshrConst(const KnownBits& a, unsigned shiftAmt, unsigned width)
     {
         if (shiftAmt == 0)
@@ -390,7 +407,8 @@ struct KnownBitsOps
         return KnownBits(z, o).Truncate(width);
     }
 
-    // Known bits of "a % b" (unsigned). Port of LLVM's KnownBits::urem (+ remGetLowBits).
+    // Known bits of "a % b" (unsigned). Port of LLVM KnownBits::urem and remGetLowBits
+    // (llvm/lib/Support/KnownBits.cpp).
     static KnownBits URem(const KnownBits& a, const KnownBits& b, unsigned width)
     {
         const uint64_t mask = KnownBits::WidthMask(width);
@@ -488,8 +506,9 @@ struct KnownBitsOps
     }
 
     // Evaluate "a <oper> b" (with the given signedness) purely from known bits. Returns 1 when the
-    // comparison is always true, 0 when always false, and -1 when it cannot be determined. Mirrors
-    // LLVM's KnownBits::eq/ne/ult/ule/ugt/uge/slt/sle/sgt/sge (min/max based).
+    // comparison is always true, 0 when always false, and -1 when it cannot be determined. Port of
+    // LLVM KnownBits::eq/ne/ult/ule/ugt/uge/slt/sle/sgt/sge (llvm/lib/Support/KnownBits.cpp), which
+    // are all min/max based, fused here into one switch.
     static int EvalRelop(genTreeOps oper, bool isUnsigned, const KnownBits& a, const KnownBits& b, unsigned width)
     {
         const uint64_t mask = KnownBits::WidthMask(width);
