@@ -20,6 +20,13 @@ static void MergeKnownBitsAssertions(
 
     const uint64_t signBit = 1ull << (width - 1);
 
+    // Tightest signed upper bound "num <= signedUpperBound" gathered from signed "num < C" / "num <= C"
+    // assertions with a non-negative bound. On its own a signed upper bound says nothing about the high
+    // bits (num could be negative), so we only apply it after the loop, and only once we also know num
+    // is non-negative (sign bit 0) -- then num is in [0, signedUpperBound] and its upper bits are 0.
+    bool     haveSignedUpperBound = false;
+    uint64_t signedUpperBound     = 0;
+
     BitVecOps::Iter iter(comp->apTraits, assertions);
     unsigned        index = 0;
     while (iter.NextElem(&index))
@@ -89,6 +96,27 @@ static void MergeKnownBitsAssertions(
                 // num > -1 (signed)  =>  num >= 0  =>  sign bit is 0.
                 *pBits = KnownBits::Intersect(*pBits, KnownBits(signBit, 0));
             }
+            else if (curAssertion.KindIs(Compiler::OAK_LT) && (relCns >= 1))
+            {
+                // num < C (signed), C >= 1. If num is also non-negative (handled after the loop),
+                // num is in [0, C-1], so record C-1 as a candidate upper bound.
+                const uint64_t ub = (uint64_t)(relCns - 1);
+                if (!haveSignedUpperBound || (ub < signedUpperBound))
+                {
+                    haveSignedUpperBound = true;
+                    signedUpperBound     = ub;
+                }
+            }
+            else if (curAssertion.KindIs(Compiler::OAK_LE) && (relCns >= 0))
+            {
+                // num <= C (signed), C >= 0. If num is also non-negative, num is in [0, C].
+                const uint64_t ub = (uint64_t)relCns;
+                if (!haveSignedUpperBound || (ub < signedUpperBound))
+                {
+                    haveSignedUpperBound = true;
+                    signedUpperBound     = ub;
+                }
+            }
             continue;
         }
 
@@ -125,6 +153,15 @@ static void MergeKnownBitsAssertions(
             *pBits = KnownBits::Intersect(*pBits, KnownBits(signBit, 0));
             continue;
         }
+    }
+
+    // If we gathered a signed upper bound and num is now known non-negative (from any of the facts
+    // above or from its value-number structure), num is in [0, signedUpperBound]: its upper bits are 0.
+    // Example: "a > 10 && a < 1000" => sign bit 0 (from a > 10) plus upper bits 0 (from a < 1000),
+    // proving a fits in a smaller type (e.g. making "checked((int)a)" non-overflowing).
+    if (haveSignedUpperBound && ((pBits->knownZero & signBit) != 0))
+    {
+        *pBits = KnownBits::Intersect(*pBits, KnownBits::FromUnsignedUpperBound(signedUpperBound, width));
     }
 }
 
