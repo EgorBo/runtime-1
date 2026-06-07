@@ -298,9 +298,58 @@ static KnownBits ComputeWorker(
             case VNF_LE_UN:
             case VNF_GT_UN:
             case VNF_GE_UN:
-                // Relops always produce 0 or 1.
+            {
+                // A relop always produces 0 or 1. If the known bits of its operands already determine
+                // the outcome, report the exact constant (0 = false, 1 = true); otherwise bound the
+                // result to [0, 1]. The exact case lets a comparison whose result is statically known
+                // feed downstream consumers (e.g. "(x & 0xF) == 0x100" is constant 0).
                 result = KnownBits::FromUnsignedUpperBound(1, width);
+
+                const ValueNum  cmpOp0  = funcApp.GetArg(0);
+                const var_types cmpType = comp->vnStore->TypeOfVN(cmpOp0);
+                if (varTypeIsIntegral(cmpType) && !varTypeIsGC(cmpType))
+                {
+                    const VNFunc vnf        = funcApp.GetFunc();
+                    const bool   isUnsigned = funcApp.FuncIs(VNF_LT_UN, VNF_LE_UN, VNF_GT_UN, VNF_GE_UN);
+
+                    genTreeOps cmpOper;
+                    switch (vnf)
+                    {
+                        case VNF_EQ:
+                            cmpOper = GT_EQ;
+                            break;
+                        case VNF_NE:
+                            cmpOper = GT_NE;
+                            break;
+                        case VNF_LT:
+                        case VNF_LT_UN:
+                            cmpOper = GT_LT;
+                            break;
+                        case VNF_LE:
+                        case VNF_LE_UN:
+                            cmpOper = GT_LE;
+                            break;
+                        case VNF_GT:
+                        case VNF_GT_UN:
+                            cmpOper = GT_GT;
+                            break;
+                        default:
+                            assert(funcApp.FuncIs(VNF_GE, VNF_GE_UN));
+                            cmpOper = GT_GE;
+                            break;
+                    }
+
+                    const unsigned  cmpWidth = (genActualType(cmpType) == TYP_LONG) ? 64 : 32;
+                    const KnownBits a        = ComputeWorker(comp, cmpOp0, assertions, --budget, visited);
+                    const KnownBits b        = ComputeWorker(comp, funcApp.GetArg(1), assertions, --budget, visited);
+                    const int       evalRes  = KnownBitsOps::EvalRelop(cmpOper, isUnsigned, a, b, cmpWidth);
+                    if (evalRes >= 0)
+                    {
+                        result = KnownBits::FromConstant((uint64_t)evalRes, width);
+                    }
+                }
                 break;
+            }
 
             case VNF_MDARR_LENGTH:
             case VNF_ARR_LENGTH:
