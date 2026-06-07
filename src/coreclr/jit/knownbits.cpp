@@ -190,6 +190,14 @@ static KnownBits ComputeWorker(
                 break;
             }
 
+            case VNF_XOR:
+            {
+                KnownBits a = ComputeWorker(comp, funcApp.GetArg(0), assertions, --budget, visited);
+                KnownBits b = ComputeWorker(comp, funcApp.GetArg(1), assertions, --budget, visited);
+                result      = KnownBitsOps::Xor(a, b);
+                break;
+            }
+
             case VNF_UMOD:
             {
                 KnownBits a = ComputeWorker(comp, funcApp.GetArg(0), assertions, --budget, visited);

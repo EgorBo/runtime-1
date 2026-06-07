@@ -5678,6 +5678,17 @@ GenTree* Compiler::optAssertionProp_BndsChk(ASSERT_VALARG_TP assertions, GenTree
         return optAssertionProp_Update(newTree, arrBndsChk, stmt);
     };
 
+    // Known-bits based elimination: if the index is provably (unsigned) less than the length, the
+    // check is redundant. Catches masked indices and bit patterns the range-based paths cannot express.
+    {
+        const KnownBits kbIdx = KnownBits::Compute(this, vnCurIdx, assertions);
+        const KnownBits kbLen = KnownBits::Compute(this, vnCurLen, assertions);
+        if (KnownBitsOps::EvalRelop(GT_LT, /* isUnsigned */ true, kbIdx, kbLen, 32) == 1)
+        {
+            return dropBoundsCheck(INDEBUG("known bits prove (uint)index < (uint)length"));
+        }
+    }
+
     // First, check if we have arr[arr.Length - cns] when we know arr.Length is >= cns.
     ValueNum add0, add1;
     if (vnStore->IsVNBinFunc(vnCurIdx, VNF_ADD, &add0, &add1))
@@ -5920,6 +5931,64 @@ GenTree* Compiler::optAssertionProp_Update(GenTree* newTree, GenTree* tree, Stat
 // Notes:
 //   stmt may be nullptr during local assertion prop
 //
+//------------------------------------------------------------------------
+// optAssertionProp_KnownBitsSimplify: Remove a redundant constant mask on AND/OR using known bits:
+//    "x & C" == "x" when every possibly-set bit of x is set in C, and "x | C" == "x" when every set
+//    bit of C is already known-one in x.
+//
+GenTree* Compiler::optAssertionProp_KnownBitsSimplify(ASSERT_VALARG_TP assertions, GenTreeOp* tree, Statement* stmt)
+{
+    if (optLocalAssertionProp || !varTypeIsIntegral(tree))
+    {
+        return nullptr;
+    }
+
+    GenTree* op1 = tree->gtGetOp1();
+    GenTree* op2 = tree->gtGetOp2();
+
+    // We need a constant mask on op2 with no side effects of its own (so dropping it is safe).
+    int64_t cns;
+    if ((op2->gtFlags & GTF_SIDE_EFFECT) != 0 ||
+        !vnStore->IsVNIntegralConstant<int64_t>(optConservativeNormalVN(op2), &cns))
+    {
+        return nullptr;
+    }
+
+    const unsigned  width    = (genActualType(tree) == TYP_LONG) ? 64 : 32;
+    const uint64_t  mask     = KnownBits::WidthMask(width);
+    const uint64_t  c        = (uint64_t)cns & mask;
+    const KnownBits kb       = KnownBits::Compute(this, optConservativeNormalVN(op1), assertions);
+    const uint64_t  maybeOne = ~kb.knownZero & mask;
+
+    if (tree->OperIs(GT_AND))
+    {
+        // x & C == x  iff every possibly-set bit of x is set in C.
+        if ((maybeOne & ~c & mask) == 0)
+        {
+            JITDUMP("Removing redundant AND mask [%06u] based on known bits.\n", dspTreeID(tree));
+            return optAssertionProp_Update(op1, tree, stmt);
+        }
+        // x & C == 0  iff x has no possibly-set bit in C.
+        if ((maybeOne & c) == 0)
+        {
+            JITDUMP("Folding AND [%06u] to zero based on known bits.\n", dspTreeID(tree));
+            GenTree* zero = (width == 64) ? gtNewLconNode(0) : gtNewIconNode(0, genActualType(tree));
+            return optAssertionProp_Update(gtWrapWithSideEffects(zero, tree, GTF_ALL_EFFECT), tree, stmt);
+        }
+    }
+    else
+    {
+        assert(tree->OperIs(GT_OR));
+        // x | C == x  iff every set bit of C is already known-one in x.
+        if ((c & ~kb.knownOne & mask) == 0)
+        {
+            JITDUMP("Removing redundant OR mask [%06u] based on known bits.\n", dspTreeID(tree));
+            return optAssertionProp_Update(op1, tree, stmt);
+        }
+    }
+    return nullptr;
+}
+
 GenTree* Compiler::optAssertionProp(ASSERT_VALARG_TP assertions, GenTree* tree, Statement* stmt, BasicBlock* block)
 {
     switch (tree->gtOper)
@@ -5988,6 +6057,10 @@ GenTree* Compiler::optAssertionProp(ASSERT_VALARG_TP assertions, GenTree* tree, 
         case GT_GT:
         case GT_GE:
             return optAssertionProp_RelOp(assertions, tree, stmt, block);
+
+        case GT_AND:
+        case GT_OR:
+            return optAssertionProp_KnownBitsSimplify(assertions, tree->AsOp(), stmt);
 
         case GT_JTRUE:
             if (block != nullptr)

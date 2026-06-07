@@ -285,6 +285,14 @@ struct KnownBitsOps
         return (a < b) ? a : b;
     }
 
+    // Bitwise XOR: a bit is 0 if both inputs agree, 1 if they differ (only where both are known).
+    static KnownBits Xor(const KnownBits& a, const KnownBits& b)
+    {
+        const uint64_t z = (a.knownZero & b.knownZero) | (a.knownOne & b.knownOne);
+        const uint64_t o = (a.knownZero & b.knownOne) | (a.knownOne & b.knownZero);
+        return KnownBits(z, o);
+    }
+
     // Known bits of a * b. Port of LLVM KnownBits::mul (llvm/lib/Support/KnownBits.cpp): leading
     // zeros from umax*umax plus the low known bits; we omit the NoUndefSelfMultiply special case.
     static KnownBits Mul(const KnownBits& a, const KnownBits& b, unsigned width)

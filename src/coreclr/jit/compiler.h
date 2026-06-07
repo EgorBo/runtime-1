@@ -9138,6 +9138,7 @@ public:
     GenTree* optAssertionProp_RelOp(ASSERT_VALARG_TP assertions, GenTree* tree, Statement* stmt, BasicBlock* block);
     GenTree* optAssertionProp_Comma(ASSERT_VALARG_TP assertions, GenTree* tree, Statement* stmt);
     GenTree* optAssertionProp_BndsChk(ASSERT_VALARG_TP assertions, GenTree* tree, Statement* stmt);
+    GenTree* optAssertionProp_KnownBitsSimplify(ASSERT_VALARG_TP assertions, GenTreeOp* tree, Statement* stmt);
     GenTree* optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
                                           GenTree*         tree,
                                           Statement*       stmt,
