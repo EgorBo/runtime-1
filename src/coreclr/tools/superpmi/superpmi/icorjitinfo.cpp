@@ -671,6 +671,13 @@ CORINFO_CLASS_HANDLE MyICJI::getObjectType(CORINFO_OBJECT_HANDLE objPtr)
     return result;
 }
 
+CORINFO_OBJECT_HANDLE MyICJI::tryCreateString(uint8_t* data, int len)
+{
+    jitInstance->mc->cr->AddCall("tryCreateString");
+    CORINFO_OBJECT_HANDLE result = jitInstance->mc->repTryCreateString(data, len);
+    return result;
+}
+
 bool MyICJI::getReadyToRunHelper(CORINFO_RESOLVED_TOKEN* pResolvedToken,
                                  CorInfoHelpFunc         id,
                                  CORINFO_METHOD_HANDLE   callerHandle,

@@ -873,6 +873,10 @@ public:
     void dmpGetContinuationType(const Agnostic_GetContinuationTypeIn& key, DWORDLONG value);
     CORINFO_CLASS_HANDLE repGetContinuationType(size_t dataSize, bool* objRefs, size_t objRefsSize);
 
+    void recTryCreateString(uint8_t* data, int len, CORINFO_OBJECT_HANDLE result);
+    void dmpTryCreateString(const Agnostic_TryCreateString& key, DWORDLONG value);
+    CORINFO_OBJECT_HANDLE repTryCreateString(uint8_t* data, int len);
+
     void recUpdateEntryPointForTailCall(const CORINFO_CONST_LOOKUP& origEntryPoint, const CORINFO_CONST_LOOKUP& newEntryPoint);
     void dmpUpdateEntryPointForTailCall(const Agnostic_CORINFO_CONST_LOOKUP& origEntryPoint, const Agnostic_CORINFO_CONST_LOOKUP& newEntryPoint);
     void repUpdateEntryPointForTailCall(CORINFO_CONST_LOOKUP* entryPoint);
@@ -1222,6 +1226,7 @@ enum mcPackets
     Packet_GetWasmTypeSymbol = 235,
     Packet_GetWasmLowering = 236,
     Packet_GetAsyncOtherVariant = 237,
+    Packet_TryCreateString = 238,
 };
 
 void SetDebugDumpVariables();

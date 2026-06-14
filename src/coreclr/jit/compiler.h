@@ -9067,11 +9067,16 @@ public:
     fgWalkResult optVNBasedFoldCurStmt(BasicBlock* block, Statement* stmt, GenTree* parent, GenTree* tree);
     GenTree*     optVNConstantPropOnJTrue(BasicBlock* block, GenTree* test);
     GenTree*     optVNBasedFoldConstExpr(BasicBlock* block, GenTree* parent, GenTree* tree);
-    GenTree*     optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTree* tree);
-    GenTree*     optVNBasedFoldExpr_Call(BasicBlock* block, GenTree* parent, GenTreeCall* call);
+    GenTree*     optVNBasedFoldExpr(BasicBlock* block, Statement* stmt, GenTree* parent, GenTree* tree);
+    GenTree*     optVNBasedFoldExpr_Call(BasicBlock* block, Statement* stmt, GenTree* parent, GenTreeCall* call);
     GenTree*     optVNBasedFoldExpr_Call_Memmove(GenTreeCall* call);
     GenTree*     optVNBasedFoldExpr_Call_Memset(GenTreeCall* call);
     GenTree*     optVNBasedFoldExpr_Call_Memcmp(GenTreeCall* call);
+    GenTree*     optVNBasedFoldExpr_Call_StringConcat(BasicBlock*  block,
+                                                      Statement*   stmt,
+                                                      GenTree*     parent,
+                                                      GenTreeCall* call);
+    CORINFO_OBJECT_HANDLE optExtractConstStringHandle(ValueNum strVN);
 
     AssertionIndex GetAssertionCount()
     {

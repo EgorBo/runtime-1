@@ -1298,6 +1298,12 @@ AssertionIndex Compiler::optCreateAssertion(GenTree* op1, GenTree* op2, bool equ
                         AssertionDsc assertion = AssertionDsc::CreateLclNonNullAssertion(this, lclNum);
                         return optAddAssertion(assertion);
                     }
+
+                    if (call->IsSpecialIntrinsic(this, NamedIntrinsic::NI_System_String_FastAllocateString))
+                    {
+                        AssertionDsc assertion = AssertionDsc::CreateLclNonNullAssertion(this, lclNum);
+                        return optAddAssertion(assertion);
+                    }
                 }
                 break;
             }
@@ -2721,6 +2727,281 @@ GenTree* Compiler::optVNBasedFoldExpr_Call_Memmove(GenTreeCall* call)
 }
 
 //------------------------------------------------------------------------------
+// optExtractConstStringHandle: Try to obtain a constant string object handle for
+//    the given value number. Handles both frozen string literals and constant
+//    (static readonly) string fields whose value is already known (e.g. when
+//    re-jitting at a higher tier after the class constructor has run).
+//
+// Arguments:
+//    strVN - the (offset-peeled) value number of the string reference
+//
+// Return Value:
+//    The string's object handle, or NO_OBJECT_HANDLE if one could not be obtained.
+//
+CORINFO_OBJECT_HANDLE Compiler::optExtractConstStringHandle(ValueNum strVN)
+{
+    // Case 1: a frozen string literal.
+    if (vnStore->IsVNObjHandle(strVN))
+    {
+        return vnStore->ConstantObjHandle(strVN);
+    }
+
+    // Case 2: a static readonly string field whose value is already initialized.
+    VNFuncApp funcApp;
+    if (vnStore->GetVNFunc(strVN, &funcApp) && funcApp.FuncIs(VNF_InvariantNonNullLoad))
+    {
+        ValueNum fieldSeqVN = vnStore->VNNormalValue(funcApp.GetArg(0));
+        if (vnStore->IsVNHandle(fieldSeqVN, GTF_ICON_FIELD_SEQ))
+        {
+            FieldSeq* fieldSeq = vnStore->FieldSeqVNToFieldSeq(fieldSeqVN);
+            if (fieldSeq != nullptr)
+            {
+                CORINFO_FIELD_HANDLE field = fieldSeq->GetFieldHandle();
+                if (field != NO_FIELD_HANDLE)
+                {
+                    // ignoreMovableObjects = false: the JIT-VM hands us a GC-safe handle that we only
+                    // use to read the string's immutable content - the concatenated result is frozen,
+                    // so we never embed the (possibly movable) source's address.
+                    uint8_t buffer[TARGET_POINTER_SIZE] = {0};
+                    if (info.compCompHnd->getStaticFieldContent(field, buffer, TARGET_POINTER_SIZE, 0,
+                                                                /* ignoreMovableObjects */ false))
+                    {
+                        CORINFO_OBJECT_HANDLE objHandle = NO_OBJECT_HANDLE;
+                        memcpy(&objHandle, buffer, TARGET_POINTER_SIZE);
+                        return objHandle;
+                    }
+                }
+            }
+        }
+    }
+
+    return NO_OBJECT_HANDLE;
+}
+
+//------------------------------------------------------------------------------
+// optVNBasedFoldExpr_Call_StringConcat: Folds a constant String.Concat into a
+//    single frozen string constant.
+//
+//    When String.Concat is inlined it expands into an allocation of the result
+//    string followed by a chain of Memmove calls copying each operand into the
+//    freshly allocated buffer:
+//
+//        STORE_LCL_VAR V = CALL String:FastAllocateString(cls, totalLen)
+//        CALL SpanHelpers:Memmove(V + _firstChar,        str0 + _firstChar, len0)
+//        CALL SpanHelpers:Memmove(V + _firstChar + len0, str1 + _firstChar, len1)
+//        ...
+//        <use of V>
+//
+//    If every source (strN) is a known constant string - a frozen string literal or the
+//    already-initialized value of a static readonly string field - and the Memmove chain fills the
+//    whole allocated buffer, the copied characters are read directly into a single buffer and the
+//    runtime is asked to create a new frozen string out of it. On success the allocation is replaced
+//    with that constant and the now-dead Memmove statements are removed.
+//
+// Arguments:
+//    block  - The block containing the FastAllocateString call.
+//    stmt   - The statement containing the FastAllocateString call.
+//    parent - The parent node of the call (expected to be a STORE_LCL_VAR).
+//    call   - The FastAllocateString call to fold.
+//
+// Return Value:
+//    A new constant object handle node to replace the allocation, or nullptr if
+//    nothing was changed.
+//
+GenTree* Compiler::optVNBasedFoldExpr_Call_StringConcat(BasicBlock*  block,
+                                                        Statement*   stmt,
+                                                        GenTree*     parent,
+                                                        GenTreeCall* call)
+{
+    assert(call->IsSpecialIntrinsic(this, NI_System_String_FastAllocateString));
+
+    JITDUMP("See if we can fold a constant String.Concat with help of VN...\n");
+
+    // We need to know which local the freshly allocated string is stored into, so that we can
+    // match the destination of the following Memmove calls against it. The allocation is expected
+    // to be the root of the current statement.
+    if ((parent == nullptr) || !parent->OperIs(GT_STORE_LCL_VAR) || (stmt->GetRootNode() != parent))
+    {
+        JITDUMP("...allocation result is not stored into a local - bail out.\n");
+        return nullptr;
+    }
+    const unsigned dstLclNum = parent->AsLclVarCommon()->GetLclNum();
+
+    // The total length (in characters) of the allocated string must be a constant.
+    ValueNum lenVN = vnStore->VNConservativeNormalValue(call->gtArgs.GetUserArgByIndex(1)->GetNode()->gtVNPair);
+    if (!vnStore->IsVNConstant(lenVN))
+    {
+        JITDUMP("...allocation length is not a constant - bail out.\n");
+        return nullptr;
+    }
+    const ssize_t allocLength = vnStore->CoercedConstantValue<ssize_t>(lenVN);
+    if (allocLength <= 0)
+    {
+        return nullptr;
+    }
+
+    // Don't fold into arbitrarily large frozen strings - they live forever and we don't know whether
+    // the result is actually going to be used at run time.
+    const ssize_t maxFoldLength = 256;
+    if (allocLength > maxFoldLength)
+    {
+        JITDUMP("...resulting string of %d chars is too large to fold - bail out.\n", (int)allocLength);
+        return nullptr;
+    }
+
+    // Walk forward over the following top-level Memmove statements. Each Memmove must copy a chunk
+    // of a known constant string into the allocated buffer at the expected (running) offset; we read
+    // the copied characters directly into a single buffer that becomes the new string's content.
+    ArrayStack<Statement*> memmoveStmts(getAllocator(CMK_AssertionProp));
+
+    // The full character content of the resulting string (allocLength UTF-16 chars).
+    uint8_t* content = new (this, CMK_AssertionProp) uint8_t[(size_t)allocLength * sizeof(uint16_t)];
+
+    // Running byte offset within the destination string where the next chunk is expected.
+    // The first chunk is written to the very first character.
+    target_ssize_t expectedDstOffset = (target_ssize_t)OFFSETOF__CORINFO_String__chars;
+
+    // VN of the freshly allocated string (V05's SSA def value). All Memmove destinations must be
+    // based on it. Using the SSA def VN (rather than peeling the destination tree) is robust against
+    // the destination address being wrapped by CSE temps, COMMAs, etc.
+    const unsigned allocSsaNum = parent->AsLclVarCommon()->GetSsaNum();
+    if (allocSsaNum == SsaConfig::RESERVED_SSA_NUM)
+    {
+        return nullptr;
+    }
+    const ValueNum allocVN =
+        vnStore->VNConservativeNormalValue(lvaGetDesc(dstLclNum)->GetPerSsaData(allocSsaNum)->m_vnPair);
+    if (allocVN == ValueNumStore::NoVN)
+    {
+        return nullptr;
+    }
+
+    for (Statement* curStmt = stmt->GetNextStmt(); curStmt != nullptr; curStmt = curStmt->GetNextStmt())
+    {
+        GenTree* rootNode = curStmt->GetRootNode();
+        if (!rootNode->IsCall())
+        {
+            JITDUMP("...next stmt is not a call (collected %d so far).\n", memmoveStmts.Height());
+            break;
+        }
+
+        GenTreeCall* memmove = rootNode->AsCall();
+        if (!memmove->IsSpecialIntrinsic(this, NI_System_SpanHelpers_Memmove) &&
+            !memmove->IsHelperCall(CORINFO_HELP_MEMCPY))
+        {
+            JITDUMP("...next stmt call is not Memmove (collected %d so far).\n", memmoveStmts.Height());
+            break;
+        }
+
+        // Destination must be (allocatedString + expectedDstOffset). The offset is derived from
+        // VN (it may be a non-trivial address tree, e.g. result + (len0 + len1) * 2).
+        GenTree*       dstArg    = memmove->gtArgs.GetUserArgByIndex(0)->GetNode();
+        ValueNum       dstVN     = optConservativeNormalVN(dstArg);
+        target_ssize_t dstOffset = 0;
+        vnStore->PeelOffsets(&dstVN, &dstOffset);
+
+        if ((dstVN != allocVN) || (dstOffset != expectedDstOffset))
+        {
+            JITDUMP("...Memmove dst mismatch: baseVN=" FMT_VN ", offset=%d (expected baseVN=" FMT_VN " offset=%d).\n",
+                    dstVN, (int)dstOffset, allocVN, (int)expectedDstOffset);
+            break;
+        }
+
+        // Source must be a constant string pointing at its first character. The string may be a
+        // frozen literal or the (already initialized) value of a static readonly string field.
+        ValueNum       srcVN     = optConservativeNormalVN(memmove->gtArgs.GetUserArgByIndex(1)->GetNode());
+        target_ssize_t srcOffset = 0;
+        vnStore->PeelOffsets(&srcVN, &srcOffset);
+        if (srcOffset != (target_ssize_t)OFFSETOF__CORINFO_String__chars)
+        {
+            JITDUMP("...Memmove src is not at the string's _firstChar (srcOffset=%d).\n", (int)srcOffset);
+            break;
+        }
+        CORINFO_OBJECT_HANDLE srcStr = optExtractConstStringHandle(srcVN);
+        if (srcStr == NO_OBJECT_HANDLE)
+        {
+            JITDUMP("...Memmove src is not a known constant string - bail out.\n");
+            break;
+        }
+
+        // The number of bytes copied must be a constant.
+        ValueNum mmLenVN = optConservativeNormalVN(memmove->gtArgs.GetUserArgByIndex(2)->GetNode());
+        if (!vnStore->IsVNConstant(mmLenVN))
+        {
+            JITDUMP("...Memmove length is not a constant.\n");
+            break;
+        }
+        const ssize_t copyBytes = vnStore->CoercedConstantValue<ssize_t>(mmLenVN);
+
+        // The chunk must fit within the allocated result buffer.
+        const target_ssize_t contentOffset = expectedDstOffset - (target_ssize_t)OFFSETOF__CORINFO_String__chars;
+        if ((copyBytes <= 0) || (contentOffset + copyBytes > (target_ssize_t)allocLength * 2))
+        {
+            JITDUMP("...Memmove copies %d bytes which doesn't fit the result buffer - bail out.\n", (int)copyBytes);
+            break;
+        }
+
+        // Read the copied characters directly from the constant source string into the result buffer.
+        if (!info.compCompHnd->getObjectContent(srcStr, content + contentOffset, (int)copyBytes, (int)srcOffset))
+        {
+            JITDUMP("...failed to read constant content from the source string - bail out.\n");
+            break;
+        }
+
+        JITDUMP("...matched Memmove #%d: copied %d bytes at dst offset %d.\n", memmoveStmts.Height(), (int)copyBytes,
+                (int)dstOffset);
+        memmoveStmts.Push(curStmt);
+        expectedDstOffset += (target_ssize_t)copyBytes;
+    }
+
+    // We need at least two operands and the Memmove chain must fill the entire buffer.
+    if ((memmoveStmts.Height() < 2) ||
+        (expectedDstOffset != (target_ssize_t)OFFSETOF__CORINFO_String__chars + (target_ssize_t)allocLength * 2))
+    {
+        JITDUMP("...didn't find a complete constant String.Concat pattern (collected %d chunks, filled %d of %d "
+                "bytes) - bail out.\n",
+                memmoveStmts.Height(), (int)(expectedDstOffset - (target_ssize_t)OFFSETOF__CORINFO_String__chars),
+                (int)((target_ssize_t)allocLength * 2));
+        return nullptr;
+    }
+
+    // Ask the runtime to create a frozen string out of the assembled character content.
+    CORINFO_OBJECT_HANDLE result = info.compCompHnd->tryCreateString(content, (int)allocLength);
+    if (result == NO_OBJECT_HANDLE)
+    {
+        JITDUMP("...runtime declined to create the string - bail out.\n");
+        return nullptr;
+    }
+
+    // The Memmove statements are now dead - their destination becomes a frozen constant. However,
+    // their argument trees may still contain side effects (the actual memory copy is what we drop),
+    // so preserve those rather than blindly removing the statements.
+    for (int i = 0; i < memmoveStmts.Height(); i++)
+    {
+        Statement* memmoveStmt = memmoveStmts.Bottom(i);
+
+        GenTree* sideEffects = nullptr;
+        gtExtractSideEffList(memmoveStmt->GetRootNode(), &sideEffects, GTF_ALL_EFFECT, /* ignoreRoot */ true);
+        if (sideEffects != nullptr)
+        {
+            memmoveStmt->SetRootNode(sideEffects);
+            fgMorphBlockStmt(block, memmoveStmt DEBUGARG("optVNBasedFoldExpr_Call_StringConcat"));
+        }
+        else
+        {
+            fgRemoveStmt(block, memmoveStmt);
+        }
+    }
+
+    GenTree* concatTree = gtNewIconEmbObjHndNode(result);
+    concatTree->gtVNPair.SetBoth(vnStore->VNForHandle((ssize_t)result, GTF_ICON_OBJ_HDL));
+
+    JITDUMP("...folded %d constant string chunks into a single frozen string constant!\n", memmoveStmts.Height());
+    DISPTREE(concatTree);
+    return concatTree;
+}
+
+//------------------------------------------------------------------------------
 // optVNBasedFoldExpr_Call: Folds given call using VN to a simpler tree.
 //
 // Arguments:
@@ -2731,7 +3012,7 @@ GenTree* Compiler::optVNBasedFoldExpr_Call_Memmove(GenTreeCall* call)
 // Return Value:
 //    Returns a new tree or nullptr if nothing is changed.
 //
-GenTree* Compiler::optVNBasedFoldExpr_Call(BasicBlock* block, GenTree* parent, GenTreeCall* call)
+GenTree* Compiler::optVNBasedFoldExpr_Call(BasicBlock* block, Statement* stmt, GenTree* parent, GenTreeCall* call)
 {
     switch (call->GetHelperNum())
     {
@@ -2802,6 +3083,11 @@ GenTree* Compiler::optVNBasedFoldExpr_Call(BasicBlock* block, GenTree* parent, G
         return optVNBasedFoldExpr_Call_Memcmp(call);
     }
 
+    if (call->IsSpecialIntrinsic(this, NI_System_String_FastAllocateString))
+    {
+        return optVNBasedFoldExpr_Call_StringConcat(block, stmt, parent, call);
+    }
+
     return nullptr;
 }
 
@@ -2816,7 +3102,7 @@ GenTree* Compiler::optVNBasedFoldExpr_Call(BasicBlock* block, GenTree* parent, G
 // Return Value:
 //    Returns a new tree or nullptr if nothing is changed.
 //
-GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTree* tree)
+GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, Statement* stmt, GenTree* parent, GenTree* tree)
 {
     // First, attempt to fold it to a constant if possible.
     GenTree* foldedToCns = optVNBasedFoldConstExpr(block, parent, tree);
@@ -2828,7 +3114,7 @@ GenTree* Compiler::optVNBasedFoldExpr(BasicBlock* block, GenTree* parent, GenTre
     switch (tree->OperGet())
     {
         case GT_CALL:
-            return optVNBasedFoldExpr_Call(block, parent, tree->AsCall());
+            return optVNBasedFoldExpr_Call(block, stmt, parent, tree->AsCall());
 
             // We can add more VN-based foldings here.
 
@@ -6484,7 +6770,7 @@ Compiler::fgWalkResult Compiler::optVNBasedFoldCurStmt(BasicBlock* block,
     }
 
     // Perform the VN-based folding:
-    GenTree* newTree = optVNBasedFoldExpr(block, parent, tree);
+    GenTree* newTree = optVNBasedFoldExpr(block, stmt, parent, tree);
 
     if (newTree == nullptr)
     {

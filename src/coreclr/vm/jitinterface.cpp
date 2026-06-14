@@ -6102,6 +6102,48 @@ CORINFO_CLASS_HANDLE CEEInfo::getObjectType(CORINFO_OBJECT_HANDLE objHandle)
 }
 
 /***********************************************************************/
+CORINFO_OBJECT_HANDLE CEEInfo::tryCreateString(uint8_t* data, int len)
+{
+    CONTRACTL{
+        THROWS;
+        GC_TRIGGERS;
+        MODE_PREEMPTIVE;
+    } CONTRACTL_END;
+
+    CORINFO_OBJECT_HANDLE result = NULL;
+
+    JIT_TO_EE_TRANSITION();
+
+    // Frozen objects live forever, so don't create them for collectible (unloadable) contexts -
+    // the result would outlive the method's loader allocator. Also bail if we don't know the
+    // method being compiled.
+    const bool canUseFrozenHeap = (m_pMethodBeingCompiled != NULL) && !m_pMethodBeingCompiled->IsCollectible();
+
+    // Frozen strings live forever, so give up on creating very large strings - we don't know whether
+    // the result is actually going to be used at run time.
+    const int maxStringLength = 256;
+
+    if ((len > 0) && (len <= maxStringLength) && canUseFrozenHeap)
+    {
+        GCX_COOP();
+
+        // Allocate the result on the frozen object heap so the JIT can embed it as a constant.
+        bool      isFrozen  = false;
+        STRINGREF resultStr = AllocateString((DWORD)len, /* preferFrozenHeap */ true, &isFrozen);
+        if (isFrozen)
+        {
+            memcpy(resultStr->GetBuffer(), data, (size_t)len * sizeof(WCHAR));
+            result = (CORINFO_OBJECT_HANDLE)OBJECTREFToObject(resultStr);
+            _ASSERTE(GCHeapUtilities::GetGCHeap()->IsInFrozenSegment((Object*)result));
+        }
+    }
+
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
+/***********************************************************************/
 bool CEEInfo::getReadyToRunHelper(
         CORINFO_RESOLVED_TOKEN *        pResolvedToken,
         CorInfoHelpFunc                 id,

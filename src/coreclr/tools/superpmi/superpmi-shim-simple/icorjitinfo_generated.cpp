@@ -512,6 +512,13 @@ CORINFO_CLASS_HANDLE interceptor_ICJI::getObjectType(
     return original_ICorJitInfo->getObjectType(objPtr);
 }
 
+CORINFO_OBJECT_HANDLE interceptor_ICJI::tryCreateString(
+          uint8_t* data,
+          int len)
+{
+    return original_ICorJitInfo->tryCreateString(data, len);
+}
+
 bool interceptor_ICJI::getReadyToRunHelper(
           CORINFO_RESOLVED_TOKEN* pResolvedToken,
           CorInfoHelpFunc id,

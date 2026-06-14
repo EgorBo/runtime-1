@@ -2727,6 +2727,24 @@ public:
             CORINFO_OBJECT_HANDLE       objPtr
             ) = 0;
 
+    //------------------------------------------------------------------------------
+    // tryCreateString: tries to create a frozen string object with the given UTF-16
+    //    character data.
+    //
+    // Arguments:
+    //    data - pointer to the raw character data (len UTF-16 characters, i.e. len*2 bytes)
+    //    len  - number of characters in the resulting string
+    //
+    // Return Value:
+    //    Returns an object handle for the newly created frozen string or
+    //    NO_OBJECT_HANDLE if the string could not be created (e.g. the result could
+    //    not be allocated on the frozen heap or the current context is collectible).
+    //
+    virtual CORINFO_OBJECT_HANDLE tryCreateString(
+            uint8_t*                    data,
+            int                         len
+            ) = 0;
+
     virtual bool getReadyToRunHelper(
             CORINFO_RESOLVED_TOKEN *        pResolvedToken,
             CorInfoHelpFunc                 id,

@@ -53,6 +53,7 @@ namespace System
         internal const int StackallocIntBufferSizeLimit = 128;
         internal const int StackallocCharBufferSizeLimit = 256;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void CopyStringContent(string dest, int destPos, string src)
         {
             Debug.Assert(dest != null);
@@ -178,6 +179,7 @@ namespace System
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string Concat(string? str0, string? str1)
         {
             if (IsNullOrEmpty(str0))
@@ -212,6 +214,7 @@ namespace System
             return result;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string Concat(string? str0, string? str1, string? str2)
         {
             if (IsNullOrEmpty(str0))
@@ -245,6 +248,7 @@ namespace System
             return result;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string Concat(string? str0, string? str1, string? str2, string? str3)
         {
             if (IsNullOrEmpty(str0))

@@ -305,6 +305,10 @@ bool getStringChar(
 CORINFO_CLASS_HANDLE getObjectType(
           CORINFO_OBJECT_HANDLE objPtr) override;
 
+CORINFO_OBJECT_HANDLE tryCreateString(
+          uint8_t* data,
+          int len) override;
+
 bool getReadyToRunHelper(
           CORINFO_RESOLVED_TOKEN* pResolvedToken,
           CorInfoHelpFunc id,

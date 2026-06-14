@@ -821,6 +821,14 @@ CORINFO_CLASS_HANDLE interceptor_ICJI::getObjectType(CORINFO_OBJECT_HANDLE typeO
     return temp;
 }
 
+CORINFO_OBJECT_HANDLE interceptor_ICJI::tryCreateString(uint8_t* data, int len)
+{
+    mc->cr->AddCall("tryCreateString");
+    CORINFO_OBJECT_HANDLE temp = original_ICorJitInfo->tryCreateString(data, len);
+    mc->recTryCreateString(data, len, temp);
+    return temp;
+}
+
 bool interceptor_ICJI::getReadyToRunHelper(CORINFO_RESOLVED_TOKEN* pResolvedToken,
                                            CorInfoHelpFunc         id,
                                            CORINFO_METHOD_HANDLE   callerHandle,

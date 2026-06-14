@@ -7051,6 +7051,65 @@ CORINFO_CLASS_HANDLE MethodContext::repGetContinuationType(size_t dataSize,
     return (CORINFO_CLASS_HANDLE)value;
 }
 
+void MethodContext::recTryCreateString(uint8_t* data, int len, CORINFO_OBJECT_HANDLE result)
+{
+    if (TryCreateString == nullptr)
+    {
+        TryCreateString = new LightWeightMap<Agnostic_TryCreateString, DWORDLONG>();
+    }
+
+    int safeLen = len < 0 ? 0 : len;
+
+    Agnostic_TryCreateString key;
+    ZeroMemory(&key, sizeof(key));
+    // 'data' holds 'len' UTF-16 characters, i.e. len * sizeof(WCHAR) bytes.
+    key.data = TryCreateString->AddBuffer((unsigned char*)data, (unsigned int)(safeLen * sizeof(WCHAR)));
+    key.len  = (DWORD)safeLen;
+
+    DWORDLONG value = CastHandle(result);
+
+    TryCreateString->Add(key, value);
+    DEBUG_REC(dmpTryCreateString(key, value));
+}
+
+void MethodContext::dmpTryCreateString(const Agnostic_TryCreateString& key, DWORDLONG value)
+{
+    printf("TryCreateString data-%u, len-%u, result-%016" PRIX64, key.data, key.len, value);
+}
+
+CORINFO_OBJECT_HANDLE MethodContext::repTryCreateString(uint8_t* data, int len)
+{
+    // Tolerate replaying collections that were recorded before this API existed: just
+    // behave as if the runtime declined to create the string.
+    if (TryCreateString == nullptr)
+    {
+        return (CORINFO_OBJECT_HANDLE)0;
+    }
+
+    int safeLen = len < 0 ? 0 : len;
+
+    Agnostic_TryCreateString key;
+    ZeroMemory(&key, sizeof(key));
+    key.data = (DWORD)TryCreateString->Contains((unsigned char*)data, (unsigned int)(safeLen * sizeof(WCHAR)));
+    key.len  = (DWORD)safeLen;
+
+    DWORDLONG value;
+    int       index = TryCreateString->GetIndex(key);
+    if (index == -1)
+    {
+        // Tolerate a miss: behave as if the runtime declined to create the string.
+        value = (DWORDLONG)0;
+    }
+    else
+    {
+        value = TryCreateString->GetItem(index);
+    }
+
+    DEBUG_REP(dmpTryCreateString(key, value));
+
+    return (CORINFO_OBJECT_HANDLE)value;
+}
+
 void MethodContext::recUpdateEntryPointForTailCall(
     const CORINFO_CONST_LOOKUP& origEntryPoint,
     const CORINFO_CONST_LOOKUP& newEntryPoint)

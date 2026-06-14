@@ -3526,6 +3526,11 @@ namespace Internal.JitInterface
             return -1;
         }
 
+        private CORINFO_OBJECT_STRUCT_* tryCreateString(byte* data, int len)
+        {
+            return null;
+        }
+
         private bool getIsClassInitedFlagAddress(CORINFO_CLASS_STRUCT_* cls, ref CORINFO_CONST_LOOKUP addr, ref int offset)
         {
             // Implemented for JIT and NativeAOT only for now.

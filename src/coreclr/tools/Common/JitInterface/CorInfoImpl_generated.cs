@@ -92,6 +92,7 @@ namespace Internal.JitInterface
                 s_callbacks.isObjectImmutable = &_isObjectImmutable;
                 s_callbacks.getStringChar = &_getStringChar;
                 s_callbacks.getObjectType = &_getObjectType;
+                s_callbacks.tryCreateString = &_tryCreateString;
                 s_callbacks.getReadyToRunHelper = &_getReadyToRunHelper;
                 s_callbacks.getReadyToRunDelegateCtorHelper = &_getReadyToRunDelegateCtorHelper;
                 s_callbacks.initClass = &_initClass;
@@ -275,6 +276,7 @@ namespace Internal.JitInterface
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_OBJECT_STRUCT_*, byte> isObjectImmutable;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_OBJECT_STRUCT_*, int, ushort*, byte> getStringChar;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_OBJECT_STRUCT_*, CORINFO_CLASS_STRUCT_*> getObjectType;
+            public delegate* unmanaged<IntPtr, IntPtr*, byte*, int, CORINFO_OBJECT_STRUCT_*> tryCreateString;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_RESOLVED_TOKEN*, CorInfoHelpFunc, CORINFO_METHOD_STRUCT_*, CORINFO_CONST_LOOKUP*, byte> getReadyToRunHelper;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_RESOLVED_TOKEN*, mdToken, CORINFO_CLASS_STRUCT_*, CORINFO_METHOD_STRUCT_*, CORINFO_LOOKUP*, void> getReadyToRunDelegateCtorHelper;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_FIELD_STRUCT_*, CORINFO_METHOD_STRUCT_*, CORINFO_CONTEXT_STRUCT*, CorInfoInitClassResult> initClass;
@@ -1448,6 +1450,21 @@ namespace Internal.JitInterface
             try
             {
                 return _this.getObjectType(objPtr);
+            }
+            catch (Exception ex)
+            {
+                *ppException = _this.AllocException(ex);
+                return default;
+            }
+        }
+
+        [UnmanagedCallersOnly]
+        private static CORINFO_OBJECT_STRUCT_* _tryCreateString(IntPtr thisHandle, IntPtr* ppException, byte* data, int len)
+        {
+            var _this = GetThis(thisHandle);
+            try
+            {
+                return _this.tryCreateString(data, len);
             }
             catch (Exception ex)
             {

@@ -713,6 +713,16 @@ CORINFO_CLASS_HANDLE WrapICorJitInfo::getObjectType(
     return temp;
 }
 
+CORINFO_OBJECT_HANDLE WrapICorJitInfo::tryCreateString(
+          uint8_t* data,
+          int len)
+{
+    API_ENTER(tryCreateString);
+    CORINFO_OBJECT_HANDLE temp = wrapHnd->tryCreateString(data, len);
+    API_LEAVE(tryCreateString);
+    return temp;
+}
+
 bool WrapICorJitInfo::getReadyToRunHelper(
           CORINFO_RESOLVED_TOKEN* pResolvedToken,
           CorInfoHelpFunc id,

@@ -2461,6 +2461,22 @@ namespace Internal.JitInterface
             return HandleToObject(objHnd).ArrayLength ?? -1;
         }
 
+        private CORINFO_OBJECT_STRUCT_* tryCreateString(byte* data, int len)
+        {
+            // Frozen strings live forever, so give up on creating very large strings - we don't
+            // know whether the result is actually going to be used at run time.
+            const int MaxStringLength = 256;
+
+            if ((len <= 0) || (len > MaxStringLength))
+            {
+                return null;
+            }
+
+            // 'data' points to 'len' UTF-16 characters (len * 2 bytes).
+            string str = new string((char*)data, 0, len);
+            return ObjectToHandle(_compilation.NodeFactory.SerializedStringObject(str));
+        }
+
         private bool getIsClassInitedFlagAddress(CORINFO_CLASS_STRUCT_* cls, ref CORINFO_CONST_LOOKUP addr, ref int offset)
         {
             MetadataType type = (MetadataType)HandleToObject(cls);

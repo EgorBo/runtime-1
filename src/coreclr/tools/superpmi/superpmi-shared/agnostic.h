@@ -668,6 +668,12 @@ struct Agnostic_GetContinuationTypeIn
     DWORD     objRefsSize;
 };
 
+struct Agnostic_TryCreateString
+{
+    DWORD data;
+    DWORD len;
+};
+
 struct Agnostic_GetWasmTypeSymbol
 {
     DWORD types;
