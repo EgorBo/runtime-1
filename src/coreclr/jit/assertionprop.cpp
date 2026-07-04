@@ -52,7 +52,12 @@ static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_V
     assert(block != nullptr);
     assert(tree != nullptr);
 
-    int budget = 64;
+    // TryGetRange walks the SSA use-def chain up to three times per query (range computation, the
+    // overflow check, and a monotonicity-driven re-walk in Widen that recovers loop lower bounds), all
+    // sharing this budget. It therefore has to be several times larger than the raw chain length: even a
+    // trivial counted loop with an inner branch needs ~67 units, so a smaller cap fails to fold obviously
+    // redundant comparisons (e.g. "i >= 0" on a loop induction variable).
+    int budget = 256;
 #ifdef DEBUG
     // JIT stress: always take the slow, SSA-based range walk (with a larger budget) to maximize
     // coverage of TryGetRange and shake out correctness issues in the range computation.
