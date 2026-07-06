@@ -533,6 +533,29 @@ Range RangeCheck::GetRangeFromAssertions(Compiler* comp, GenTree* tree, ASSERT_V
 }
 
 //------------------------------------------------------------------------
+// GetRangeFromAssertions: Value-number-based overload of the above. Useful when only a value
+//    number is available (e.g. an operand extracted from another node's VN).
+//
+// Arguments:
+//    comp             - the compiler instance
+//    num              - the value number to analyze range for
+//    assertions       - the assertions to use
+//    budget           - the remaining budget for recursive analysis
+//
+// Return Value:
+//    The computed range
+//
+Range RangeCheck::GetRangeFromAssertions(Compiler* comp, ValueNum num, ASSERT_VALARG_TP assertions, int budget)
+{
+    if ((num == ValueNumStore::NoVN) || !varTypeIsIntegral(comp->vnStore->TypeOfVN(num)))
+    {
+        return Limit(Limit::keUnknown);
+    }
+
+    ValueNumStore::SmallValueNumSet set;
+    return GetRangeFromAssertionsWorker(comp, num, assertions, budget, &set);
+}
+//------------------------------------------------------------------------
 // GetRangeFromAssertionsWorker: Cheaper version of TryGetRange that is based purely on assertions
 //    and does not require a full range analysis based on SSA.
 //
@@ -1768,7 +1791,7 @@ void RangeCheck::MergeAssertion(BasicBlock* block, GenTree* op, Range* pRange DE
 Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool monIncreasing DEBUGARG(int indent))
 {
     assert(genActualType(binop) == TYP_INT);
-    assert(binop->OperIs(GT_ADD, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
+    assert(binop->OperIs(GT_ADD, GT_SUB, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
 
     // For XOR we only care about Log2 pattern for now
     if (binop->OperIs(GT_XOR))
@@ -1812,7 +1835,16 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
             // find the range.
             opRange = GetSearchPath()->Lookup(op) ? Range(Limit(Limit::keDependent))
                                                   : GetRangeWorker(block, op, monIncreasing DEBUGARG(indent));
-            MergeAssertion(block, op, &opRange DEBUGARG(indent + 1));
+
+            // If 'op' IS the preferred bound, GetRangeWorker anchored it to the exact symbolic value
+            // [bound, bound]. Merging assertions (e.g. "bound >= 0") would reshape that to the looser
+            // [0, bound], which loses the symbolic lower and prevents subtractions against the same
+            // bound from cancelling. The anchored value is already exact, so skip the merge.
+            if ((m_preferredBound == ValueNumStore::NoVN) ||
+                (m_compiler->vnStore->VNConservativeNormalValue(op->gtVNPair) != m_preferredBound))
+            {
+                MergeAssertion(block, op, &opRange DEBUGARG(indent + 1));
+            }
         }
         else
         {
@@ -1830,6 +1862,9 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
     {
         case GT_ADD:
             r = RangeOps::Add(op1Range, op2Range);
+            break;
+        case GT_SUB:
+            r = RangeOps::Subtract(op1Range, op2Range);
             break;
         case GT_MUL:
             r = RangeOps::Multiply(op1Range, op2Range);
@@ -2064,6 +2099,30 @@ bool RangeCheck::DoesBinOpOverflow(BasicBlock* block, GenTreeOp* binop, const Ra
             return false;
         }
     }
+    if (binop->OperIs(GT_SUB))
+    {
+        // "a - b" cannot overflow int32 when both operands are known non-negative: the result lies
+        // within [-max(b), max(a)], which is fully contained in the int32 range. An operand is known
+        // non-negative if its range lower limit is a constant >= 0 or a "bound + cns" with cns >= 0
+        // (bounds are non-negative), if its value number is proven never-negative, or if it is a
+        // monotonically-increasing value built from non-negative constants (e.g. a loop induction
+        // variable whose lower limit is still "dependent" during the first, pre-Widen pass).
+        auto isNonNeg = [this](const Limit& lo, GenTree* op) {
+            if ((lo.IsConstant() && (lo.GetConstant() >= 0)) || (lo.IsBinOpArray() && (lo.GetConstant() >= 0)))
+            {
+                return true;
+            }
+            if (m_compiler->vnStore->IsVNNeverNegative(m_compiler->vnStore->VNConservativeNormalValue(op->gtVNPair)))
+            {
+                return true;
+            }
+            return IsMonotonicallyIncreasing(op, /* rejectNegativeConst */ true);
+        };
+        if (isNonNeg(op1Range->LowerLimit(), op1) && isNonNeg(op2Range->LowerLimit(), op2))
+        {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -2168,7 +2227,7 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
         overflows = DoesVarDefOverflow(block, expr->AsLclVarCommon(), range);
     }
     // Check if these bin ops overflow.
-    else if (expr->OperIs(GT_ADD, GT_OR, GT_MUL, GT_LSH))
+    else if (expr->OperIs(GT_ADD, GT_SUB, GT_OR, GT_MUL, GT_LSH))
     {
         overflows = DoesBinOpOverflow(block, expr->AsOp(), range);
     }
@@ -2270,6 +2329,16 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
             range = Limit(Limit::keUnknown);
         }
     }
+    // If this value IS the caller-provided preferred bound, represent it symbolically as exactly
+    // [bound, bound] so that subtractions/comparisons against the same bound cancel to a constant.
+    // GT_ARR_LENGTH nodes are excluded because they have a dedicated branch below (which produces the
+    // [0, bound] shape the checked-bound machinery relies on); every other shape of the bound value
+    // (a span-length IND, a LCL holding it, etc.) is anchored here, whether or not the value happens
+    // to also be a VN-recognized checked bound.
+    else if ((m_preferredBound != ValueNumStore::NoVN) && (vn == m_preferredBound) && !expr->OperIs(GT_ARR_LENGTH))
+    {
+        range = Range(Limit(Limit::keBinOpArray, m_preferredBound, 0));
+    }
     // If local, find the definition from the def map and evaluate the range for rhs.
     else if (expr->IsLocal())
     {
@@ -2277,7 +2346,7 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
         MergeAssertion(block, expr, &range DEBUGARG(indent + 1));
     }
     // compute the range for binary operation
-    else if (expr->OperIs(GT_XOR, GT_OR, GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL))
+    else if (expr->OperIs(GT_XOR, GT_OR, GT_ADD, GT_SUB, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL))
     {
         range = ComputeRangeForBinOp(block, expr->AsOp(), monIncreasing DEBUGARG(indent + 1));
     }
@@ -2290,6 +2359,9 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
     // If phi, then compute the range for arguments, calling the result "dependent" when looping begins.
     else if (expr->OperIs(GT_PHI))
     {
+        Limit symbolicUpper(Limit::keUndef); // best symbolic ("$bnd + n") upper limit seen among args
+        bool  haveConstUpper = false;
+        int   constUpper     = 0; // largest constant upper limit seen among args
         for (GenTreePhi::Use& use : expr->AsPhi()->Uses())
         {
             Range argRange = Range(Limit(Limit::keUndef));
@@ -2305,9 +2377,44 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
             assert(!argRange.LowerLimit().IsUndef());
             assert(!argRange.UpperLimit().IsUndef());
             MergeAssertion(block, use.GetNode(), &argRange DEBUGARG(indent + 1));
+
+            const Limit& argUpper = argRange.UpperLimit();
+            if (argUpper.IsBinOpArray() &&
+                (!symbolicUpper.IsBinOpArray() || (argUpper.GetConstant() > symbolicUpper.GetConstant())))
+            {
+                symbolicUpper = argUpper;
+            }
+            else if (argUpper.IsConstant())
+            {
+                constUpper     = haveConstUpper ? max(constUpper, argUpper.GetConstant()) : argUpper.GetConstant();
+                haveConstUpper = true;
+            }
+
             JITDUMP("Merging ranges %s %s:", range.ToString(m_compiler), argRange.ToString(m_compiler));
             range = RangeOps::Merge(range, argRange, monIncreasing);
             JITDUMP("%s\n", range.ToString(m_compiler));
+        }
+
+        // Recovery: merging a symbolic upper "$bnd + n" (n < 0) with a smaller constant upper "k"
+        // yields Unknown, because "max(k, $bnd + n)" only simplifies to "$bnd + n" when "$bnd + n >= k"
+        // (see RangeOps::Merge). This is common for increasing loops whose limit is "len - K" (e.g.
+        // vectorized loops merging the "len - K" back-edge bound with a "0" initializer). If assertions
+        // prove the symbolic bound value "$bnd + n" is >= the constant "k", it is the true upper limit,
+        // so recover it here rather than losing it to Unknown.
+        if (range.UpperLimit().IsUnknown() && symbolicUpper.IsBinOpArray() && haveConstUpper)
+        {
+            ValueNum boundValVN =
+                m_compiler->vnStore->VNForFunc(TYP_INT, VNF_ADD, symbolicUpper.vn,
+                                               m_compiler->vnStore->VNForIntCon(symbolicUpper.GetConstant()));
+            ValueNumStore::SmallValueNumSet visited;
+            Range                           boundValRange =
+                GetRangeFromAssertionsWorker(m_compiler, boundValVN, block->bbAssertionIn, /* budget */ 3, &visited);
+            if (boundValRange.LowerLimit().IsConstant() && (boundValRange.LowerLimit().GetConstant() >= constUpper))
+            {
+                JITDUMP("Recovered symbolic upper %s for phi [%06d] (proved >= %d)\n",
+                        symbolicUpper.ToString(m_compiler), Compiler::dspTreeID(expr), constUpper);
+                range.UpperLimit() = symbolicUpper;
+            }
         }
     }
     else if (expr->OperIs(GT_COMMA))

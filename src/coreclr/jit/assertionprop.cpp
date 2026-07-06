@@ -47,7 +47,12 @@ bool IntegralRange::Contains(int64_t value) const
 //    Range of possible values for "tree" based on the given assertions and block context.
 //    An unknown range if the range cannot be determined, or if the computation exceeds the visit budget.
 //
-static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_VALARG_TP assertions, bool fast = true)
+static Range GetRange(Compiler*        comp,
+                      GenTree*         tree,
+                      BasicBlock*      block,
+                      ASSERT_VALARG_TP assertions,
+                      bool             fast             = true,
+                      ValueNum         preferredBoundVN = ValueNumStore::NoVN)
 {
     assert(block != nullptr);
     assert(tree != nullptr);
@@ -71,7 +76,7 @@ static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_V
     }
 
     Range range = Limit(Limit::keUndef);
-    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range))
+    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range, preferredBoundVN))
     {
         return range;
     }
@@ -2173,6 +2178,23 @@ void Compiler::optAssertionGen(GenTree* tree)
             break;
 
         case GT_IND:
+            if (tree->IndirMayFault(this))
+            {
+                assertionInfo = optCreateAssertion(tree->GetIndirOrArrMetaDataAddr(), nullptr, /*equals*/ false);
+            }
+            else if (tree->TypeIs(TYP_INT) && IntegralRange::ForNode(tree, this).IsNonNegative())
+            {
+                // Create "IND >= 0" assertion for int indirections that are known to be non-negative.
+                // Mainly, this is for unpromoted Span.Length indirections.
+                ValueNum vn = optConservativeNormalVN(tree);
+                if (vn != ValueNumStore::NoVN)
+                {
+                    assertionInfo = optAddAssertion(
+                        AssertionDsc::CreateConstantBound(this, VNF_GE, vn, vnStore->VNZeroForType(TYP_INT)));
+                }
+            }
+            break;
+
         case GT_XAND:
         case GT_XORR:
         case GT_XADD:
@@ -4496,11 +4518,33 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
             if (!relopRange.IsSingleValueConstant(&relopResult) &&
                 // The few checks below ensure this analysis
                 // is only performed when beneficial according to SPMI, keeping the TP impact low.
-                op1->TypeIs(TYP_INT) && op2->IsIntCnsFitsInI32() && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
+                op1->TypeIs(TYP_INT) && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
             {
-                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false);
-                Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false);
-                relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
+                // Pick a "preferred bound": a never-negative, length-like value that lets a loop
+                // induction variable's range be expressed symbolically relative to it.
+                ValueNum preferredBound = ValueNumStore::NoVN;
+                ValueNum minuendVN;
+                ValueNum subtrahendVN;
+
+                if (op2->IsIntCnsFitsInI32() && vnStore->IsVNBinFunc(op1VN, VNF_SUB, &minuendVN, &subtrahendVN) &&
+                    RangeCheck::GetRangeFromAssertions(this, minuendVN, assertions).IsNeverNegative())
+                {
+                    // Shape 1: "(len - i) <relop> C" -> use 'len' (the minuend of the subtraction)
+                    preferredBound = minuendVN;
+                }
+                else if (op2->TypeIs(TYP_INT) &&
+                         RangeCheck::GetRangeFromAssertions(this, op2VN, assertions).IsNeverNegative())
+                {
+                    // Shape 2: use the right-hand side of "i <relop> len" as the bound.
+                    preferredBound = op2VN;
+                }
+
+                if (op2->IsIntCnsFitsInI32() || (preferredBound != ValueNumStore::NoVN))
+                {
+                    Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false, preferredBound);
+                    Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false, preferredBound);
+                    relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
+                }
             }
 
             if (relopRange.IsSingleValueConstant(&relopResult))

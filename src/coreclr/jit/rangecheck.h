@@ -279,6 +279,11 @@ struct Range
         return lLimit.IsConstant() && uLimit.IsConstant() && IsValid();
     }
 
+    bool IsNeverNegative() const
+    {
+        return IsConstantRange() && lLimit.GetConstant() >= 0;
+    }
+
     bool IsUndef() const
     {
         return lLimit.IsUndef() && uLimit.IsUndef();
@@ -362,8 +367,50 @@ struct RangeOps
             return Limit(Limit::keUnknown); // Give up on unsigned subtraction for now
         }
 
-        // Delegate to Add after negating the second operand. Possible overflows will be handled there.
-        return Add(r1, Negate(r2));
+        // Subtract two limits "a - b" into a single limit. We support:
+        //   keConstant    - keConstant       => keConstant
+        //   keBinOpArray  - keConstant       => keBinOpArray (same VN, adjusted offset)
+        //   keBinOpArray  - keBinOpArray      => keConstant   (same VN cancels)
+        // Anything else (e.g. "keConstant - keBinOpArray", which would require negating the VN,
+        // or two BinOpArrays with different VNs) is not representable and yields keUnknown.
+        auto subLimits = [](const Limit& a, const Limit& b) -> Limit {
+            if (a.IsDependent() || b.IsDependent())
+            {
+                return Limit(Limit::keDependent);
+            }
+            if (!a.IsConstantOrBinOp() || !b.IsConstantOrBinOp())
+            {
+                return Limit(Limit::keUnknown);
+            }
+
+            if (a.IsBinOpArray() && b.IsBinOpArray())
+            {
+                // The symbolic parts only cancel when they refer to the same VN.
+                if ((a.vn != b.vn) || CheckedOps::SubOverflows(a.GetConstant(), b.GetConstant(), CheckedOps::Signed))
+                {
+                    return Limit(Limit::keUnknown);
+                }
+                return Limit(Limit::keConstant, a.GetConstant() - b.GetConstant());
+            }
+
+            if (b.IsBinOpArray())
+            {
+                // "keConstant - keBinOpArray" would require representing "-VN"; give up.
+                return Limit(Limit::keUnknown);
+            }
+
+            if (CheckedOps::SubOverflows(a.GetConstant(), b.GetConstant(), CheckedOps::Signed))
+            {
+                return Limit(Limit::keUnknown);
+            }
+            const int cns = a.GetConstant() - b.GetConstant();
+            return a.IsBinOpArray() ? Limit(Limit::keBinOpArray, a.vn, cns) : Limit(Limit::keConstant, cns);
+        };
+
+        Range result  = Limit(Limit::keUnknown);
+        result.lLimit = subLimits(r1.LowerLimit(), r2.UpperLimit());
+        result.uLimit = subLimits(r1.UpperLimit(), r2.LowerLimit());
+        return result;
     }
 
     static Range Multiply(const Range& r1, const Range& r2, bool unsignedMul = false)
@@ -743,28 +790,50 @@ struct RangeOps
         const Limit& xUpper = x.UpperLimit();
         const Limit& yUpper = y.UpperLimit();
 
-        // For unsigned comparisons, we only support non-negative ranges.
-        // NOTE: it's not applicable for EQ and NE.
+        // Two limits are "orderable" if they can be compared to a definite sign: both constants, or
+        // both "$bnd + c" over the same VN (then the comparison reduces to comparing the constants,
+        // since the shared $bnd cancels). Sets *cmp to -1 / 0 / +1 for a < b / a == b / a > b.
+        auto tryOrder = [](const Limit& a, const Limit& b, int* cmp) -> bool {
+            bool comparable =
+                (a.IsConstant() && b.IsConstant()) || (a.IsBinOpArray() && b.IsBinOpArray() && (a.vn == b.vn));
+            if (!comparable)
+            {
+                return false;
+            }
+            const int ca = a.GetConstant();
+            const int cb = b.GetConstant();
+            *cmp         = (ca < cb) ? -1 : ((ca > cb) ? 1 : 0);
+            return true;
+        };
+
+        // A limit is known non-negative if it is a constant >= 0, or "$bnd + c" with c >= 0 ($bnd is
+        // a length-like value that is always >= 0).
+        auto isNonNegative = [](const Limit& l) -> bool {
+            return (l.IsConstant() || l.IsBinOpArray()) && (l.GetConstant() >= 0);
+        };
+
+        // For unsigned comparisons, we only support non-negative ranges (so that the unsigned and
+        // signed orderings agree). NOTE: it's not applicable for EQ and NE.
         if (isUnsigned && (relop != GT_EQ) && (relop != GT_NE))
         {
-            if (!xLower.IsConstant() || !yLower.IsConstant() || (xLower.GetConstant() < 0) ||
-                (yLower.GetConstant() < 0))
+            if (!isNonNegative(xLower) || !isNonNegative(yLower))
             {
                 // Relops always return either 0 or 1.
                 return Range(Limit(Limit::keConstant, 0), Limit(Limit::keConstant, 1));
             }
         }
 
+        int cmp;
         switch (relop)
         {
             case GT_GE:
             case GT_LT:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() >= yUpper.GetConstant()))
+                if (tryOrder(xLower, yUpper, &cmp) && (cmp >= 0))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant()))
+                if (tryOrder(xUpper, yLower, &cmp) && (cmp < 0))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 0 : 1));
                 }
@@ -772,12 +841,12 @@ struct RangeOps
 
             case GT_GT:
             case GT_LE:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant()))
+                if (tryOrder(xLower, yUpper, &cmp) && (cmp > 0))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() <= yLower.GetConstant()))
+                if (tryOrder(xUpper, yLower, &cmp) && (cmp <= 0))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 0 : 1));
                 }
@@ -787,8 +856,7 @@ struct RangeOps
             case GT_NE:
                 // If the ranges do not overlap, then EQ is always false, NE is always true.
                 // Example: x = [6..10], y = [0..5] -> EQ is always false, NE is always true.
-                if ((xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant())) ||
-                    (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant())))
+                if ((tryOrder(xLower, yUpper, &cmp) && (cmp > 0)) || (tryOrder(xUpper, yLower, &cmp) && (cmp < 0)))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_EQ ? 0 : 1));
                 }
@@ -831,6 +899,9 @@ public:
 
     // Cheaper version of TryGetRange that is based only on incoming assertions.
     static Range GetRangeFromAssertions(Compiler* comp, GenTree* tree, ASSERT_VALARG_TP assertions, int budget = 10);
+
+    // Value-number-based overload of GetRangeFromAssertions.
+    static Range GetRangeFromAssertions(Compiler* comp, ValueNum num, ASSERT_VALARG_TP assertions, int budget = 10);
 
     // Compute the range from the given type
     static Range GetRangeFromType(var_types type);
