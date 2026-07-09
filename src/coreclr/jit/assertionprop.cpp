@@ -42,19 +42,26 @@ bool IntegralRange::Contains(int64_t value) const
 //   block      - the BasicBlock in which "tree" is being evaluated.
 //   assertions - the set of assertions to consider when computing the range. Can be null.
 //   fast       - fast is when we only use VN and assertions. slow is when we perform an SSA walk to compute the range.
+//   preferredBoundVN - a value number of the preferred bound for slow range analysis.
+//   budget     - the maximum number of nodes to visit during slow range analysis.
 //
 // Return Value:
 //    Range of possible values for "tree" based on the given assertions and block context.
 //    An unknown range if the range cannot be determined, or if the computation exceeds the visit budget.
 //
-static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_VALARG_TP assertions, bool fast = true)
+static Range GetRange(Compiler*        comp,
+                      GenTree*         tree,
+                      BasicBlock*      block,
+                      ASSERT_VALARG_TP assertions,
+                      bool             fast             = true,
+                      ValueNum         preferredBoundVN = ValueNumStore::NoVN,
+                      int              budget           = 256)
 {
     assert(block != nullptr);
     assert(tree != nullptr);
 
     // TryGetRange walks the SSA use-def chain up to three times per query (range computation, the overflow check,
     // and a monotonicity-driven re-walk in Widen that recovers loop lower bounds), all sharing this budget.
-    int budget = 256;
 #ifdef DEBUG
     // JIT stress: always take the slow, SSA-based range walk (with a larger budget) to maximize
     // coverage of TryGetRange and shake out correctness issues in the range computation.
@@ -73,7 +80,7 @@ static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_V
     }
 
     Range range = Limit(Limit::keUndef);
-    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range))
+    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range, preferredBoundVN))
     {
         return range;
     }
@@ -4517,14 +4524,64 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
             }
 
             // Perform a slow, SSA-based range check analysis.
-            if (!relopRange.IsSingleValueConstant(&relopResult) &&
+            ValueNum preferredBoundVN        = ValueNumStore::NoVN;
+            bool     isSlowCandidate         = op2->IsIntCnsFitsInI32();
+            bool     isCheckedBoundCandidate = false;
+
+            if (isSlowCandidate)
+            {
+                VNFuncApp op1FuncApp;
+                ValueNum  op1VN = optConservativeNormalVN(op1);
+                if (vnStore->GetVNFunc(op1VN, &op1FuncApp) && op1FuncApp.FuncIs(VNF_SUB) &&
+                    vnStore->IsVNCheckedBound(op1FuncApp.GetArg(0)))
+                {
+                    preferredBoundVN = op1FuncApp.GetArg(0);
+                }
+            }
+            else
+            {
+                ValueNum op2VN = optConservativeNormalVN(op2);
+                if (tree->IsUnsigned() && vnStore->IsVNCheckedBound(op2VN))
+                {
+                    preferredBoundVN        = op2VN;
+                    isSlowCandidate         = true;
+                    isCheckedBoundCandidate = true;
+                }
+            }
+
+            if (!relopRange.IsSingleValueConstant(&relopResult) && isSlowCandidate &&
                 // The few checks below ensure this analysis
                 // is only performed when beneficial according to SPMI, keeping the TP impact low.
-                op1->TypeIs(TYP_INT) && op2->IsIntCnsFitsInI32() && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
+                op1->TypeIs(TYP_INT) && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
             {
-                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false);
-                Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false);
+                const int rangeBudget = isCheckedBoundCandidate ? 32 : 256;
+                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false, preferredBoundVN, rangeBudget);
+                // The checked bound is exact by definition, so avoid a redundant SSA walk for op2.
+                Range op2Rng = isCheckedBoundCandidate ? Range(Limit(Limit::keBinOpArray, preferredBoundVN, 0))
+                                                       : GetRange(this, op2, block, assertions, /*fast*/ false,
+                                                                  preferredBoundVN, rangeBudget);
                 relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
+
+                if (!relopRange.IsSingleValueConstant(&relopResult) && tree->IsUnsigned() &&
+                    (preferredBoundVN != ValueNumStore::NoVN))
+                {
+                    auto isNonNegative = [preferredBoundVN](const Range& range) {
+                        const Limit& lower = range.LowerLimit();
+                        return (lower.IsConstant() && (lower.GetConstant() >= 0)) ||
+                               (lower.IsBinOpArray() && (lower.vn == preferredBoundVN) && (lower.GetConstant() >= 0));
+                    };
+
+                    if (isNonNegative(op1Rng) && isNonNegative(op2Rng))
+                    {
+                        const bool reverse = tree->OperIs(GT_LE, GT_LT);
+                        Range      difference =
+                            reverse ? RangeOps::Subtract(op2Rng, op1Rng) : RangeOps::Subtract(op1Rng, op2Rng);
+                        Range zero = Limit(Limit::keConstant, 0);
+
+                        relopRange = RangeOps::EvalRelop(tree->OperIs(GT_LE, GT_GE) ? GT_GE : GT_GT,
+                                                         /*isUnsigned*/ false, difference, zero);
+                    }
+                }
             }
 
             if (relopRange.IsSingleValueConstant(&relopResult))

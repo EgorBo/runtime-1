@@ -84,6 +84,36 @@ public class ElidedBoundsChecks
         return false;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
+    static int SumVector128(ReadOnlySpan<int> span)
+    {
+        int sum = 0;
+        int i = 0;
+
+        int vectorSize = Vector128<int>.Count;
+        if (span.Length >= vectorSize)
+        {
+            Vector128<int> vectorSum = Vector128<int>.Zero;
+            for (; i <= span.Length - vectorSize; i += vectorSize)
+            {
+                // X64-FULL-LINE: sub {{[a-z0-9]+}}, 4
+                // X64-NOT:  cmp
+                // X64-NOT:  call
+                // X64:      vpaddd
+                Vector128<int> vectorBatch = Vector128.Create(span.Slice(i));
+                vectorSum += vectorBatch;
+            }
+            sum = Vector128.Sum(vectorSum);
+        }
+
+        for (; i < span.Length; i++)
+        {
+            sum += span[i];
+        }
+
+        return sum;
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     static bool TryStripFirstChar(ref ReadOnlySpan<char> span, char value)
     {
@@ -248,6 +278,13 @@ public class ElidedBoundsChecks
             return 0;
 
         if (IndexPlusConstLessThanLen("hello".AsSpan()) != false)
+            return 0;
+
+        int[] vectorValues = new int[100];
+        for (int i = 0; i < vectorValues.Length; i++)
+            vectorValues[i] = i;
+
+        if (SumVector128(vectorValues) != 4950)
             return 0;
 
         ReadOnlySpan<char> chars = "hello".AsSpan();

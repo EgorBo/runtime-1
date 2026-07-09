@@ -1792,7 +1792,7 @@ void RangeCheck::MergeAssertion(BasicBlock* block, GenTree* op, Range* pRange DE
 Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool monIncreasing DEBUGARG(int indent))
 {
     assert(genActualType(binop) == TYP_INT);
-    assert(binop->OperIs(GT_ADD, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
+    assert(binop->OperIs(GT_ADD, GT_SUB, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
 
     // For XOR we only care about Log2 pattern for now
     if (binop->OperIs(GT_XOR))
@@ -1826,7 +1826,7 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
     }
 
     // Get range (cached or compute) for an operand, merging assertions as needed.
-    auto getRange = [this, block, monIncreasing DEBUGARG(indent)](GenTree* op) -> Range {
+    auto getRange = [this, block, monIncreasing DEBUGARG(indent)](GenTree* op, bool preservePreferredBound) -> Range {
         Range* opRangeCached = nullptr;
         Range  opRange       = Limit(Limit::keUndef);
         // Check if the range value is already cached.
@@ -1842,18 +1842,42 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
         {
             opRange = *opRangeCached;
         }
+
+        // Keep the minuend symbolic so subtraction can cancel the same checked bound in the subtrahend.
+        if (preservePreferredBound && (m_preferredBound != ValueNumStore::NoVN) &&
+            (m_compiler->vnStore->VNConservativeNormalValue(op->gtVNPair) == m_preferredBound))
+        {
+            opRange = Range(Limit(Limit::keBinOpArray, m_preferredBound, 0));
+            GetRangeMap()->Set(op, new (m_alloc) Range(opRange), RangeMap::Overwrite);
+        }
+
         assert(opRange.IsValid());
         return opRange;
     };
 
-    Range op1Range = getRange(op1);
-    Range op2Range = getRange(op2);
+    const bool preservePreferredBound = binop->OperIs(GT_SUB);
+    Range      op1Range               = getRange(op1, preservePreferredBound);
+    Range      op2Range               = getRange(op2, false);
+
+    const bool subtractsFromPreferredBound = op1Range.LowerLimit().IsBinOpArray() &&
+                                             (op1Range.LowerLimit().vn == m_preferredBound) &&
+                                             op1Range.LowerLimit().Equals(op1Range.UpperLimit());
+
+    if (binop->OperIs(GT_SUB) && subtractsFromPreferredBound &&
+        (op2Range.LowerLimit().IsDependent() || op2Range.LowerLimit().IsUnknown()))
+    {
+        Widen(block, op2, &op2Range);
+        op1Range = getRange(op1, preservePreferredBound);
+    }
 
     Range r = Range(Limit::keUnknown);
     switch (binop->OperGet())
     {
         case GT_ADD:
             r = RangeOps::Add(op1Range, op2Range);
+            break;
+        case GT_SUB:
+            r = RangeOps::Subtract(op1Range, op2Range);
             break;
         case GT_MUL:
             r = RangeOps::Multiply(op1Range, op2Range);
@@ -2072,6 +2096,13 @@ bool RangeCheck::DoesBinOpOverflow(BasicBlock* block, GenTreeOp* binop, const Ra
     {
         return MultiplyOverflows(op1Range->UpperLimit(), op2Range->UpperLimit());
     }
+    if (binop->OperIs(GT_SUB))
+    {
+        Limit upperLimit = range.UpperLimit();
+        int   maxValue;
+        return !range.LowerLimit().IsConstant() || (range.LowerLimit().GetConstant() < 0) ||
+               !GetLimitMax(upperLimit, &maxValue);
+    }
     if (binop->OperIs(GT_LSH))
     {
         // Convert LSH(X, CNS) to MUL(X, CNS) if possible and check that,
@@ -2192,7 +2223,8 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
         overflows = DoesVarDefOverflow(block, expr->AsLclVarCommon(), range);
     }
     // Check if these bin ops overflow.
-    else if (expr->OperIs(GT_ADD, GT_OR, GT_MUL, GT_LSH))
+    else if (expr->OperIs(GT_ADD, GT_OR, GT_MUL, GT_LSH) ||
+             ((m_preferredBound != ValueNumStore::NoVN) && expr->OperIs(GT_SUB)))
     {
         overflows = DoesBinOpOverflow(block, expr->AsOp(), range);
     }
@@ -2306,7 +2338,8 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
         MergeAssertion(block, expr, &range DEBUGARG(indent + 1));
     }
     // compute the range for binary operation
-    else if (expr->OperIs(GT_XOR, GT_OR, GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL))
+    else if (expr->OperIs(GT_XOR, GT_OR, GT_ADD, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL) ||
+             ((m_preferredBound != ValueNumStore::NoVN) && expr->OperIs(GT_SUB)))
     {
         range = ComputeRangeForBinOp(block, expr->AsOp(), monIncreasing DEBUGARG(indent + 1));
     }

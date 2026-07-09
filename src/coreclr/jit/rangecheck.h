@@ -362,8 +362,44 @@ struct RangeOps
             return Limit(Limit::keUnknown); // Give up on unsigned subtraction for now
         }
 
-        // Delegate to Add after negating the second operand. Possible overflows will be handled there.
-        return Add(r1, Negate(r2));
+        auto subtract = [](const Limit& a, const Limit& b) {
+            if (a.IsConstantOrBinOp() && b.IsConstantOrBinOp())
+            {
+                if (a.IsBinOpArray() && b.IsBinOpArray() && (a.vn != b.vn))
+                {
+                    return Limit(Limit::keUnknown);
+                }
+
+                if (!CheckedOps::SubOverflows(a.GetConstant(), b.GetConstant(), false))
+                {
+                    if (a.IsConstant() && b.IsConstant())
+                    {
+                        return Limit(Limit::keConstant, a.GetConstant() - b.GetConstant());
+                    }
+
+                    if (a.IsBinOpArray() && b.IsConstant())
+                    {
+                        return Limit(Limit::keBinOpArray, a.vn, a.GetConstant() - b.GetConstant());
+                    }
+
+                    if (a.IsBinOpArray() && b.IsBinOpArray())
+                    {
+                        return Limit(Limit::keConstant, a.GetConstant() - b.GetConstant());
+                    }
+                }
+            }
+
+            return Limit(Limit::keUnknown);
+        };
+
+        Range result  = Limit(Limit::keUnknown);
+        result.lLimit = (r1.LowerLimit().IsDependent() || r2.UpperLimit().IsDependent())
+                            ? Limit(Limit::keDependent)
+                            : subtract(r1.LowerLimit(), r2.UpperLimit());
+        result.uLimit = (r1.UpperLimit().IsDependent() || r2.LowerLimit().IsDependent())
+                            ? Limit(Limit::keDependent)
+                            : subtract(r1.UpperLimit(), r2.LowerLimit());
+        return result;
     }
 
     static Range Multiply(const Range& r1, const Range& r2, bool unsignedMul = false)
