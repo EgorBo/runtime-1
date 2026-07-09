@@ -955,6 +955,9 @@ public:
         return m_compiler;
     }
 
+    bool TryGetNamedIntrinsic(CORINFO_METHOD_HANDLE method, NamedIntrinsic* intrinsic) const;
+    void SetNamedIntrinsic(CORINFO_METHOD_HANDLE method, NamedIntrinsic intrinsic);
+
     // Root context
     InlineContext* GetRootContext();
 
@@ -1183,6 +1186,16 @@ private:
     int               m_CurrentSizeEstimate;
     bool              m_HasForceViaDiscretionary;
     bool              m_HasHardwareIntrinsicCheck;
+
+    static constexpr unsigned NamedIntrinsicCacheSize = 32;
+
+    struct NamedIntrinsicCacheEntry
+    {
+        CORINFO_METHOD_HANDLE method;
+        NamedIntrinsic       intrinsic;
+    };
+
+    NamedIntrinsicCacheEntry m_namedIntrinsicCache[NamedIntrinsicCacheSize] = {};
 
 #if defined(DEBUG)
     long       m_MethodXmlFilePosition;

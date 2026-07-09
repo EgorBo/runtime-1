@@ -67,14 +67,40 @@ bool Compiler::impILConsumesAddr(const BYTE* codeAddr, const BYTE* codeEndp)
     return false;
 }
 
-void Compiler::impResolveToken(const BYTE* addr, CORINFO_RESOLVED_TOKEN* pResolvedToken, CorInfoTokenKind kind)
+void Compiler::impResolveToken(const BYTE*             addr,
+                               CORINFO_RESOLVED_TOKEN* pResolvedToken,
+                               CorInfoTokenKind        kind,
+                               bool                    cacheResult)
 {
+    assert(!cacheResult || (kind == CORINFO_TOKENKIND_Method));
+
+    if ((kind == CORINFO_TOKENKIND_Method) && (impResolvedTokenCache != nullptr) &&
+        impResolvedTokenCache->Lookup(addr, pResolvedToken))
+    {
+        assert(pResolvedToken->tokenContext == impTokenLookupContextHandle);
+        assert(pResolvedToken->tokenScope == info.compScopeHnd);
+        assert(pResolvedToken->token == getU4LittleEndian(addr));
+        assert(pResolvedToken->tokenType == kind);
+        return;
+    }
+
     pResolvedToken->tokenContext = impTokenLookupContextHandle;
     pResolvedToken->tokenScope   = info.compScopeHnd;
     pResolvedToken->token        = getU4LittleEndian(addr);
     pResolvedToken->tokenType    = kind;
 
     info.compCompHnd->resolveToken(pResolvedToken);
+
+    if (cacheResult)
+    {
+        if (impResolvedTokenCache == nullptr)
+        {
+            impResolvedTokenCache =
+                new (this, CMK_Inlining) ImpResolvedTokenCache(getAllocator(CMK_Inlining));
+        }
+
+        impResolvedTokenCache->Set(addr, *pResolvedToken);
+    }
 }
 
 //------------------------------------------------------------------------

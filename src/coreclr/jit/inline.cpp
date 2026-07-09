@@ -910,6 +910,53 @@ InlineStrategy::InlineStrategy(Compiler* compiler)
 }
 
 //------------------------------------------------------------------------
+// TryGetNamedIntrinsic: Look up a cached named intrinsic for a method.
+//
+// Arguments:
+//    method    - method handle
+//    intrinsic - [out] cached named intrinsic
+//
+// Return Value:
+//    True if the cache contained an entry for the method.
+//
+bool InlineStrategy::TryGetNamedIntrinsic(CORINFO_METHOD_HANDLE method, NamedIntrinsic* intrinsic) const
+{
+    assert(method != nullptr);
+    static_assert((NamedIntrinsicCacheSize & (NamedIntrinsicCacheSize - 1)) == 0);
+
+    size_t hash = reinterpret_cast<size_t>(method);
+    hash ^= hash >> 12;
+
+    const NamedIntrinsicCacheEntry& entry = m_namedIntrinsicCache[(hash >> 3) & (NamedIntrinsicCacheSize - 1)];
+    if (entry.method != method)
+    {
+        return false;
+    }
+
+    *intrinsic = entry.intrinsic;
+    return true;
+}
+
+//------------------------------------------------------------------------
+// SetNamedIntrinsic: Cache the named intrinsic for a method.
+//
+// Arguments:
+//    method    - method handle
+//    intrinsic - named intrinsic
+//
+void InlineStrategy::SetNamedIntrinsic(CORINFO_METHOD_HANDLE method, NamedIntrinsic intrinsic)
+{
+    assert(method != nullptr);
+
+    size_t hash = reinterpret_cast<size_t>(method);
+    hash ^= hash >> 12;
+
+    NamedIntrinsicCacheEntry& entry = m_namedIntrinsicCache[(hash >> 3) & (NamedIntrinsicCacheSize - 1)];
+    entry.method                     = method;
+    entry.intrinsic                  = intrinsic;
+}
+
+//------------------------------------------------------------------------
 // GetRootContext: get the InlineContext for the root method
 //
 // Return Value:

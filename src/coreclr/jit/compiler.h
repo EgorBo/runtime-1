@@ -5147,7 +5147,10 @@ protected:
     bool impIsPrimitive(CorInfoType type);
     bool impILConsumesAddr(const BYTE* codeAddr, const BYTE* codeEndp);
 
-    void impResolveToken(const BYTE* addr, CORINFO_RESOLVED_TOKEN* pResolvedToken, CorInfoTokenKind kind);
+    void impResolveToken(const BYTE*             addr,
+                         CORINFO_RESOLVED_TOKEN* pResolvedToken,
+                         CorInfoTokenKind        kind,
+                         bool                    cacheResult = false);
 
     void impPushOnStack(GenTree* tree, typeInfo ti);
     StackEntry impPopStack();
@@ -5519,6 +5522,11 @@ public:
 
 private:
     //----------------- Importing the method ----------------------------------
+
+    using ImpResolvedTokenCache =
+        JitHashTable<const BYTE*, JitPtrKeyFuncs<BYTE>, CORINFO_RESOLVED_TOKEN>;
+
+    ImpResolvedTokenCache* impResolvedTokenCache = nullptr;
 
     CORINFO_CONTEXT_HANDLE impTokenLookupContextHandle; // The context used for looking up tokens.
 

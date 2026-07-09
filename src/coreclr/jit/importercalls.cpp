@@ -10697,6 +10697,18 @@ GenTree* Compiler::impMathIntrinsic(CORINFO_METHOD_HANDLE method,
 //
 NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
 {
+    InlineStrategy* const inlineStrategy = impInlineRoot()->m_inlineStrategy;
+    NamedIntrinsic        cachedIntrinsic;
+    if (inlineStrategy->TryGetNamedIntrinsic(method, &cachedIntrinsic))
+    {
+        return cachedIntrinsic;
+    }
+
+    auto cacheResult = [inlineStrategy, method](NamedIntrinsic result) {
+        inlineStrategy->SetNamedIntrinsic(method, result);
+        return result;
+    };
+
     const char* className              = nullptr;
     const char* namespaceName          = nullptr;
     const char* enclosingClassNames[2] = {nullptr};
@@ -10735,19 +10747,19 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
         {
             case CorInfoArrayIntrinsic::GET:
                 JITDUMP("ARRAY_FUNC_GET: Recognized\n");
-                return NI_Array_Get;
+                return cacheResult(NI_Array_Get);
             case CorInfoArrayIntrinsic::SET:
                 JITDUMP("ARRAY_FUNC_SET: Recognized\n");
-                return NI_Array_Set;
+                return cacheResult(NI_Array_Set);
             case CorInfoArrayIntrinsic::ADDRESS:
                 JITDUMP("ARRAY_FUNC_ADDRESS: Recognized\n");
-                return NI_Array_Address;
+                return cacheResult(NI_Array_Address);
             default:
                 break;
         }
 
         JITDUMP(": Not recognized, not enough metadata\n");
-        return NI_Illegal;
+        return cacheResult(NI_Illegal);
     }
 
     JITDUMP(": ");
@@ -11429,11 +11441,13 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
                             }
                             else if (strcmp(methodName, "SetNextCallGenericContext") == 0)
                             {
-                                return NI_System_Runtime_CompilerServices_RuntimeHelpers_SetNextCallGenericContext;
+                                return cacheResult(
+                                    NI_System_Runtime_CompilerServices_RuntimeHelpers_SetNextCallGenericContext);
                             }
                             else if (strcmp(methodName, "SetNextCallAsyncContinuation") == 0)
                             {
-                                return NI_System_Runtime_CompilerServices_RuntimeHelpers_SetNextCallAsyncContinuation;
+                                return cacheResult(
+                                    NI_System_Runtime_CompilerServices_RuntimeHelpers_SetNextCallAsyncContinuation);
                             }
                         }
                         else if (strcmp(className, "AsyncHelpers") == 0)
@@ -11880,7 +11894,7 @@ NamedIntrinsic Compiler::lookupNamedIntrinsic(CORINFO_METHOD_HANDLE method)
     {
         JITDUMP("Recognized\n");
     }
-    return result;
+    return cacheResult(result);
 }
 
 //------------------------------------------------------------------------
