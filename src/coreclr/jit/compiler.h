@@ -8317,6 +8317,15 @@ public:
     bool optFindPhiUsesInBlockAndSuccessors(BasicBlock* block, GenTreeLclVar* phiDef, JumpThreadInfo& jti);
     bool optCanRewritePhiUses(JumpThreadInfo& jti);
     bool optJumpThreadCore(JumpThreadInfo& jti);
+    void optMarkJumpThreaded(BasicBlock* const block);
+    bool optWasJumpThreaded(BasicBlock* const block);
+
+    // Blocks bypassed by jump threading during RBO. Jump threading adds edges from
+    // a block's preds to its succs, so such a block may no longer dominate the blocks
+    // in its (now stale) dominator subtree.
+    //
+    BitVecTraits* optJumpThreadedBitVecTraits;
+    BitVec        optJumpThreadedBlocks;
 
     enum class ReachabilityResult
     {

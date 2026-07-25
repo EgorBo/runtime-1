@@ -100,7 +100,9 @@ PhaseStatus Compiler::optRedundantBranches()
         }
     };
 
-    optReachableBitVecTraits = nullptr;
+    optReachableBitVecTraits    = nullptr;
+    optJumpThreadedBitVecTraits = new (this, CMK_RedundantBranch) BitVecTraits(fgBBNumMax + 1, this);
+    optJumpThreadedBlocks       = BitVecOps::MakeEmpty(optJumpThreadedBitVecTraits);
     OptRedundantBranchesDomTreeVisitor visitor(this);
     visitor.WalkTree(m_domTree);
 
@@ -115,6 +117,46 @@ PhaseStatus Compiler::optRedundantBranches()
     fgInvalidateDfsTree();
 
     return visitor.madeChanges ? PhaseStatus::MODIFIED_EVERYTHING : PhaseStatus::MODIFIED_NOTHING;
+}
+
+//------------------------------------------------------------------------
+// optMarkJumpThreaded: note that we have jump threaded through a block
+//
+// Arguments:
+//   block - block that was bypassed by jump threading
+//
+// Notes:
+//   Jump threading through a block adds edges from the block's preds directly
+//   to the block's succs. Any such path no longer runs through block, so block
+//   may no longer dominate the blocks that it dominated before.
+//
+//   Note only block's dominance is impacted: each new path is one of the old
+//   paths with block removed, so every other dominator of a block remains a
+//   dominator. Thus we simply need to remember which blocks were threaded, and
+//   not rely on them when doing dominance based inference.
+//
+void Compiler::optMarkJumpThreaded(BasicBlock* const block)
+{
+    assert(optJumpThreadedBitVecTraits != nullptr);
+    assert(BitVecTraits::GetSize(optJumpThreadedBitVecTraits) == fgBBNumMax + 1);
+    BitVecOps::AddElemD(optJumpThreadedBitVecTraits, optJumpThreadedBlocks, block->bbNum);
+}
+
+//------------------------------------------------------------------------
+// optWasJumpThreaded: see if we have jump threaded through a block
+//
+// Arguments:
+//   block - block in question
+//
+// Returns:
+//   true if we jump threaded through block during this phase, and so its
+//   recorded dominance information can no longer be trusted.
+//
+bool Compiler::optWasJumpThreaded(BasicBlock* const block)
+{
+    assert(optJumpThreadedBitVecTraits != nullptr);
+    assert(BitVecTraits::GetSize(optJumpThreadedBitVecTraits) == fgBBNumMax + 1);
+    return BitVecOps::IsMember(optJumpThreadedBitVecTraits, optJumpThreadedBlocks, block->bbNum);
 }
 
 static const ValueNumStore::VN_RELATION_KIND s_vnRelations[] = {ValueNumStore::VN_RELATION_KIND::VRK_Same,
@@ -896,6 +938,16 @@ bool Compiler::optRedundantDominatingBranch(BasicBlock* const block)
             break;
         }
 
+        // If we jump threaded through domBlockProbe earlier in this phase, it may no
+        // longer dominate block.
+        //
+        if (optWasJumpThreaded(domBlockProbe))
+        {
+            JITDUMP("failed -- dominator " FMT_BB " was jump threaded, so may no longer dominate " FMT_BB "\n",
+                    domBlockProbe->bbNum, block->bbNum);
+            break;
+        }
+
         currentBlock = skipSideEffectFreeBlocks(currentBlock);
 
         // Make sure this conditional dominator branches to the same
@@ -1228,7 +1280,16 @@ bool Compiler::optRedundantBranch(BasicBlock* const block)
 
         // Check the current dominator
         //
-        if (domBlock->KindIs(BBJ_COND))
+        // If we jump threaded through domBlock earlier in this phase, it may no longer
+        // dominate block, so we can't infer anything from its branch. Blocks higher up
+        // in the dom tree are unaffected, so keep looking.
+        //
+        if (optWasJumpThreaded(domBlock))
+        {
+            JITDUMP(FMT_BB " was jump threaded, so may no longer dominate " FMT_BB "; skipping it\n", domBlock->bbNum,
+                    block->bbNum);
+        }
+        else if (domBlock->KindIs(BBJ_COND))
         {
             Statement* const domJumpStmt = domBlock->lastStmt();
             GenTree* const   domJumpTree = domJumpStmt->GetRootNode();
@@ -2682,6 +2743,10 @@ bool Compiler::optJumpThreadCore(JumpThreadInfo& jti)
 
     // We optimized.
     //
+    // Note flow no longer necessarily runs through jti.m_block, so its dominance
+    // information is now stale.
+    //
+    optMarkJumpThreaded(jti.m_block);
     Metrics.JumpThreadingsPerformed++;
     fgModified = true;
     return true;
