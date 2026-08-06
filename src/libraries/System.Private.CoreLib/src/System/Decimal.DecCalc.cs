@@ -577,14 +577,14 @@ PosRem:
             /// See if we need to scale the result to fit it in 96 bits.
             /// Perform needed scaling. Adjust scale factor accordingly.
             /// </summary>
-            /// <param name="bufRes">Array of uints with value, least-significant first</param>
+            /// <param name="bufRes">Buffer with the value, least-significant uint first</param>
             /// <param name="hiRes">Index of last non-zero value in bufRes</param>
             /// <param name="scale">Scale factor for this value, range 0 - 2 * DEC_SCALE_MAX</param>
             /// <returns>Returns new scale factor. bufRes updated in place, always 3 uints.</returns>
-            private static unsafe int ScaleResult(Buf24* bufRes, uint hiRes, int scale)
+            private static int ScaleResult(ref Buf24 bufRes, int hiRes, int scale)
             {
-                Debug.Assert(hiRes < Buf24.Length);
-                uint* result = (uint*)bufRes;
+                Debug.Assert((uint)hiRes < Buf24.Length);
+                Span<uint> result = bufRes.AsSpan();
 
                 // See if we need to scale the result.  The combined scale must
                 // be <= DEC_SCALE_MAX and the upper 96 bits must be zero.
@@ -708,7 +708,7 @@ PosRem:
                         power >>= 1;  // power of 10 always even
                         if (power <= remainder && (power < remainder || ((result[0] & 1) | sticky) != 0) && ++result[0] == 0)
                         {
-                            uint cur = 0;
+                            int cur = 0;
                             do
                             {
                                 Debug.Assert(cur + 1 < Buf24.Length);
@@ -738,11 +738,11 @@ PosRem:
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private static unsafe uint DivByConst(uint* result, uint hiRes, out uint quotient, out uint remainder, uint power)
+            private static uint DivByConst(Span<uint> result, int hiRes, out uint quotient, out uint remainder, uint power)
             {
                 uint high = result[hiRes];
                 (quotient, remainder) = Math.DivRem(high, power);
-                for (uint i = hiRes - 1; (int)i >= 0; i--)
+                for (int i = hiRes - 1; i >= 0; i--)
                 {
 #if TARGET_64BIT
                     ulong num = result[i] + ((ulong)remainder << 32);
@@ -750,19 +750,17 @@ PosRem:
 #else
                     // 32-bit RyuJIT doesn't convert 64-bit division by constant into multiplication by reciprocal. Do half-width divisions instead.
                     Debug.Assert(power <= ushort.MaxValue);
-#if BIGENDIAN
-                    const int low16 = 2, high16 = 0;
-#else
-                    const int low16 = 0, high16 = 2;
-#endif
-                    // byte* is used here because Roslyn doesn't do constant propagation for pointer arithmetic
-                    uint num = *(ushort*)((byte*)result + i * 4 + high16) + (remainder << 16);
-                    (uint div, remainder) = Math.DivRem(num, power);
-                    *(ushort*)((byte*)result + i * 4 + high16) = (ushort)div;
+                    uint value = result[i];
 
-                    num = *(ushort*)((byte*)result + i * 4 + low16) + (remainder << 16);
-                    (div, remainder) = Math.DivRem(num, power);
-                    *(ushort*)((byte*)result + i * 4 + low16) = (ushort)div;
+                    // remainder < power <= ushort.MaxValue, so each half-width quotient fits in 16 bits.
+                    uint num = (value >> 16) + (remainder << 16);
+                    (uint divHigh, remainder) = Math.DivRem(num, power);
+
+                    num = (ushort)value + (remainder << 16);
+                    (uint divLow, remainder) = Math.DivRem(num, power);
+
+                    Debug.Assert(divHigh <= ushort.MaxValue && divLow <= ushort.MaxValue);
+                    result[i] = (divHigh << 16) | divLow;
 #endif
                 }
                 return power;
@@ -928,7 +926,7 @@ PosRem:
             /// <param name="d1">First decimal to add or subtract.</param>
             /// <param name="d2">Second decimal to add or subtract.</param>
             /// <param name="sign">True means subtract and false means add.</param>
-            internal static unsafe void DecAddSub(ref DecCalc d1, ref DecCalc d2, bool sign)
+            internal static void DecAddSub(ref DecCalc d1, ref DecCalc d2, bool sign)
             {
                 ulong low64 = d1.Low64;
                 uint high = d1.High, flags = d1.uflags, d2flags = d2.uflags;
@@ -1038,10 +1036,11 @@ PosRem:
                     // Have to scale by a bunch. Move the number to a buffer where it has room to grow as it's scaled.
                     //
                     Unsafe.SkipInit(out Buf24 bufNum);
+                    Span<uint> rgulNum = bufNum.AsSpan();
 
                     bufNum.Low64 = low64;
                     bufNum.Mid64 = tmp64;
-                    uint hiProd = 3;
+                    int hiProd = 3;
 
                     // Scaling loop, up to 10^9 at a time. hiProd stays updated with index of highest non-zero uint.
                     //
@@ -1051,23 +1050,23 @@ PosRem:
                         if ((uint)scale < MaxInt32Scale)
                             power = UInt32Powers10[scale];
                         tmp64 = 0;
-                        uint* rgulNum = (uint*)&bufNum;
-                        for (uint cur = 0; ;)
+                        Span<uint> num = rgulNum.Slice(0, hiProd + 1);
+                        for (int cur = 0; cur < num.Length; cur++)
                         {
-                            Debug.Assert(cur < Buf24.Length);
-                            tmp64 += Math.BigMul(rgulNum[cur], power);
-                            rgulNum[cur] = (uint)tmp64;
-                            cur++;
+                            tmp64 += Math.BigMul(num[cur], power);
+                            num[cur] = (uint)tmp64;
                             tmp64 >>= 32;
-                            if (cur > hiProd)
-                                break;
                         }
 
                         if ((uint)tmp64 != 0)
                         {
-                            // We're extending the result by another uint.
-                            Debug.Assert(hiProd + 1 < Buf24.Length);
-                            rgulNum[++hiProd] = (uint)tmp64;
+                            // We're extending the result by another uint. Scaling a 96-bit value by
+                            // 10^DEC_SCALE_MAX always fits in the 192-bit buffer, so this can only run out
+                            // of room when one of the operands carries an out of range scale factor, which
+                            // is reachable by reinterpreting arbitrary bits as a decimal.
+                            if ((uint)++hiProd >= Buf24.Length)
+                                Number.ThrowDecimalOverflowException();
+                            rgulNum[hiProd] = (uint)tmp64;
                         }
                     }
 
@@ -1098,14 +1097,11 @@ PosRem:
 
                         // Carry the subtraction into the higher bits.
                         //
-                        uint* number = (uint*)&bufNum;
-                        uint cur = 3;
-                        do
-                        {
-                            Debug.Assert(cur < Buf24.Length);
-                        } while (number[cur++]-- == 0);
-                        Debug.Assert(hiProd < Buf24.Length);
-                        if (number[hiProd] == 0 && --hiProd <= 2)
+                        int cur = 3;
+                        while (rgulNum[cur]-- == 0)
+                            cur++;
+
+                        if (rgulNum[hiProd] == 0 && --hiProd <= 2)
                             goto ReturnResult;
                     }
                     else
@@ -1126,13 +1122,15 @@ PosRem:
                         else if (high >= tmpHigh)
                             goto NoCarry;
 
-                        uint* number = (uint*)&bufNum;
-                        for (uint cur = 3; ++number[cur++] == 0;)
+                        int cur = 3;
+                        while (++rgulNum[cur] == 0)
                         {
-                            Debug.Assert(cur < Buf24.Length);
+                            cur++;
                             if (hiProd < cur)
                             {
-                                number[cur] = 1;
+                                if ((uint)cur >= Buf24.Length)
+                                    Number.ThrowDecimalOverflowException();
+                                rgulNum[cur] = 1;
                                 hiProd = cur;
                                 break;
                             }
@@ -1142,7 +1140,7 @@ NoCarry:
 
                     bufNum.Low64 = low64;
                     bufNum.U2 = high;
-                    scale = ScaleResult(&bufNum, hiProd, (byte)(flags >> ScaleShift));
+                    scale = ScaleResult(ref bufNum, hiProd, (byte)(flags >> ScaleShift));
                     flags = (flags & ~ScaleMask) | ((uint)scale << ScaleShift);
                     low64 = bufNum.Low64;
                     high = bufNum.U2;
@@ -1386,12 +1384,12 @@ ThrowOverflow:
             /// <summary>
             /// Decimal Multiply
             /// </summary>
-            internal static unsafe void VarDecMul(ref DecCalc d1, ref DecCalc d2)
+            internal static void VarDecMul(ref DecCalc d1, ref DecCalc d2)
             {
                 int scale = (byte)(d1.uflags + d2.uflags >> ScaleShift);
 
                 ulong tmp;
-                uint hiProd;
+                int hiProd;
                 Unsafe.SkipInit(out Buf24 bufProd);
 
                 if ((d1.High | d1.Mid) == 0)
@@ -1519,7 +1517,7 @@ ThrowOverflow:
 
                 // Check for leading zero uints on the product
                 //
-                uint* product = (uint*)&bufProd;
+                Span<uint> product = bufProd.AsSpan();
                 while (product[hiProd] == 0)
                 {
                     if (hiProd == 0)
@@ -1530,7 +1528,7 @@ ThrowOverflow:
 SkipScan:
                 if (hiProd > 2 || scale > DEC_SCALE_MAX)
                 {
-                    scale = ScaleResult(&bufProd, hiProd, scale);
+                    scale = ScaleResult(ref bufProd, hiProd, scale);
                 }
 
                 d1.Low64 = bufProd.Low64;
@@ -2227,7 +2225,7 @@ RoundUp:
                 } while (scale < 0);
             }
 
-            private static unsafe void VarDecModFull(ref DecCalc d1, ref DecCalc d2, int scale)
+            private static void VarDecModFull(ref DecCalc d1, ref DecCalc d2, int scale)
             {
                 // Divisor has bits set in the upper 64 bits.
                 //
@@ -2241,6 +2239,7 @@ RoundUp:
                 int shift = BitOperations.LeadingZeroCount(tmp);
 
                 Unsafe.SkipInit(out Buf28 b);
+                Span<uint> buf = b.AsSpan();
 
                 b.Buf24.Low64 = d1.Low64 << shift;
                 b.Buf24.Mid64 = (d1.Mid + ((ulong)d1.High << 32)) >> (32 - shift);
@@ -2248,11 +2247,10 @@ RoundUp:
                 // The dividend might need to be scaled up to 221 significant bits.
                 // Maximum scaling is required when the divisor is 2^64 with scale 28 and is left shifted 31 bits
                 // and the dividend is decimal.MaxValue: (2^96 - 1) * 10^28 << 31 = 221 bits.
-                uint high = 3;
+                int high = 3;
                 while (scale < 0)
                 {
                     uint power = scale <= -MaxInt32Scale ? TenToPowerNine : UInt32Powers10[-scale];
-                    uint* buf = (uint*)&b;
                     ulong tmp64 = Math.BigMul(b.Buf24.U0, power);
                     b.Buf24.U0 = (uint)tmp64;
                     for (int i = 1; i <= high; i++)
@@ -2277,17 +2275,17 @@ RoundUp:
                     switch (high)
                     {
                         case 6:
-                            Div96By64(ref *(Buf12*)&b.Buf24.U4, divisor);
+                            Div96By64(ref b.U4To6, divisor);
                             goto case 5;
                         case 5:
-                            Div96By64(ref *(Buf12*)&b.Buf24.U3, divisor);
+                            Div96By64(ref b.U3To5, divisor);
                             goto case 4;
                         case 4:
-                            Div96By64(ref *(Buf12*)&b.Buf24.U2, divisor);
+                            Div96By64(ref b.U2To4, divisor);
                             break;
                     }
-                    Div96By64(ref *(Buf12*)&b.Buf24.U1, divisor);
-                    Div96By64(ref *(Buf12*)&b, divisor);
+                    Div96By64(ref b.U1To3, divisor);
+                    Div96By64(ref b.U0To2, divisor);
 
                     d1.Low64 = b.Buf24.Low64 >> shift;
                     d1.High = 0;
@@ -2302,16 +2300,16 @@ RoundUp:
                     switch (high)
                     {
                         case 6:
-                            Div128By96(ref *(Buf16*)&b.Buf24.U3, ref bufDivisor);
+                            Div128By96(ref b.U3To6, ref bufDivisor);
                             goto case 5;
                         case 5:
-                            Div128By96(ref *(Buf16*)&b.Buf24.U2, ref bufDivisor);
+                            Div128By96(ref b.U2To5, ref bufDivisor);
                             goto case 4;
                         case 4:
-                            Div128By96(ref *(Buf16*)&b.Buf24.U1, ref bufDivisor);
+                            Div128By96(ref b.U1To4, ref bufDivisor);
                             break;
                     }
-                    Div128By96(ref *(Buf16*)&b, ref bufDivisor);
+                    Div128By96(ref b.U0To3, ref bufDivisor);
 
                     d1.Low64 = (b.Buf24.Low64 >> shift) + ((ulong)b.Buf24.U2 << (32 - shift) << 32);
                     d1.High = b.Buf24.U2 >> shift;
@@ -2608,14 +2606,45 @@ done:
                 }
 
                 public const int Length = 6;
+
+                [UnscopedRef]
+                public Span<uint> AsSpan() => MemoryMarshal.CreateSpan(ref U0, Length);
             }
 
+            [StructLayout(LayoutKind.Explicit)]
             private struct Buf28
             {
+                [FieldOffset(0 * 4)]
                 public Buf24 Buf24;
+                [FieldOffset(6 * 4)]
                 public uint U6;
 
+                // Overlapping 96-bit and 128-bit windows over the buffer, named after the
+                // uints they span. VarDecModFull divides the buffer one uint at a time.
+                [FieldOffset(0 * 4)]
+                public Buf12 U0To2;
+                [FieldOffset(1 * 4)]
+                public Buf12 U1To3;
+                [FieldOffset(2 * 4)]
+                public Buf12 U2To4;
+                [FieldOffset(3 * 4)]
+                public Buf12 U3To5;
+                [FieldOffset(4 * 4)]
+                public Buf12 U4To6;
+
+                [FieldOffset(0 * 4)]
+                public Buf16 U0To3;
+                [FieldOffset(1 * 4)]
+                public Buf16 U1To4;
+                [FieldOffset(2 * 4)]
+                public Buf16 U2To5;
+                [FieldOffset(3 * 4)]
+                public Buf16 U3To6;
+
                 public const int Length = 7;
+
+                [UnscopedRef]
+                public Span<uint> AsSpan() => MemoryMarshal.CreateSpan(ref Buf24.U0, Length);
             }
         }
     }
