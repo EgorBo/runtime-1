@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 #if NET
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -18,6 +19,613 @@ namespace System.Text.Unicode
 {
     internal static unsafe partial class Utf8Utility
     {
+        // Span-based entry point. On .NET this is a fully memory-safe, vectorized implementation:
+        // every buffer access below is bounds checked, and the JIT elides those checks inside the loops.
+        public static OperationStatus TranscodeToUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten)
+        {
+#if NET
+            // Almost all real-world input is ASCII, and the vectorized Ascii helper converts it in a
+            // single pass. Keeping that case in a tiny method matters for short buffers, which would
+            // otherwise pay the register-saving prologue of the engines below. Text that does not start
+            // with ASCII skips the helper altogether rather than paying for a zero-length conversion.
+            int asciiConverted = 0;
+            if (!source.IsEmpty && source[0] <= 0x7F)
+            {
+                Ascii.ToUtf16(source, destination, out asciiConverted);
+                if (asciiConverted == source.Length)
+                {
+                    bytesRead = asciiConverted;
+                    charsWritten = asciiConverted;
+                    return OperationStatus.Done;
+                }
+            }
+
+            return TranscodeNonAsciiToUtf16(source, destination, asciiConverted, out bytesRead, out charsWritten);
+#else
+            fixed (byte* pSource = &MemoryMarshal.GetReference(source))
+            fixed (char* pDestination = &MemoryMarshal.GetReference(destination))
+            {
+                OperationStatus status = TranscodeToUtf16(
+                    pSource, source.Length, pDestination, destination.Length,
+                    out byte* pInputBufferRemaining, out char* pOutputBufferRemaining);
+
+                bytesRead = (int)(pInputBufferRemaining - pSource);
+                charsWritten = (int)(pOutputBufferRemaining - pDestination);
+                return status;
+            }
+#endif
+        }
+
+#if NET
+        /// <summary>
+        /// Transcodes a buffer whose leading ASCII run of length <paramref name="asciiPrefixLength"/> has
+        /// already been converted. Runs the block engine while there is enough data for it, then decodes
+        /// the remainder one scalar value at a time; that tail is where every <see cref="OperationStatus"/>
+        /// edge case is decided.
+        /// </summary>
+        private static OperationStatus TranscodeNonAsciiToUtf16(ReadOnlySpan<byte> source, Span<char> destination, int asciiPrefixLength, out int bytesRead, out int charsWritten)
+        {
+            ReadOnlySpan<byte> src = source.Slice(asciiPrefixLength);
+            Span<char> dst = destination.Slice(asciiPrefixLength);
+
+            if (Vector128.IsHardwareAccelerated && BitConverter.IsLittleEndian && src.Length >= 16 && dst.Length >= 16)
+            {
+                TranscodeBlocksToUtf16(src, dst, out int blockBytes, out int blockChars);
+                src = src.Slice(blockBytes);
+                dst = dst.Slice(blockChars);
+            }
+
+            OperationStatus status = OperationStatus.Done;
+
+            // One scalar value per iteration. The well-formed shapes are handled inline (so that the
+            // out-parameter locals of the shared decoder stay off this path and out of memory); anything
+            // else - malformed, truncated, or simply not enough room - falls through to that decoder,
+            // which is the single place deciding between InvalidData, NeedMoreData and DestinationTooSmall.
+            while (!src.IsEmpty)
+            {
+                uint firstByte = src[0];
+
+                if (firstByte <= 0x7F)
+                {
+                    if (dst.IsEmpty)
+                    {
+                        status = OperationStatus.DestinationTooSmall;
+                        break;
+                    }
+                    dst[0] = (char)firstByte;
+                    src = src.Slice(1);
+                    dst = dst.Slice(1);
+                    continue;
+                }
+
+                if (firstByte < 0xE0)
+                {
+                    if (firstByte >= 0xC2 && src.Length >= 2 && !dst.IsEmpty &&
+                        IsLowByteUtf8ContinuationByte(src[1]))
+                    {
+                        dst[0] = (char)(((firstByte & 0x1F) << 6) | ((uint)src[1] & 0x3F));
+
+                        // Two-byte scripts come in runs, so take an immediately adjacent second
+                        // sequence as well rather than going around the loop again.
+                        if (src.Length >= 4 && dst.Length >= 2 &&
+                            (uint)(src[2] - 0xC2) <= (0xDF - 0xC2) && IsLowByteUtf8ContinuationByte(src[3]))
+                        {
+                            dst[1] = (char)((((uint)src[2] & 0x1F) << 6) | ((uint)src[3] & 0x3F));
+                            src = src.Slice(4);
+                            dst = dst.Slice(2);
+                            continue;
+                        }
+
+                        src = src.Slice(2);
+                        dst = dst.Slice(1);
+                        continue;
+                    }
+                }
+                else if (firstByte < 0xF0)
+                {
+                    if (src.Length >= 3 && !dst.IsEmpty &&
+                        IsLowByteUtf8ContinuationByte(src[1]) && IsLowByteUtf8ContinuationByte(src[2]))
+                    {
+                        uint partial = ((firstByte & 0x0F) << 6) | ((uint)src[1] & 0x3F);
+                        if (partial >= 0x20 && (partial & 0x3E0) != 0x360)
+                        {
+                            dst[0] = (char)((partial << 6) | ((uint)src[2] & 0x3F));
+                            src = src.Slice(3);
+                            dst = dst.Slice(1);
+                            continue;
+                        }
+                    }
+                }
+                else if (firstByte <= 0xF4 && src.Length >= 4 && dst.Length >= 2 &&
+                         IsLowByteUtf8ContinuationByte(src[1]) && IsLowByteUtf8ContinuationByte(src[2]) &&
+                         IsLowByteUtf8ContinuationByte(src[3]))
+                {
+                    uint partial = ((firstByte & 0x07) << 6) | ((uint)src[1] & 0x3F);
+                    if ((partial - 0x10) <= (0x10F - 0x10))
+                    {
+                        uint offset = ((partial << 12) | (((uint)src[2] & 0x3F) << 6) | ((uint)src[3] & 0x3F)) - 0x10000;
+                        dst[0] = (char)(0xD800u | (offset >> 10));
+                        dst[1] = (char)(0xDC00u | (offset & 0x3FF));
+                        src = src.Slice(4);
+                        dst = dst.Slice(2);
+                        continue;
+                    }
+                }
+
+                status = DecodeScalarToUtf16(src, dst, out int consumed, out int produced);
+                if (status != OperationStatus.Done)
+                {
+                    break;
+                }
+                src = src.Slice(consumed);
+                dst = dst.Slice(produced);
+            }
+
+            bytesRead = source.Length - src.Length;
+            charsWritten = destination.Length - dst.Length;
+            return status;
+        }
+
+        /// <summary>
+        /// Converts as many whole blocks as possible. Stops (without reporting an error) as soon as fewer
+        /// than sixteen bytes or sixteen chars remain, or as soon as a sequence is not well-formed; the
+        /// caller's scalar loop then re-examines that position and produces the exact status.
+        /// </summary>
+        /// <remarks>
+        /// Every path here advances the <em>source</em> by a compile-time constant, which matters a lot: a
+        /// data-dependent source advance puts the next load address on a serial dependency chain
+        /// (load, compare, movemask, tzcnt, address) roughly seventeen cycles long that out-of-order
+        /// execution cannot hide. Branching to a constant lets the branch predictor run the loads ahead
+        /// instead. Only the destination advance is allowed to vary, because no load depends on it.
+        /// </remarks>
+        private static void TranscodeBlocksToUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten)
+        {
+            ReadOnlySpan<byte> src = source;
+            Span<char> dst = destination;
+
+            while (src.Length >= 16 && dst.Length >= 16)
+            {
+                Vector128<byte> block = Vector128.Create(src);
+                uint nonAscii = block.ExtractMostSignificantBits();
+                Span<ushort> wide = MemoryMarshal.Cast<char, ushort>(dst);
+
+                if (nonAscii == 0)
+                {
+                    Vector128.WidenLower(block).CopyTo(wide);
+                    Vector128.WidenUpper(block).CopyTo(wide.Slice(8));
+                    src = src.Slice(16);
+                    dst = dst.Slice(16);
+                    continue;
+                }
+
+                if ((nonAscii & 1) == 0)
+                {
+                    // An ASCII run shorter than the whole block.
+                    if ((nonAscii & 0xFF) == 0)
+                    {
+                        Vector128.WidenLower(block).CopyTo(wide);
+                        src = src.Slice(8);
+                        dst = dst.Slice(8);
+                    }
+                    else if ((nonAscii & 0xF) == 0)
+                    {
+                        Vector128.WidenLower(block).GetLower().CopyTo(wide);
+                        src = src.Slice(4);
+                        dst = dst.Slice(4);
+                    }
+                    else if ((nonAscii & 3) == 0)
+                    {
+                        wide[0] = src[0];
+                        wide[1] = src[1];
+                        src = src.Slice(2);
+                        dst = dst.Slice(2);
+                    }
+                    else
+                    {
+                        wide[0] = src[0];
+                        src = src.Slice(1);
+                        dst = dst.Slice(1);
+                    }
+                    continue;
+                }
+
+                uint lead = src[0];
+
+                if (lead < 0xE0)
+                {
+                    // ---- 2-byte sequences [ C2..DF ] [ 80..BF ] ----
+                    // Even lanes must land in C2..DF and odd lanes in 80..BF; one subtract plus one
+                    // unsigned compare classifies all sixteen bytes at once. The length of the leading
+                    // run of good bytes then selects a constant-size conversion.
+                    uint bad = ~Vector128.LessThanOrEqual(
+                        block - Vector128.Create((ushort)0x80C2).AsByte(),
+                        Vector128.Create((ushort)0x3F1D).AsByte()).ExtractMostSignificantBits();
+
+                    if ((ushort)bad == 0)
+                    {
+                        TwoByteSequencesToUtf16(block).CopyTo(wide);
+                        src = src.Slice(16);
+                        dst = dst.Slice(8);
+                        continue;
+                    }
+
+                    int good = BitOperations.TrailingZeroCount(bad);
+                    if (good >= 4)
+                    {
+                        Vector128<ushort> chars = TwoByteSequencesToUtf16(block);
+                        if (good >= 8)
+                        {
+                            chars.GetLower().CopyTo(wide);
+                            if (good < 10)
+                            {
+                                src = src.Slice(8);
+                                dst = dst.Slice(4);
+                                continue;
+                            }
+                            wide[4] = chars.GetElement(4);
+                            if (good < 12)
+                            {
+                                src = src.Slice(10);
+                                dst = dst.Slice(5);
+                                continue;
+                            }
+                            wide[5] = chars.GetElement(5);
+                            if (good < 14)
+                            {
+                                src = src.Slice(12);
+                                dst = dst.Slice(6);
+                                continue;
+                            }
+                            wide[6] = chars.GetElement(6);
+                            src = src.Slice(14);
+                            dst = dst.Slice(7);
+                            continue;
+                        }
+
+                        MemoryMarshal.Cast<ushort, uint>(wide.Slice(0, 2))[0] = chars.AsUInt32().ToScalar();
+                        if (good < 6)
+                        {
+                            src = src.Slice(4);
+                            dst = dst.Slice(2);
+                            continue;
+                        }
+                        wide[2] = chars.GetElement(2);
+                        src = src.Slice(6);
+                        dst = dst.Slice(3);
+                        continue;
+                    }
+                    if (good >= 2)
+                    {
+                        wide[0] = (ushort)(((lead & 0x1F) << 6) | ((uint)src[1] & 0x3F));
+                        src = src.Slice(2);
+                        dst = dst.Slice(1);
+                        continue;
+                    }
+                }
+                else if (lead < 0xF0)
+                {
+                    // ---- 3-byte sequences (CJK, and most of the BMP above U+07FF) ----
+                    // Two sequences need six non-ASCII bytes; testing that first keeps the shape
+                    // computation off the path taken by a lone non-ASCII character in ASCII text.
+                    if (ShuffleIsAccelerated && (nonAscii & 0x3F) == 0x3F)
+                    {
+                        // Lead bytes sit at 0, 3, 6, 9 and 12; every other byte of the first fifteen must
+                        // be a continuation. Byte 15 is masked out of the comparison.
+                        uint badShape = ~Vector128.Equals(
+                            block & Vector128.Create((byte)0xF0, 0xC0, 0xC0, 0xF0, 0xC0, 0xC0, 0xF0, 0xC0, 0xC0, 0xF0, 0xC0, 0xC0, 0xF0, 0xC0, 0xC0, 0),
+                            Vector128.Create((byte)0xE0, 0x80, 0x80, 0xE0, 0x80, 0x80, 0xE0, 0x80, 0x80, 0xE0, 0x80, 0x80, 0xE0, 0x80, 0x80, 0))
+                            .ExtractMostSignificantBits();
+
+                        int shapeLength = BitOperations.TrailingZeroCount(badShape);
+                        if (shapeLength >= 6)
+                        {
+                            Vector128<ushort> chars = ThreeByteSequencesToUtf16(block);
+
+                            // Reject overlong (below U+0800) and UTF-16 surrogate encodings.
+                            uint invalid = (Vector128.LessThan(chars, Vector128.Create((ushort)0x0800)) |
+                                            Vector128.LessThan(chars - Vector128.Create((ushort)0xD800), Vector128.Create((ushort)0x0800)))
+                                           .ExtractMostSignificantBits();
+
+                            int count = Math.Min(shapeLength / 3, BitOperations.TrailingZeroCount(invalid | 0x20u));
+                            if (count >= 2)
+                            {
+                                MemoryMarshal.Cast<ushort, uint>(wide.Slice(0, 2))[0] = chars.AsUInt32().ToScalar();
+                                if (count >= 4)
+                                {
+                                    MemoryMarshal.Cast<ushort, uint>(wide.Slice(2, 2))[0] = chars.AsUInt32().GetElement(1);
+                                    if (count >= 5)
+                                    {
+                                        wide[4] = chars.GetElement(4);
+                                        src = src.Slice(15);
+                                        dst = dst.Slice(5);
+                                        continue;
+                                    }
+                                    src = src.Slice(12);
+                                    dst = dst.Slice(4);
+                                    continue;
+                                }
+                                if (count >= 3)
+                                {
+                                    wide[2] = chars.GetElement(2);
+                                    src = src.Slice(9);
+                                    dst = dst.Slice(3);
+                                    continue;
+                                }
+                                src = src.Slice(6);
+                                dst = dst.Slice(2);
+                                continue;
+                            }
+                        }
+                    }
+
+                    uint secondByte = src[1];
+                    uint thirdByte = src[2];
+                    uint partial = ((lead & 0x0F) << 6) | (secondByte & 0x3F);
+                    if (IsLowByteUtf8ContinuationByte(secondByte) && IsLowByteUtf8ContinuationByte(thirdByte) &&
+                        partial >= 0x20 && (partial & 0x3E0) != 0x360)
+                    {
+                        wide[0] = (ushort)((partial << 6) | (thirdByte & 0x3F));
+                        src = src.Slice(3);
+                        dst = dst.Slice(1);
+                        continue;
+                    }
+                }
+                else
+                {
+                    // ---- 4-byte sequences (supplementary planes, emitted as surrogate pairs) ----
+                    if (ShuffleIsAccelerated && nonAscii == 0xFFFF && FourByteSequencesToUtf16(block, dst))
+                    {
+                        src = src.Slice(16);
+                        dst = dst.Slice(8);
+                        continue;
+                    }
+
+                    uint secondByte = src[1];
+                    uint thirdByte = src[2];
+                    uint fourthByte = src[3];
+                    uint partial = ((lead & 0x07) << 6) | (secondByte & 0x3F);
+                    if (lead <= 0xF4 && IsLowByteUtf8ContinuationByte(secondByte) &&
+                        IsLowByteUtf8ContinuationByte(thirdByte) && IsLowByteUtf8ContinuationByte(fourthByte) &&
+                        (partial - 0x10) <= (0x10F - 0x10))
+                    {
+                        uint offset = ((partial << 12) | ((thirdByte & 0x3F) << 6) | (fourthByte & 0x3F)) - 0x10000;
+                        wide[0] = (ushort)(0xD800u | (offset >> 10));
+                        wide[1] = (ushort)(0xDC00u | (offset & 0x3FF));
+                        src = src.Slice(4);
+                        dst = dst.Slice(2);
+                        continue;
+                    }
+                }
+
+                // Not well-formed. Hand the position back to the caller's scalar loop, which reports the
+                // exact status. (Reaching here always means the next sequence really is malformed: every
+                // well-formed shape is handled above.)
+                break;
+            }
+
+            bytesRead = source.Length - src.Length;
+            charsWritten = destination.Length - dst.Length;
+        }
+
+        /// <summary>True when the platform has a fast variable byte shuffle (pshufb / tbl / i8x16.swizzle).</summary>
+        private static bool ShuffleIsAccelerated =>
+            Ssse3.IsSupported || AdvSimd.Arm64.IsSupported || PackedSimd.IsSupported;
+
+        /// <summary>Converts the eight adjacent 2-byte sequences held in a 16-byte block.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<ushort> TwoByteSequencesToUtf16(Vector128<byte> block)
+        {
+            // A little-endian 16-bit lane is [ lead | continuation << 8 ].
+            Vector128<ushort> words = block.AsUInt16();
+            return ((words & Vector128.Create((ushort)0x001F)) << 6) |
+                   ((words >>> 8) & Vector128.Create((ushort)0x003F));
+        }
+
+        /// <summary>Converts the five 3-byte sequences held in bytes 0..14 of a block.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<ushort> ThreeByteSequencesToUtf16(Vector128<byte> block)
+        {
+            // One shuffle gathers [ b0 | b1 << 8 ] per sequence, the other gathers b2.
+            Vector128<ushort> high = Vector128.Shuffle(block,
+                Vector128.Create((byte)0, 1, 3, 4, 6, 7, 9, 10, 12, 13, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).AsUInt16();
+            Vector128<ushort> low = Vector128.Shuffle(block,
+                Vector128.Create((byte)2, 0xFF, 5, 0xFF, 8, 0xFF, 11, 0xFF, 14, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).AsUInt16();
+
+            return ((high & Vector128.Create((ushort)0x000F)) << 12) |
+                   (((high >>> 8) & Vector128.Create((ushort)0x003F)) << 6) |
+                   (low & Vector128.Create((ushort)0x003F));
+        }
+
+        /// <summary>
+        /// Converts the four 4-byte sequences held in a 16-byte block into four surrogate pairs.
+        /// Returns false (writing nothing) if the block does not hold four well-formed sequences.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool FourByteSequencesToUtf16(Vector128<byte> block, Span<char> destination)
+        {
+            if (!Vector128.EqualsAll(
+                    block & Vector128.Create((uint)0xC0C0C0F8).AsByte(),
+                    Vector128.Create((uint)0x808080F0).AsByte()))
+            {
+                return false;
+            }
+
+            // Reversing each 4-byte group turns a sequence into a big-endian ordered UInt32 lane.
+            Vector128<uint> gathered = Vector128.Shuffle(block,
+                Vector128.Create((byte)3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12)).AsUInt32();
+
+            Vector128<uint> offsets =
+                (((gathered & Vector128.Create(0x0700_0000u)) >>> 6) |
+                 ((gathered & Vector128.Create(0x003F_0000u)) >>> 4) |
+                 ((gathered & Vector128.Create(0x0000_3F00u)) >>> 2) |
+                  (gathered & Vector128.Create(0x0000_003Fu))) - Vector128.Create(0x0001_0000u);
+
+            // Valid scalars are U+10000..U+10FFFF, i.e. offsets 0..0xFFFFF.
+            if (!Vector128.LessThanOrEqualAll(offsets, Vector128.Create(0x000F_FFFFu)))
+            {
+                return false;
+            }
+
+            // The low half of each lane becomes the high surrogate, the high half the low surrogate.
+            ((Vector128.Create((uint)0xD800) | (offsets >>> 10)) |
+             ((Vector128.Create((uint)0xDC00) | (offsets & Vector128.Create(0x0000_03FFu))) << 16))
+                .AsUInt16().CopyTo(MemoryMarshal.Cast<char, ushort>(destination));
+            return true;
+        }
+
+        /// <summary>
+        /// Decodes exactly one scalar value. This is the single place where the UTF-8 grammar and the
+        /// precedence between the <see cref="OperationStatus"/> results are implemented.
+        /// </summary>
+        private static OperationStatus DecodeScalarToUtf16(ReadOnlySpan<byte> src, Span<char> dst, out int bytesConsumed, out int charsProduced)
+        {
+            bytesConsumed = 0;
+            charsProduced = 0;
+
+            uint firstByte = src[0];
+
+            if (firstByte <= 0x7F)
+            {
+                if (dst.IsEmpty)
+                {
+                    return OperationStatus.DestinationTooSmall;
+                }
+                dst[0] = (char)firstByte;
+                bytesConsumed = 1;
+                charsProduced = 1;
+                return OperationStatus.Done;
+            }
+
+            if (firstByte < 0xC2 || firstByte > 0xF4)
+            {
+                // A stray continuation byte, an overlong [ C0 ] / [ C1 ] lead, or a byte that can never
+                // appear in well-formed UTF-8 ([ F5 ] .. [ FF ]).
+                return OperationStatus.InvalidData;
+            }
+
+            if (src.Length < 2)
+            {
+                return OperationStatus.NeedMoreData;
+            }
+
+            uint secondByte = src[1];
+
+            if (firstByte < 0xE0)
+            {
+                if (!IsLowByteUtf8ContinuationByte(secondByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (dst.IsEmpty)
+                {
+                    return OperationStatus.DestinationTooSmall;
+                }
+                dst[0] = (char)(((firstByte & 0x1F) << 6) | (secondByte & 0x3F));
+                bytesConsumed = 2;
+                charsProduced = 1;
+                return OperationStatus.Done;
+            }
+
+            if (firstByte < 0xF0)
+            {
+                if (!IsLowByteUtf8ContinuationByte(secondByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+
+                // partial is the scalar value shifted right by 6, so it is fully determined by the first
+                // two bytes and both the overlong and the surrogate check can run before reading further.
+                uint partial = ((firstByte & 0x0F) << 6) | (secondByte & 0x3F);
+                if (partial < 0x20 || (partial & 0x3E0) == 0x360)
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (src.Length < 3)
+                {
+                    return OperationStatus.NeedMoreData;
+                }
+
+                uint thirdByte = src[2];
+                if (!IsLowByteUtf8ContinuationByte(thirdByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (dst.IsEmpty)
+                {
+                    return OperationStatus.DestinationTooSmall;
+                }
+                dst[0] = (char)((partial << 6) | (thirdByte & 0x3F));
+                bytesConsumed = 3;
+                charsProduced = 1;
+                return OperationStatus.Done;
+            }
+
+            {
+                if (!IsLowByteUtf8ContinuationByte(secondByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+
+                // partial is the scalar value shifted right by 12 and must land in [ 0x10, 0x10F ].
+                uint partial = ((firstByte & 0x07) << 6) | (secondByte & 0x3F);
+                if ((partial - 0x10) > (0x10F - 0x10))
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (src.Length < 3)
+                {
+                    return OperationStatus.NeedMoreData;
+                }
+
+                uint thirdByte = src[2];
+                if (!IsLowByteUtf8ContinuationByte(thirdByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (src.Length < 4)
+                {
+                    return OperationStatus.NeedMoreData;
+                }
+
+                uint fourthByte = src[3];
+                if (!IsLowByteUtf8ContinuationByte(fourthByte))
+                {
+                    return OperationStatus.InvalidData;
+                }
+                if (dst.Length < 2)
+                {
+                    return OperationStatus.DestinationTooSmall;
+                }
+
+                uint offset = ((partial << 12) | ((thirdByte & 0x3F) << 6) | (fourthByte & 0x3F)) - 0x10000;
+                dst[0] = (char)(0xD800u | (offset >> 10));
+                dst[1] = (char)(0xDC00u | (offset & 0x3FF));
+                bytesConsumed = 4;
+                charsProduced = 2;
+                return OperationStatus.Done;
+            }
+        }
+
+        // On method return, pInputBufferRemaining and pOutputBufferRemaining will both point to where
+        // the next byte would have been consumed from / the next char would have been written to.
+        // inputLength in bytes, outputCharsRemaining in chars.
+        public static OperationStatus TranscodeToUtf16(byte* pInputBuffer, int inputLength, char* pOutputBuffer, int outputCharsRemaining, out byte* pInputBufferRemaining, out char* pOutputBufferRemaining)
+        {
+            Debug.Assert(inputLength >= 0, "Input length must not be negative.");
+            Debug.Assert(pInputBuffer != null || inputLength == 0, "Input length must be zero if input buffer pointer is null.");
+            Debug.Assert(outputCharsRemaining >= 0, "Destination length must not be negative.");
+            Debug.Assert(pOutputBuffer != null || outputCharsRemaining == 0, "Destination length must be zero if destination buffer pointer is null.");
+
+            OperationStatus status = TranscodeToUtf16(
+                new ReadOnlySpan<byte>(pInputBuffer, inputLength),
+                new Span<char>(pOutputBuffer, outputCharsRemaining),
+                out int bytesRead, out int charsWritten);
+
+            pInputBufferRemaining = pInputBuffer + bytesRead;
+            pOutputBufferRemaining = pOutputBuffer + charsWritten;
+            return status;
+        }
+#else
         // On method return, pInputBufferRemaining and pOutputBufferRemaining will both point to where
         // the next byte would have been consumed from / the next char would have been written to.
         // inputLength in bytes, outputCharsRemaining in chars.
@@ -834,6 +1442,24 @@ namespace System.Text.Unicode
             pInputBufferRemaining = pInputBuffer;
             pOutputBufferRemaining = pOutputBuffer;
             return retVal;
+        }
+#endif
+
+        // Span-based entry point, so that callers such as System.Text.Unicode.Utf8 do not have to
+        // pin their buffers or manipulate raw pointers themselves.
+        public static OperationStatus TranscodeToUtf8(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten)
+        {
+            fixed (char* pSource = &MemoryMarshal.GetReference(source))
+            fixed (byte* pDestination = &MemoryMarshal.GetReference(destination))
+            {
+                OperationStatus status = TranscodeToUtf8(
+                    pSource, source.Length, pDestination, destination.Length,
+                    out char* pInputBufferRemaining, out byte* pOutputBufferRemaining);
+
+                charsRead = (int)(pInputBufferRemaining - pSource);
+                bytesWritten = (int)(pOutputBufferRemaining - pDestination);
+                return status;
+            }
         }
 
         // On method return, pInputBufferRemaining and pOutputBufferRemaining will both point to where

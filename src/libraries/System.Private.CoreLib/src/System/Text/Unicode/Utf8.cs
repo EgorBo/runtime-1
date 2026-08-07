@@ -42,82 +42,73 @@ namespace System.Text.Unicode
         /// in <paramref name="source"/> will be replaced with U+FFFD in <paramref name="destination"/>, and
         /// this method will not return <see cref="OperationStatus.InvalidData"/>.
         /// </remarks>
-        public static unsafe OperationStatus FromUtf16(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
+        public static OperationStatus FromUtf16(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
         {
-            fixed (char* pOriginalSource = &MemoryMarshal.GetReference(source))
-            fixed (byte* pOriginalDestination = &MemoryMarshal.GetReference(destination))
+            int totalCharsRead = 0;
+            int totalBytesWritten = 0;
+
+            // We're going to bulk transcode as much as we can in a loop, iterating
+            // every time we see bad data that requires replacement.
+
+            OperationStatus operationStatus = OperationStatus.Done;
+
+            while (!source.IsEmpty)
             {
-                // We're going to bulk transcode as much as we can in a loop, iterating
-                // every time we see bad data that requires replacement.
+                operationStatus = Utf8Utility.TranscodeToUtf8(source, destination, out int charsReadJustNow, out int bytesWrittenJustNow);
 
-                OperationStatus operationStatus = OperationStatus.Done;
-                char* pInputBufferRemaining = pOriginalSource;
-                byte* pOutputBufferRemaining = pOriginalDestination;
+                source = source.Slice(charsReadJustNow);
+                destination = destination.Slice(bytesWrittenJustNow);
+                totalCharsRead += charsReadJustNow;
+                totalBytesWritten += bytesWrittenJustNow;
 
-                while (!source.IsEmpty)
+                // If we finished the operation entirely or we ran out of space in the destination buffer,
+                // or if we need more input data and the caller told us that there's possibly more data
+                // coming, return immediately.
+
+                if (operationStatus <= OperationStatus.DestinationTooSmall
+                    || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
                 {
-                    // We've pinned the spans at the entry point to this method.
-                    // It's safe for us to use Unsafe.AsPointer on them during this loop.
-
-                    operationStatus = Utf8Utility.TranscodeToUtf8(
-                        pInputBuffer: (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source)),
-                        inputLength: source.Length,
-                        pOutputBuffer: (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination)),
-                        outputBytesRemaining: destination.Length,
-                        pInputBufferRemaining: out pInputBufferRemaining,
-                        pOutputBufferRemaining: out pOutputBufferRemaining);
-
-                    // If we finished the operation entirely or we ran out of space in the destination buffer,
-                    // or if we need more input data and the caller told us that there's possibly more data
-                    // coming, return immediately.
-
-                    if (operationStatus <= OperationStatus.DestinationTooSmall
-                        || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
-                    {
-                        break;
-                    }
-
-                    // We encountered invalid data, or we need more data but the caller told us we're
-                    // at the end of the stream. In either case treat this as truly invalid.
-                    // If the caller didn't tell us to replace invalid sequences, return immediately.
-
-                    if (!replaceInvalidSequences)
-                    {
-                        operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
-                        break;
-                    }
-
-                    // We're going to attempt to write U+FFFD to the destination buffer.
-                    // Do we even have enough space to do so?
-
-                    destination = destination.Slice((int)(pOutputBufferRemaining - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination))));
-
-                    if (destination.Length <= 2)
-                    {
-                        operationStatus = OperationStatus.DestinationTooSmall;
-                        break;
-                    }
-
-                    destination[0] = 0xEF; // U+FFFD = [ EF BF BD ] in UTF-8
-                    destination[1] = 0xBF;
-                    destination[2] = 0xBD;
-                    destination = destination.Slice(3);
-
-                    // Invalid UTF-16 sequences are always of length 1. Just skip the next character.
-
-                    source = source.Slice((int)(pInputBufferRemaining - (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source))) + 1);
-
-                    operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
-                    pInputBufferRemaining = (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source));
-                    pOutputBufferRemaining = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination));
+                    break;
                 }
 
-                // Not possible to make any further progress - report to our caller how far we got.
+                // We encountered invalid data, or we need more data but the caller told us we're
+                // at the end of the stream. In either case treat this as truly invalid.
+                // If the caller didn't tell us to replace invalid sequences, return immediately.
 
-                charsRead = (int)(pInputBufferRemaining - pOriginalSource);
-                bytesWritten = (int)(pOutputBufferRemaining - pOriginalDestination);
-                return operationStatus;
+                if (!replaceInvalidSequences)
+                {
+                    operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
+                    break;
+                }
+
+                // We're going to attempt to write U+FFFD to the destination buffer.
+                // Do we even have enough space to do so?
+
+                if (destination.Length <= 2)
+                {
+                    operationStatus = OperationStatus.DestinationTooSmall;
+                    break;
+                }
+
+                destination[0] = 0xEF; // U+FFFD = [ EF BF BD ] in UTF-8
+                destination[1] = 0xBF;
+                destination[2] = 0xBD;
+                destination = destination.Slice(3);
+                totalBytesWritten += 3;
+
+                // Invalid UTF-16 sequences are always of length 1. Just skip the next character.
+
+                source = source.Slice(1);
+                totalCharsRead++;
+
+                operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
             }
+
+            // Not possible to make any further progress - report to our caller how far we got.
+
+            charsRead = totalCharsRead;
+            bytesWritten = totalBytesWritten;
+            return operationStatus;
         }
 
         /// <summary>
@@ -128,94 +119,82 @@ namespace System.Text.Unicode
         /// in <paramref name="source"/> will be replaced with U+FFFD in <paramref name="destination"/>, and
         /// this method will not return <see cref="OperationStatus.InvalidData"/>.
         /// </remarks>
-        public static unsafe OperationStatus ToUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
+        public static OperationStatus ToUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
         {
             // NOTE: Changes to this method should be kept in sync with ToUtf16PreservingReplacement below.
             // See it for an explanation of the differences
 
-            // We'll be mutating these values throughout our loop.
+            int totalBytesRead = 0;
+            int totalCharsWritten = 0;
 
-            fixed (byte* pOriginalSource = &MemoryMarshal.GetReference(source))
-            fixed (char* pOriginalDestination = &MemoryMarshal.GetReference(destination))
+            // We're going to bulk transcode as much as we can in a loop, iterating
+            // every time we see bad data that requires replacement.
+
+            OperationStatus operationStatus = OperationStatus.Done;
+
+            while (!source.IsEmpty)
             {
-                // We're going to bulk transcode as much as we can in a loop, iterating
-                // every time we see bad data that requires replacement.
+                operationStatus = Utf8Utility.TranscodeToUtf16(source, destination, out int bytesReadJustNow, out int charsWrittenJustNow);
 
-                OperationStatus operationStatus = OperationStatus.Done;
-                byte* pInputBufferRemaining = pOriginalSource;
-                char* pOutputBufferRemaining = pOriginalDestination;
+                source = source.Slice(bytesReadJustNow);
+                destination = destination.Slice(charsWrittenJustNow);
+                totalBytesRead += bytesReadJustNow;
+                totalCharsWritten += charsWrittenJustNow;
 
-                while (!source.IsEmpty)
+                // If we finished the operation entirely or we ran out of space in the destination buffer,
+                // or if we need more input data and the caller told us that there's possibly more data
+                // coming, return immediately.
+
+                if (operationStatus <= OperationStatus.DestinationTooSmall
+                    || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
                 {
-                    // We've pinned the spans at the entry point to this method.
-                    // It's safe for us to use Unsafe.AsPointer on them during this loop.
-
-                    operationStatus = Utf8Utility.TranscodeToUtf16(
-                        pInputBuffer: (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source)),
-                        inputLength: source.Length,
-                        pOutputBuffer: (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination)),
-                        outputCharsRemaining: destination.Length,
-                        pInputBufferRemaining: out pInputBufferRemaining,
-                        pOutputBufferRemaining: out pOutputBufferRemaining);
-
-                    // If we finished the operation entirely or we ran out of space in the destination buffer,
-                    // or if we need more input data and the caller told us that there's possibly more data
-                    // coming, return immediately.
-
-                    if (operationStatus <= OperationStatus.DestinationTooSmall
-                        || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
-                    {
-                        break;
-                    }
-
-                    // We encountered invalid data, or we need more data but the caller told us we're
-                    // at the end of the stream. In either case treat this as truly invalid.
-                    // If the caller didn't tell us to replace invalid sequences, return immediately.
-
-                    if (!replaceInvalidSequences)
-                    {
-                        operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
-                        break;
-                    }
-
-                    // We're going to attempt to write U+FFFD to the destination buffer.
-                    // Do we even have enough space to do so?
-
-                    destination = destination.Slice((int)(pOutputBufferRemaining - (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination))));
-
-                    if (destination.IsEmpty)
-                    {
-                        operationStatus = OperationStatus.DestinationTooSmall;
-                        break;
-                    }
-
-                    destination[0] = (char)UnicodeUtility.ReplacementChar;
-                    destination = destination.Slice(1);
-
-                    // Now figure out how many bytes of the source we must skip over before we should retry
-                    // the operation. This might be more than 1 byte.
-
-                    source = source.Slice((int)(pInputBufferRemaining - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source))));
-                    Debug.Assert(!source.IsEmpty, "Expected 'Done' if source is fully consumed.");
-
-                    Rune.DecodeFromUtf8(source, out _, out int bytesConsumedJustNow);
-                    source = source.Slice(bytesConsumedJustNow);
-
-                    operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
-                    pInputBufferRemaining = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source));
-                    pOutputBufferRemaining = (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination));
+                    break;
                 }
 
-                // Not possible to make any further progress - report to our caller how far we got.
+                // We encountered invalid data, or we need more data but the caller told us we're
+                // at the end of the stream. In either case treat this as truly invalid.
+                // If the caller didn't tell us to replace invalid sequences, return immediately.
 
-                bytesRead = (int)(pInputBufferRemaining - pOriginalSource);
-                charsWritten = (int)(pOutputBufferRemaining - pOriginalDestination);
-                return operationStatus;
+                if (!replaceInvalidSequences)
+                {
+                    operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
+                    break;
+                }
+
+                // We're going to attempt to write U+FFFD to the destination buffer.
+                // Do we even have enough space to do so?
+
+                if (destination.IsEmpty)
+                {
+                    operationStatus = OperationStatus.DestinationTooSmall;
+                    break;
+                }
+
+                destination[0] = (char)UnicodeUtility.ReplacementChar;
+                destination = destination.Slice(1);
+                totalCharsWritten++;
+
+                // Now figure out how many bytes of the source we must skip over before we should retry
+                // the operation. This might be more than 1 byte.
+
+                Debug.Assert(!source.IsEmpty, "Expected 'Done' if source is fully consumed.");
+
+                Rune.DecodeFromUtf8(source, out _, out int bytesConsumedJustNow);
+                source = source.Slice(bytesConsumedJustNow);
+                totalBytesRead += bytesConsumedJustNow;
+
+                operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
             }
+
+            // Not possible to make any further progress - report to our caller how far we got.
+
+            bytesRead = totalBytesRead;
+            charsWritten = totalCharsWritten;
+            return operationStatus;
         }
 
 #if NET
-        internal static unsafe OperationStatus ToUtf16PreservingReplacement(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
+        internal static OperationStatus ToUtf16PreservingReplacement(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
         {
             // NOTE: Changes to this method should be kept in sync with ToUtf16 above.
             //
@@ -228,90 +207,70 @@ namespace System.Text.Unicode
             // This allows them to compare as invalid UTF-16 sequences and thus only match with the same
             // invalid sequence.
 
-            // We'll be mutating these values throughout our loop.
+            int totalBytesRead = 0;
+            int totalCharsWritten = 0;
 
-            fixed (byte* pOriginalSource = &MemoryMarshal.GetReference(source))
-            fixed (char* pOriginalDestination = &MemoryMarshal.GetReference(destination))
+            OperationStatus operationStatus = OperationStatus.Done;
+
+            while (!source.IsEmpty)
             {
-                // We're going to bulk transcode as much as we can in a loop, iterating
-                // every time we see bad data that requires replacement.
+                operationStatus = Utf8Utility.TranscodeToUtf16(source, destination, out int bytesReadJustNow, out int charsWrittenJustNow);
 
-                OperationStatus operationStatus = OperationStatus.Done;
-                byte* pInputBufferRemaining = pOriginalSource;
-                char* pOutputBufferRemaining = pOriginalDestination;
+                source = source.Slice(bytesReadJustNow);
+                destination = destination.Slice(charsWrittenJustNow);
+                totalBytesRead += bytesReadJustNow;
+                totalCharsWritten += charsWrittenJustNow;
 
-                while (!source.IsEmpty)
+                // If we finished the operation entirely or we ran out of space in the destination buffer,
+                // or if we need more input data and the caller told us that there's possibly more data
+                // coming, return immediately.
+
+                if (operationStatus <= OperationStatus.DestinationTooSmall
+                    || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
                 {
-                    // We've pinned the spans at the entry point to this method.
-                    // It's safe for us to use Unsafe.AsPointer on them during this loop.
-
-                    operationStatus = Utf8Utility.TranscodeToUtf16(
-                        pInputBuffer: (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source)),
-                        inputLength: source.Length,
-                        pOutputBuffer: (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination)),
-                        outputCharsRemaining: destination.Length,
-                        pInputBufferRemaining: out pInputBufferRemaining,
-                        pOutputBufferRemaining: out pOutputBufferRemaining);
-
-                    // If we finished the operation entirely or we ran out of space in the destination buffer,
-                    // or if we need more input data and the caller told us that there's possibly more data
-                    // coming, return immediately.
-
-                    if (operationStatus <= OperationStatus.DestinationTooSmall
-                        || (operationStatus == OperationStatus.NeedMoreData && !isFinalBlock))
-                    {
-                        break;
-                    }
-
-                    // We encountered invalid data, or we need more data but the caller told us we're
-                    // at the end of the stream. In either case treat this as truly invalid.
-                    // If the caller didn't tell us to replace invalid sequences, return immediately.
-
-                    if (!replaceInvalidSequences)
-                    {
-                        operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
-                        break;
-                    }
-
-                    // We're going to attempt to write U+DF?? to the destination buffer for each invalid byte
-                    //
-                    // Figure out how many bytes of the source we must skip over before we should retry
-                    // the operation. This might be more than 1 byte.
-                    //
-                    // Check if we even have enough space to do so?
-
-                    source = source.Slice((int)(pInputBufferRemaining - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source))));
-                    destination = destination.Slice((int)(pOutputBufferRemaining - (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination))));
-
-                    Debug.Assert(!source.IsEmpty, "Expected 'Done' if source is fully consumed.");
-                    Rune.DecodeFromUtf8(source, out _, out int bytesConsumedJustNow);
-
-                    if (destination.Length < bytesConsumedJustNow)
-                    {
-                        operationStatus = OperationStatus.DestinationTooSmall;
-                        break;
-                    }
-
-                    for (int i = 0; i < bytesConsumedJustNow; i++)
-                    {
-                        destination[i] = (char)(0xDF00 | source[i]);
-                    }
-
-                    destination = destination.Slice(bytesConsumedJustNow);
-                    source = source.Slice(bytesConsumedJustNow);
-
-                    operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
-
-                    pInputBufferRemaining = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(source));
-                    pOutputBufferRemaining = (char*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(destination));
+                    break;
                 }
 
-                // Not possible to make any further progress - report to our caller how far we got.
+                // We encountered invalid data, or we need more data but the caller told us we're
+                // at the end of the stream. In either case treat this as truly invalid.
+                // If the caller didn't tell us to replace invalid sequences, return immediately.
 
-                bytesRead = (int)(pInputBufferRemaining - pOriginalSource);
-                charsWritten = (int)(pOutputBufferRemaining - pOriginalDestination);
-                return operationStatus;
+                if (!replaceInvalidSequences)
+                {
+                    operationStatus = OperationStatus.InvalidData; // status code may have been NeedMoreData - force to be error
+                    break;
+                }
+
+                // We're going to attempt to write U+DF?? to the destination buffer for each invalid byte.
+                // Figure out how many bytes of the source that is, then check we have room for them all.
+
+                Debug.Assert(!source.IsEmpty, "Expected 'Done' if source is fully consumed.");
+                Rune.DecodeFromUtf8(source, out _, out int bytesConsumedJustNow);
+
+                if (destination.Length < bytesConsumedJustNow)
+                {
+                    operationStatus = OperationStatus.DestinationTooSmall;
+                    break;
+                }
+
+                for (int i = 0; i < bytesConsumedJustNow; i++)
+                {
+                    destination[i] = (char)(0xDF00 | source[i]);
+                }
+
+                destination = destination.Slice(bytesConsumedJustNow);
+                source = source.Slice(bytesConsumedJustNow);
+                totalBytesRead += bytesConsumedJustNow;
+                totalCharsWritten += bytesConsumedJustNow;
+
+                operationStatus = OperationStatus.Done; // we patched the error - if we're about to break out of the loop this is a success case
             }
+
+            // Not possible to make any further progress - report to our caller how far we got.
+
+            bytesRead = totalBytesRead;
+            charsWritten = totalCharsWritten;
+            return operationStatus;
         }
 
         /// <summary>Writes the specified interpolated string to the UTF-8 byte span.</summary>
@@ -679,7 +638,7 @@ namespace System.Text.Unicode
             /// <param name="value">The value to write. It must be an ISpanFormattable but isn't constrained because the caller doesn't have a constraint.</param>
             /// <param name="format">The format string.</param>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private unsafe bool AppendSpanFormattable<T>(T value, string? format)
+            private bool AppendSpanFormattable<T>(T value, string? format)
             {
                 Debug.Assert(value is ISpanFormattable);
 
@@ -726,7 +685,7 @@ namespace System.Text.Unicode
             /// <param name="value">The value to write. It must be an enum but isn't constrained because the caller doesn't have a constraint.</param>
             /// <param name="format">The format string.</param>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            private unsafe bool AppendEnum<T>(T value, string? format)
+            private bool AppendEnum<T>(T value, string? format)
             {
                 Debug.Assert(typeof(T).IsEnum);
 

@@ -762,6 +762,94 @@ namespace System.Text.Unicode.Tests
         }
 
         [Fact]
+        public void ToChars_LongBuffersWithSingleByteCorruptions()
+        {
+            // Long inputs take a different code path than short ones (the transcoder converts whole
+            // 16-byte blocks at a time). Compare it against a scalar reference for buffers of each
+            // sequence length, for every truncation, and with a single byte corrupted at every offset.
+            string[] samples =
+            {
+                "The quick brown fox jumps over the lazy dog, again and again and again.",
+                "\u0421\u044A\u0435\u0448\u044C \u0436\u0435 \u0435\u0449\u0451 \u044D\u0442\u0438\u0445 \u043C\u044F\u0433\u043A\u0438\u0445 \u0444\u0440\u0430\u043D\u0446\u0443\u0437\u0441\u043A\u0438\u0445 \u0431\u0443\u043B\u043E\u043A.",
+                "\u5FEB\u901F\u7684\u68D5\u8272\u72D0\u72F8\u8DF3\u8FC7\u4E86\u90A3\u53EA\u61D2\u60F0\u7684\u72D7\u3002",
+                "\U0001F41F\U0001F420\U0001F421\U0001F988\U0001F419\U0001F991\U0001F990\U0001F99E\U0001F980",
+                "Caf\u00E9 \u2014 na\u00EFve fa\u00E7ade, \u65E5\u672C\u8A9E, \U0001F642. ",
+            };
+
+            byte[] corruptions = { 0x00, 0x41, 0x7F, 0x80, 0xBF, 0xC0, 0xC1, 0xC2, 0xE0, 0xED, 0xEF, 0xF0, 0xF4, 0xF5, 0xF8, 0xFB, 0xFC, 0xFF };
+
+            foreach (string sample in samples)
+            {
+                byte[] utf8 = Encoding.UTF8.GetBytes(sample);
+
+                for (int length = 0; length <= utf8.Length; length++)
+                {
+                    AssertToCharsMatchesReference(utf8.AsSpan(0, length));
+                }
+
+                for (int i = 0; i < utf8.Length; i++)
+                {
+                    foreach (byte corruption in corruptions)
+                    {
+                        byte[] corrupted = (byte[])utf8.Clone();
+                        corrupted[i] = corruption;
+                        AssertToCharsMatchesReference(corrupted);
+                    }
+                }
+            }
+        }
+
+        private static void AssertToCharsMatchesReference(ReadOnlySpan<byte> utf8Input)
+        {
+            // Also vary the destination size so that the DestinationTooSmall paths are exercised.
+            foreach (int destinationSize in new[] { 0, 1, 2, 3, utf8Input.Length / 2, utf8Input.Length, utf8Input.Length + 1 })
+            {
+                if (destinationSize < 0)
+                {
+                    continue;
+                }
+
+                char[] expected = new char[destinationSize];
+                char[] actual = new char[destinationSize];
+
+                OperationStatus expectedStatus = ReferenceToUtf16(utf8Input, expected, out int expectedRead, out int expectedWritten);
+                OperationStatus actualStatus = Utf8.ToUtf16(utf8Input, actual, out int actualRead, out int actualWritten, replaceInvalidSequences: false, isFinalBlock: false);
+
+                string context = $"input={Convert.ToHexString(utf8Input)}, destinationSize={destinationSize}";
+                Assert.True(expectedStatus == actualStatus, $"status: expected {expectedStatus}, got {actualStatus} ({context})");
+                Assert.True(expectedRead == actualRead, $"bytesRead: expected {expectedRead}, got {actualRead} ({context})");
+                Assert.True(expectedWritten == actualWritten, $"charsWritten: expected {expectedWritten}, got {actualWritten} ({context})");
+                Assert.Equal(expected.AsSpan(0, expectedWritten).ToString(), actual.AsSpan(0, actualWritten).ToString());
+            }
+        }
+
+        // Straightforward scalar-at-a-time reference implementation of Utf8.ToUtf16.
+        private static OperationStatus ReferenceToUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten)
+        {
+            bytesRead = 0;
+            charsWritten = 0;
+
+            while (bytesRead < source.Length)
+            {
+                OperationStatus status = Rune.DecodeFromUtf8(source.Slice(bytesRead), out Rune rune, out int bytesConsumed);
+                if (status != OperationStatus.Done)
+                {
+                    return status;
+                }
+
+                if (destination.Length - charsWritten < rune.Utf16SequenceLength)
+                {
+                    return OperationStatus.DestinationTooSmall;
+                }
+
+                charsWritten += rune.EncodeToUtf16(destination.Slice(charsWritten));
+                bytesRead += bytesConsumed;
+            }
+
+            return OperationStatus.Done;
+        }
+
+        [Fact]
         public void ToChars_AllPossibleScalarValues()
         {
             ToChars_Test_Core(
