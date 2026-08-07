@@ -9,8 +9,19 @@ namespace System
 {
     public static partial class MemoryExtensions
     {
+        /// <summary>
+        /// Returns true when <paramref name="value"/> is a complete UTF-8 scalar that is never whitespace,
+        /// i.e. an ASCII byte greater than U+0020. Continuation and lead bytes (>= 0x80) return false.
+        /// </summary>
+        private static bool IsAsciiNonWhiteSpace(byte value) => (uint)(value - 0x21) <= (0x7F - 0x21);
+
         internal static ReadOnlySpan<byte> TrimStartUtf8(this ReadOnlySpan<byte> span)
         {
+            if (span.Length != 0 && IsAsciiNonWhiteSpace(span[0]))
+            {
+                return span;
+            }
+
             // Since `DecodeFromUtf8` returns `Rune.ReplacementChar` on failure and that is not
             // whitespace, we can safely treat it as no trimming and leave failure handling up to
             // the caller instead.
@@ -43,6 +54,13 @@ namespace System
             Debug.Assert(!Rune.IsWhiteSpace(Rune.ReplacementChar));
 
             if (span.Length == 0)
+            {
+                return span;
+            }
+
+            // Every byte in [0x21, 0x7F] is a complete scalar that is never whitespace, so when both
+            // ends are one of those there is nothing to trim and no scalar needs to be decoded.
+            if (IsAsciiNonWhiteSpace(span[0]) && IsAsciiNonWhiteSpace(span[^1]))
             {
                 return span;
             }
