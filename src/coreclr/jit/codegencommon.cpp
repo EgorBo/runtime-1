@@ -3514,8 +3514,8 @@ void CodeGen::genHomeRegisterParams(regNumber initReg, bool* initRegStillZeroed)
 
 #if defined(UNIX_AMD64_ABI) && defined(FEATURE_SIMD)
         if (!lclDsc->lvPromoted && lclDsc->lvOnFrame && (!lclDsc->lvIsInReg() || lclDsc->IsLiveInOutOfHandler()) &&
-            lclDsc->TypeIs(TYP_STRUCT) && (lclDsc->lvExactSize() == 16) && !lclDsc->HasGCPtr() &&
-            (abiInfo.NumSegments == 2))
+            lclDsc->TypeIs(TYP_STRUCT) && lclDsc->IsAddressExposed() && (lclDsc->lvExactSize() == 16) &&
+            !lclDsc->HasGCPtr() && (abiInfo.NumSegments == 2))
         {
             const ABIPassingSegment& lowSegment  = abiInfo.Segment(0);
             const ABIPassingSegment& highSegment = abiInfo.Segment(1);
