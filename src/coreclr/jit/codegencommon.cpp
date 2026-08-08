@@ -3512,6 +3512,37 @@ void CodeGen::genHomeRegisterParams(regNumber initReg, bool* initRegStillZeroed)
         LclVarDsc*                   lclDsc  = m_compiler->lvaGetDesc(lclNum);
         const ABIPassingInformation& abiInfo = m_compiler->lvaGetParameterABIInfo(lclNum);
 
+#if defined(UNIX_AMD64_ABI) && defined(FEATURE_SIMD)
+        if (!lclDsc->lvPromoted && lclDsc->lvOnFrame && (!lclDsc->lvIsInReg() || lclDsc->IsLiveInOutOfHandler()) &&
+            lclDsc->TypeIs(TYP_STRUCT) && (lclDsc->lvExactSize() == 16) && !lclDsc->HasGCPtr() &&
+            (abiInfo.NumSegments == 2))
+        {
+            const ABIPassingSegment& lowSegment  = abiInfo.Segment(0);
+            const ABIPassingSegment& highSegment = abiInfo.Segment(1);
+
+            if (lowSegment.IsPassedInRegister() && highSegment.IsPassedInRegister() &&
+                genIsValidIntReg(lowSegment.GetRegister()) && genIsValidIntReg(highSegment.GetRegister()) &&
+                (lowSegment.Offset == 0) && (highSegment.Offset == 8) && (lowSegment.Size == 8) &&
+                (highSegment.Size == 8) && ((paramRegs & lowSegment.GetRegisterMask()) != 0) &&
+                ((paramRegs & highSegment.GetRegisterMask()) != 0) &&
+                (m_compiler->FindParameterRegisterLocalMappingByRegister(lowSegment.GetRegister()) == nullptr) &&
+                (m_compiler->FindParameterRegisterLocalMappingByRegister(highSegment.GetRegister()) == nullptr) &&
+                m_compiler->compOpportunisticallyDependsOn(InstructionSet_X86Base))
+            {
+                regMaskTP tempRegs =
+                    genGetParameterHomingTempRegisterCandidates() & RBM_ALLFLOAT & ~calleeRegArgMaskLiveIn;
+                noway_assert(tempRegs != RBM_NONE);
+
+                // Avoid homing with two narrow stores that may not forward efficiently to a subsequent wide load.
+                regNumber tempReg = genFirstRegNumFromMask(tempRegs);
+                GetEmitter()->emitIns_Mov(INS_movd64, EA_8BYTE, tempReg, lowSegment.GetRegister(), false);
+                GetEmitter()->emitIns_R_R_I(INS_pinsrq, EA_16BYTE, tempReg, highSegment.GetRegister(), 1);
+                GetEmitter()->emitIns_S_R(ins_Store(TYP_SIMD16), EA_16BYTE, tempReg, lclNum, 0);
+                continue;
+            }
+        }
+#endif // UNIX_AMD64_ABI && FEATURE_SIMD
+
         for (const ABIPassingSegment& segment : abiInfo.Segments())
         {
             if (!segment.IsPassedInRegister())
