@@ -1,13 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
-
 namespace System
 {
-    [StructLayout(LayoutKind.Sequential)]
-    public ref struct ArgIterator
+    // Native varargs are not supported on this platform. Every member throws.
+    public ref partial struct ArgIterator
     {
         public ArgIterator(RuntimeArgumentHandle arglist)
         {
@@ -36,18 +33,18 @@ namespace System
         }
 
         [CLSCompliant(false)]
-        public System.TypedReference GetNextArg()
+        public TypedReference GetNextArg()
         {
             throw new PlatformNotSupportedException(SR.PlatformNotSupported_ArgIterator);
         }
 
         [CLSCompliant(false)]
-        public System.TypedReference GetNextArg(System.RuntimeTypeHandle rth)
+        public TypedReference GetNextArg(RuntimeTypeHandle rth)
         {
             throw new PlatformNotSupportedException(SR.PlatformNotSupported_ArgIterator);
         }
 
-        public unsafe System.RuntimeTypeHandle GetNextArgType()
+        public unsafe RuntimeTypeHandle GetNextArgType()
         {
             throw new PlatformNotSupportedException(SR.PlatformNotSupported_ArgIterator);
         }

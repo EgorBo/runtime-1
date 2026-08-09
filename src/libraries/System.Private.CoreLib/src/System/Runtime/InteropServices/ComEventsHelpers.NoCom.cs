@@ -15,7 +15,7 @@ namespace System.Runtime.InteropServices
             throw new PlatformNotSupportedException(SR.PlatformNotSupported_ComInterop);
         }
 
-        public static Delegate Remove(object rcw, Guid iid, int dispid, Delegate d)
+        public static Delegate? Remove(object rcw, Guid iid, int dispid, Delegate d)
         {
             throw new PlatformNotSupportedException(SR.PlatformNotSupported_ComInterop);
         }
