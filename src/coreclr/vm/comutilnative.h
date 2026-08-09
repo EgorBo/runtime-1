@@ -255,7 +255,6 @@ extern "C" void QCALLTYPE FileLoadException_GetMessageForHR(UINT32 hresult, QCal
 class ObjectNative
 {
 public:
-    FCDECL1(static INT32, TryGetHashCode, Object* vThisRef);
     FCDECL2(static FC_BOOL_RET, ContentEquals, Object *pThisRef, Object *pCompareRef);
 };
 

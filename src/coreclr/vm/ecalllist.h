@@ -264,6 +264,7 @@ FCFuncEnd()
 
 FCFuncStart(gObjectHeaderFuncs)
     FCFuncElement("GetLockHandleIfExists", ObjectHeader_GetLockHandleIfExists)
+    FCFuncElement("GetSyncBlockHashCode", ObjectHeader_GetSyncBlockHashCode)
 FCFuncEnd()
 
 
@@ -336,7 +337,6 @@ FCFuncStart(gJitInfoFuncs)
 FCFuncEnd()
 
 FCFuncStart(gRuntimeHelpers)
-    FCFuncElement("TryGetHashCode", ObjectNative::TryGetHashCode)
     FCFuncElement("ContentEquals", ObjectNative::ContentEquals)
     FCFuncElement("TryEnsureSufficientExecutionStack", ReflectionInvocation::TryEnsureSufficientExecutionStack)
     FCFuncElement("GetTailCallArgBuffer", TailCallHelp::GetTailCallArgBuffer)

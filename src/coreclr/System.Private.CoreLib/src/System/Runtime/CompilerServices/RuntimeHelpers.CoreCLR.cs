@@ -236,32 +236,9 @@ namespace System.Runtime.CompilerServices
         /// If a hash code has been assigned to the object, it is returned. Otherwise zero is
         /// returned.
         /// </summary>
-        /// <safety>Runtime FCall that reads the object's existing hash from its header and returns it as an int; it dereferences no raw pointer and touches no caller-chosen memory.</safety>
-        [MethodImpl(MethodImplOptions.InternalCall)]
-        internal static safe extern int TryGetHashCode(object? o);
+        internal static int TryGetHashCode(object? o) => ObjectHeader.TryGetHashCode(o);
 
-        [LibraryImport(QCall, EntryPoint = "ObjectNative_GetHashCodeSlow")]
-        private static partial int GetHashCodeSlow(ObjectHandleOnStack o);
-
-        public static int GetHashCode(object? o)
-        {
-            int hashCode = TryGetHashCode(o);
-            if (hashCode == 0)
-            {
-                return GetHashCodeWorker(o);
-            }
-            return hashCode;
-
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            static int GetHashCodeWorker(object? o)
-            {
-                if (o is null)
-                {
-                    return 0;
-                }
-                return GetHashCodeSlow(ObjectHandleOnStack.Create(ref o));
-            }
-        }
+        public static int GetHashCode(object? o) => ObjectHeader.GetHashCode(o);
 
         public static new unsafe bool Equals(object? o1, object? o2)
         {

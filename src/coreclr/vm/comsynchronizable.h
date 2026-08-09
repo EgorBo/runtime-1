@@ -86,5 +86,6 @@ extern "C" void QCALLTYPE ThreadNative_DisableComObjectEagerCleanup(QCall::Threa
 extern "C" void QCALLTYPE ObjectHeader_GetOrCreateLockObject(QCall::ObjectHandleOnStack obj, QCall::ObjectHandleOnStack lockObj);
 
 FCDECL1(OBJECTHANDLE, ObjectHeader_GetLockHandleIfExists, Object* obj);
+FCDECL1(INT32, ObjectHeader_GetSyncBlockHashCode, Object* obj);
 #endif // _COMSYNCHRONIZABLE_H
 

@@ -1592,18 +1592,6 @@ extern "C" INT32 QCALLTYPE ObjectNative_GetHashCodeSlow(QCall::ObjectHandleOnSta
     return idx;
 }
 
-FCIMPL1(INT32, ObjectNative::TryGetHashCode, Object* obj)
-{
-    FCALL_CONTRACT;
-
-    if (obj == NULL)
-        return 0;
-
-    OBJECTREF objRef = ObjectToOBJECTREF(obj);
-    return objRef->TryGetHashCode();
-}
-FCIMPLEND
-
 FCIMPL2(FC_BOOL_RET, ObjectNative::ContentEquals, Object *pThisRef, Object *pCompareRef)
 {
     FCALL_CONTRACT;

@@ -62,6 +62,104 @@ namespace System.Threading
             return (int*)ppMethodTable - 1;
         }
 
+        /// <summary>
+        /// Returns the hash code assigned to the object. If no hash code has yet been assigned,
+        /// it assigns one in a thread-safe way.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int GetHashCode(object? o)
+        {
+            if (o is null)
+            {
+                return 0;
+            }
+
+            int bits;
+            fixed (nint* ppMethodTable = &o.GetMethodTableRef())
+            {
+                bits = *GetHeaderPtr(ppMethodTable);
+            }
+
+            // Common case: the hash code is stored right in the header. BIT_SBLK_IS_HASHCODE
+            // is only ever set together with BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX, and neither a
+            // sync block index nor thin lock data reaches that bit, so testing it alone is enough.
+            if ((bits & BIT_SBLK_IS_HASHCODE) != 0)
+            {
+                Debug.Assert((bits & BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX) != 0);
+                return bits & MASK_HASHCODE_INDEX;
+            }
+
+            // The hash code is either in a sync block or not assigned at all. Both are handled
+            // out of line, and outside the fixed block so that the object is not pinned there.
+            return GetHashCodeSlow(o, bits);
+        }
+
+        /// <summary>
+        /// If a hash code has been assigned to the object, it is returned. Otherwise zero is
+        /// returned.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int TryGetHashCode(object? o)
+        {
+            if (o is null)
+            {
+                return 0;
+            }
+
+            int bits;
+            fixed (nint* ppMethodTable = &o.GetMethodTableRef())
+            {
+                bits = *GetHeaderPtr(ppMethodTable);
+            }
+
+            // Common case: the hash code is stored right in the header. BIT_SBLK_IS_HASHCODE
+            // is only ever set together with BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX, and neither a
+            // sync block index nor thin lock data reaches that bit, so testing it alone is enough.
+            if ((bits & BIT_SBLK_IS_HASHCODE) != 0)
+            {
+                Debug.Assert((bits & BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX) != 0);
+                return bits & MASK_HASHCODE_INDEX;
+            }
+
+            // Either no hash code has been assigned yet, or the object has a sync block
+            // which is where the hash code would be. Ask the runtime for the latter.
+            return (bits & BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX) == 0 ? 0 : GetSyncBlockHashCode(o);
+        }
+
+        // The header bits are read by the caller and may be stale by the time we get here.
+        // They only serve to skip work; the runtime re-validates them when assigning.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int GetHashCodeSlow(object o, int bits)
+        {
+            if ((bits & BIT_SBLK_IS_HASH_OR_SYNCBLKINDEX) != 0)
+            {
+                // The object has a sync block, which is where its hash code would be.
+                int hashCode = GetSyncBlockHashCode(o);
+                if (hashCode != 0)
+                {
+                    return hashCode;
+                }
+            }
+
+            // Assigning a hash code may need to create a sync block and can allocate and
+            // throw, so it is left to the runtime.
+            return AssignHashCode(o);
+        }
+
+        // Kept in its own method so that the QCall frame setup does not weigh on
+        // GetHashCodeSlow, which returns early for the common sync block case.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int AssignHashCode(object o)
+        {
+            return AssignHashCodeSlow(ObjectHandleOnStack.Create(ref o));
+        }
+
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        private static extern int GetSyncBlockHashCode(object o);
+
+        [LibraryImport(RuntimeHelpers.QCall, EntryPoint = "ObjectNative_GetHashCodeSlow")]
+        private static partial int AssignHashCodeSlow(ObjectHandleOnStack o);
+
         internal static Lock GetLockObject(object obj)
         {
             IntPtr lockHandle = GetLockHandleIfExists(obj);

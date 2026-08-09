@@ -858,6 +858,20 @@ FCIMPL1(OBJECTHANDLE, ObjectHeader_GetLockHandleIfExists, Object* pObj)
 }
 FCIMPLEND
 
+FCIMPL1(INT32, ObjectHeader_GetSyncBlockHashCode, Object* pObj)
+{
+    FCALL_CONTRACT;
+
+    _ASSERTE(pObj != NULL);
+    PTR_SyncBlock pSyncBlock = pObj->PassiveGetSyncBlock();
+    if (pSyncBlock == NULL)
+    {
+        return 0;
+    }
+    return (INT32)pSyncBlock->GetHashCode();
+}
+FCIMPLEND
+
 extern "C" void QCALLTYPE ObjectHeader_GetOrCreateLockObject(QCall::ObjectHandleOnStack obj, QCall::ObjectHandleOnStack lockObj)
 {
     QCALL_CONTRACT;
