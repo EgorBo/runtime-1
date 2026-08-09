@@ -62,18 +62,6 @@ DWORD Object::ComputeHashCode()
     return hashCode;
 }
 
-DWORD Object::GetGlobalNewHashCode()
-{
-    LIMITED_METHOD_CONTRACT;
-    // Used for generating hash codes for exceptions to determine whether the
-    // Catch_Handler_Found_Event should be reported. See Thread::GetNewHashCode.
-    // Using linear congruential generator from Knuth Vol. 2, p. 102, line 24
-    static DWORD dwHashCodeSeed = 123456789U * 1566083941U + 1;
-    const DWORD multiplier = 1*4 + 5; //same as the GetNewHashCode method
-    dwHashCodeSeed = dwHashCodeSeed*multiplier + 1;
-    return dwHashCodeSeed;
-}
-
 #ifndef DACCESS_COMPILE
 INT32 Object::GetHashCodeEx()
 {
