@@ -8976,6 +8976,8 @@ PhaseStatus Lowering::DoPhase()
         MapParameterRegisterLocals();
     }
 
+    m_compiler->fgAddPinnedLocalKeepAlives();
+
     for (BasicBlock* const block : m_compiler->Blocks())
     {
         /* Make the block publicly available */

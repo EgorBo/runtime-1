@@ -117,10 +117,17 @@ void GCInfo::gcMarkFilterVarsPinned()
 
 #ifndef JIT32_GCENCODER
                 // Because there is no nesting within filters, nothing
-                // should be already pinned.
+                // should be already pinned. The exception is enregistered pinned locals, whose
+                // stack homes are already reported as pinned for their whole lifetime.
                 // For JIT32_GCENCODER, we should not do this check as gcVarPtrList are always sorted by vpdBegOfs
                 // which means that we could see some varPtrDsc that were already pinned by previous splitting.
-                assert((lowBits & pinned_OFFSET_FLAG) == 0);
+                assert(((lowBits & pinned_OFFSET_FLAG) == 0) || m_compiler->fgPinnedLocalsKeptAlive);
+
+                if ((lowBits & pinned_OFFSET_FLAG) != 0)
+                {
+                    // Already pinned for its whole lifetime; nothing to do.
+                    continue;
+                }
 #endif // JIT32_GCENCODER
 
                 if (begOffs < filterBeg)
@@ -4131,8 +4138,10 @@ void GCInfo::gcMakeRegPtrTable(
             // Do we have an argument or local variable?
             if (!varDsc->lvIsParam)
             {
-                // If it is pinned, it must be an untracked local.
-                assert(!varDsc->lvPinned || !varDsc->lvTracked);
+                // If it is pinned, it must either be an untracked local, or a local whose
+                // implicit uses were made explicit by "fgAddPinnedLocalKeepAlives" (in which
+                // case its stack home, if any, is reported as pinned via "gcMakeVarPtrTable").
+                assert(!varDsc->lvPinned || !varDsc->lvTracked || m_compiler->fgPinnedLocalsKeptAlive);
 
                 // When noTrackedGCSlots is true (e.g. on wasm) tracked on-frame GC vars
                 // must be reported here as untracked, since gcVarPtrList is not populated.
@@ -4696,6 +4705,13 @@ void GCInfo::gcInfoRecordGCRegStateChange(GcInfoEncoder* gcInfoEncoder,
         if ((tmpMask & byRefMask) != 0)
         {
             regFlags = (GcSlotFlags)(regFlags | GC_SLOT_INTERIOR);
+        }
+
+        // If a pinned local was enregistered, report every GC-live register as pinned. See
+        // "GCInfo::gcHasEnregisteredPinnedLcl" for why this over-approximation is needed.
+        if (gcHasEnregisteredPinnedLcl)
+        {
+            regFlags = (GcSlotFlags)(regFlags | GC_SLOT_PINNED);
         }
 
         assert(regNum == (regNumberSmall)regNum);

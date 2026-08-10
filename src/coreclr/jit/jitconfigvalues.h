@@ -906,6 +906,9 @@ RELEASE_CONFIG_INTEGER(JitWasmFunclets, "JitWasmFunclets", 1)
 // Allow to enregister locals with struct type.
 RELEASE_CONFIG_INTEGER(JitEnregStructLocals, "JitEnregStructLocals", 1)
 
+// Allow pinned locals to be enregistered (reported to the GC as pinned registers).
+RELEASE_CONFIG_INTEGER(JitEnregPinnedLocals, "JitEnregPinnedLocals", 1)
+
 #undef CONFIG_INTEGER
 #undef CONFIG_STRING
 #undef CONFIG_METHODSET

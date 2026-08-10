@@ -4976,6 +4976,17 @@ public:
     bool lvaIsFieldOfDependentlyPromotedStruct(const LclVarDsc* varDsc);
     bool lvaIsGCTracked(const LclVarDsc* varDsc);
 
+    // Returns true if "store" is a store to a pinned local that releases the pin (i.e. the
+    // stored value is known not to be a GC pointer, such as the "null" store that the C#
+    // compiler emits at the end of a "fixed" statement).
+    bool lvaIsPinReleasingStore(GenTreeLclVarCommon* store)
+    {
+        return store->OperIs(GT_STORE_LCL_VAR) && lvaGetDesc(store)->lvPinned &&
+               store->AsLclVar()->Data()->IsNotGcDef();
+    }
+
+    void fgAddPinnedLocalKeepAlives();
+
 #if defined(FEATURE_SIMD)
     bool lvaMapSimd12ToSimd16(unsigned varNum)
     {
@@ -11094,8 +11105,10 @@ public:
 
 #endif // DEBUG
 
-    bool fgLocalVarLivenessDone         = false; // Note that this one is used outside of debug.
-    bool fgDidEarlyLiveness             = false;
+    bool fgLocalVarLivenessDone = false; // Note that this one is used outside of debug.
+    bool fgDidEarlyLiveness     = false;
+    // Has "fgAddPinnedLocalKeepAlives" made the implicit uses of pinned locals explicit?
+    bool fgPinnedLocalsKeptAlive        = false;
     bool compPostImportationCleanupDone = false;
     bool compRegAllocDone               = false;
     bool compRationalIRForm             = false;
@@ -12001,6 +12014,18 @@ public:
     bool compEnregStructLocals()
     {
         return (JitConfig.JitEnregStructLocals() != 0);
+    }
+
+    // Whether pinned locals may be enregistered. This requires the GC info encoding to be
+    // able to describe a register as holding a pinned reference, which the x86 encoding
+    // cannot do.
+    bool compEnregPinnedLocals()
+    {
+#if defined(JIT32_GCENCODER) || defined(TARGET_WASM)
+        return false;
+#else
+        return compEnregLocals() && (JitConfig.JitEnregPinnedLocals() != 0);
+#endif
     }
 
     bool compObjectStackAllocation()

@@ -8851,7 +8851,7 @@ void emitter::emitDispDataSec(dataSecDsc* section, AllocMemChunk* dataChunks)
  *  Record the fact that the given variable now contains a live GC ref.
  */
 
-void emitter::emitGCvarLiveSet(int offs, GCtype gcType, BYTE* addr, ssize_t disp)
+void emitter::emitGCvarLiveSet(int offs, GCtype gcType, BYTE* addr, ssize_t disp, bool isPinned)
 {
     assert(emitIssuing);
 
@@ -8887,6 +8887,11 @@ void emitter::emitGCvarLiveSet(int offs, GCtype gcType, BYTE* addr, ssize_t disp
     if (gcType == GCT_BYREF)
     {
         desc->vpdVarNum |= byref_OFFSET_FLAG;
+    }
+
+    if (isPinned)
+    {
+        desc->vpdVarNum |= pinned_OFFSET_FLAG;
     }
 
     /* Append the new entry to the end of the list */
@@ -9767,6 +9772,8 @@ void emitter::emitGCvarLiveUpd(int offs, int varNum, GCtype gcType, BYTE* addr D
                Note that varNum might be negative, indicating a spill temp.
             */
 
+            bool isPinned = false;
+
             if (varNum != INT_MAX)
             {
                 bool isTracked = false;
@@ -9775,6 +9782,7 @@ void emitter::emitGCvarLiveUpd(int offs, int varNum, GCtype gcType, BYTE* addr D
                     // This is NOT a spill temp
                     const LclVarDsc* varDsc = m_compiler->lvaGetDesc(varNum);
                     isTracked               = m_compiler->lvaIsGCTracked(varDsc);
+                    isPinned                = varDsc->lvPinned;
                 }
 
                 if (!isTracked)
@@ -9803,7 +9811,7 @@ void emitter::emitGCvarLiveUpd(int offs, int varNum, GCtype gcType, BYTE* addr D
 
             if (emitGCrFrameLiveTab[disp] == nullptr)
             {
-                emitGCvarLiveSet(offs, gcType, addr, disp);
+                emitGCvarLiveSet(offs, gcType, addr, disp, isPinned);
 #ifdef DEBUG
                 if ((EMIT_GC_VERBOSE || m_compiler->opts.disasmWithGC) && (actualVarNum < m_compiler->lvaCount) &&
                     m_compiler->lvaGetDesc(actualVarNum)->lvTracked)

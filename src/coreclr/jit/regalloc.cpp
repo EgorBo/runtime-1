@@ -475,7 +475,7 @@ void RegAllocImpl::checkForDNER(unsigned lclNum, LclVarDsc* varDsc)
         }
     }
 
-    if (varDsc->lvPinned)
+    if (varDsc->lvPinned && !m_compiler->fgPinnedLocalsKeptAlive)
     {
         m_compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(DoNotEnregisterReason::PinningRef));
         return;

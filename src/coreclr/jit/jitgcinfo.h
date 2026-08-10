@@ -114,6 +114,19 @@ public:
 
     regMaskTP gcRegGCrefSetCur; // current regs holding GCrefs
     regMaskTP gcRegByrefSetCur; // current regs holding Byrefs
+    // Set when a pinned local was enregistered. In that case every register that is GC-live is
+    // reported to the GC as pinned.
+    //
+    // Reporting a reference as pinned is always safe: it only constrains the GC (the referent
+    // cannot be relocated), it never causes anything to be missed. Tracking exactly which
+    // registers hold the pinned local instead would be tighter, but it is not enough to record
+    // the registers LSRA assigns to the local's intervals: the value also transits registers
+    // chosen by "assignCopyReg" and by "getTempRegForResolution" when breaking register cycles
+    // in block-boundary resolution code. Missing any one of those is a GC hole, so this errs on
+    // the safe side.
+    //
+    // TODO-CQ: report only the registers that can actually hold the pinned local.
+    bool gcHasEnregisteredPinnedLcl;
 
     VARSET_TP gcTrkStkPtrLcls; // set of tracked stack ptr lcls (GCref and Byref) - no args
     VARSET_TP gcVarPtrSetCur;  // currently live part of "gcTrkStkPtrLcls"

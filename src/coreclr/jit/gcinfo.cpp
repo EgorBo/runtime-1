@@ -44,6 +44,8 @@ GCInfo::GCInfo(Compiler* theCompiler)
     gcPtrArgCnt    = 0;
     gcCallDescList = nullptr;
     gcCallDescLast = nullptr;
+
+    gcHasEnregisteredPinnedLcl = false;
 #if EMIT_GENERATE_GCINFO
 #ifdef JIT32_GCENCODER
     // TODO-WASM-Factoring: exclude this whole file from the wasm build by factoring out write barrier selection.

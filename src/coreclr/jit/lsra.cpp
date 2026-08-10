@@ -1804,6 +1804,14 @@ void LinearScan::identifyCandidates()
             {
                 m_compiler->compFloatingPointUsed = true;
             }
+
+            // A pinned local that is a register candidate may end up in a register, which
+            // changes how the method's registers must be reported to the GC.
+            if (varDsc->lvPinned && varTypeIsGC(varDsc->TypeGet()))
+            {
+                m_compiler->codeGen->gcInfo.gcHasEnregisteredPinnedLcl = true;
+            }
+
             Interval* newInt = newInterval(type);
             newInt->setLocalNumber(m_compiler, lclNum, this);
             VarSetOps::AddElemD(m_compiler, registerCandidateVars, varDsc->lvVarIndex);

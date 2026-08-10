@@ -432,7 +432,10 @@ void Liveness<TLiveness>::SelectTrackedLocals()
         // For example, the nulling of these will look like dead stores, but
         // these are actually observed by GC and important to keep.
         // Furthermore, x86 GC encoding does not support enregistering these.
-        if (varDsc->lvPinned)
+        //
+        // Once "fgAddPinnedLocalKeepAlives" has made those uses explicit they can be tracked
+        // (and enregistered) like any other local.
+        if (varDsc->lvPinned && !m_compiler->fgPinnedLocalsKeptAlive)
         {
             isTracked = false;
         }
@@ -2888,4 +2891,188 @@ PhaseStatus Compiler::fgEarlyLiveness()
     liveness.Run();
     fgDidEarlyLiveness = true;
     return PhaseStatus::MODIFIED_EVERYTHING;
+}
+
+//------------------------------------------------------------------------
+// fgAddPinnedLocalKeepAlives:
+//   Make the implicit uses of pinned locals explicit so that ordinary liveness can be
+//   computed for them, which in turn allows them to be enregistered.
+//
+// Notes:
+//   A pinned local pins its referent from the point it is assigned a GC pointer until it is
+//   overwritten with a non-GC value -- the C# compiler emits such a store ("null") when a
+//   "fixed" statement ends -- or, if there is no such store, until the method returns.
+//
+//   Regular liveness cannot see these uses: the pointers derived from the pinned local are
+//   plain native ints, so a pinned local looks dead right after it is converted to one. That
+//   is why pinned locals are otherwise kept untracked (and thus always live) on the stack.
+//
+//   This function inserts GT_KEEPALIVE nodes covering the region in which the pin is in effect:
+//   right before a store that releases the pin, and at the end of every block the pin is still
+//   in effect in. With those in place the rest of the JIT can treat pinned locals as ordinary
+//   locals.
+//
+void Compiler::fgAddPinnedLocalKeepAlives()
+{
+    if (!compEnregPinnedLocals())
+    {
+        return;
+    }
+
+    ArrayStack<unsigned> pinnedLocals(getAllocator(CMK_Generic));
+    for (unsigned lclNum = 0; lclNum < lvaCount; lclNum++)
+    {
+        if (lvaGetDesc(lclNum)->lvPinned)
+        {
+            pinnedLocals.Push(lclNum);
+        }
+    }
+
+    if (pinnedLocals.Height() == 0)
+    {
+        return;
+    }
+
+    // A pin established in a try region is still in effect in the handlers of that region, and
+    // the flow into handlers is not modelled by the normal predecessor lists. Rather than
+    // reasoning about that, be conservative and keep pins alive for the whole method when the
+    // method has EH.
+    //
+    // TODO-CQ: model EH flow (via "BasicBlock::VisitEHSuccs") instead, so that methods with EH
+    // get the same precision as the rest.
+    const bool conservative = (compHndBBtabCount > 0);
+
+    unsigned const blockCount = fgBBNumMax + 1;
+    bool*          genSet     = new (this, CMK_Generic) bool[blockCount];
+    bool*          killSet    = new (this, CMK_Generic) bool[blockCount];
+    bool*          pinAtExit  = new (this, CMK_Generic) bool[blockCount];
+
+    // Inserts a keep-alive at "insertionPoint", or at the end of the block when it is null.
+    auto insertKeepAliveAt = [this](BasicBlock* block, GenTree* insertionPoint, unsigned lclNum) {
+        GenTree* lcl       = gtNewLclvNode(lclNum, lvaGetDesc(lclNum)->TypeGet());
+        GenTree* keepAlive = gtNewKeepAliveNode(lcl);
+
+        LIR::AsRange(block).InsertBefore(insertionPoint, lcl, keepAlive);
+
+        // Match what "Lowering" would do for a GT_KEEPALIVE, so that a pinned local that stays on
+        // the stack does not have to be loaded into a register just to be kept alive.
+        lcl->SetRegOptional();
+
+        JITDUMP("Inserted GT_KEEPALIVE [%06u] for pinned V%02u in " FMT_BB "\n", dspTreeID(keepAlive), lclNum,
+                block->bbNum);
+    };
+
+    // Keeps the local alive up to (but not including) "store", which must be a node in "block".
+    // The keep-alive goes before the whole tree the store is the root of, so that no existing
+    // tree is split; phases such as "Lowering::LowerArrLength" require operands to stay adjacent
+    // to their user.
+    auto insertKeepAliveBeforeStore = [&](BasicBlock* block, GenTree* store, unsigned lclNum) {
+        bool               isClosed  = false;
+        LIR::ReadOnlyRange treeRange = LIR::AsRange(block).GetTreeRange(store, &isClosed);
+        insertKeepAliveAt(block, isClosed ? treeRange.FirstNode() : store, lclNum);
+    };
+
+    // Keeps the local alive to the end of "block". The keep-alive is appended, except when the
+    // block ends in a terminator that must stay last, in which case it goes just before it. This
+    // mirrors "LIR::InsertBeforeTerminator", which is not used directly because its debug-only
+    // check does not know every oper that can end a BBJ_RETURN block (GT_RETURN_SUSPEND, say).
+    auto insertKeepAliveAtEnd = [&](BasicBlock* block, unsigned lclNum) {
+        GenTree* insertionPoint = block->KindIs(BBJ_COND, BBJ_SWITCH, BBJ_RETURN) ? block->lastNode() : nullptr;
+        insertKeepAliveAt(block, insertionPoint, lclNum);
+    };
+
+    for (int i = 0; i < pinnedLocals.Height(); i++)
+    {
+        unsigned const lclNum = pinnedLocals.Bottom(i);
+
+        for (unsigned j = 0; j < blockCount; j++)
+        {
+            genSet[j] = killSet[j] = pinAtExit[j] = false;
+        }
+
+        // Insert a keep-alive before every store that releases the pin, and record how each
+        // block leaves the pin state (only the last definition in a block matters for that).
+        for (BasicBlock* const block : Blocks())
+        {
+            LIR::Range& blockRange = LIR::AsRange(block);
+            GenTree*    next       = nullptr;
+            for (GenTree* node = blockRange.FirstNode(); node != nullptr; node = next)
+            {
+                next = node->gtNext;
+
+                // Definitions that are not simple stores (e.g. definitions via address) are
+                // treated as establishing a pin, which is the conservative direction.
+                bool const isDef =
+                    node->OperIsLocalStore() || (node->OperIs(GT_LCL_ADDR) && ((node->gtFlags & GTF_VAR_DEF) != 0));
+                if (!isDef || (node->AsLclVarCommon()->GetLclNum() != lclNum))
+                {
+                    continue;
+                }
+
+                bool const releasesPin = lvaIsPinReleasingStore(node->AsLclVarCommon());
+                genSet[block->bbNum]   = !releasesPin;
+                killSet[block->bbNum]  = releasesPin;
+
+                if (releasesPin)
+                {
+                    insertKeepAliveBeforeStore(block, node, lclNum);
+                }
+            }
+        }
+
+        // Forward dataflow computing where the pin is still in effect at block exit:
+        //   out(b) = gen(b) || (in(b) && !kill(b)), in(b) = OR over preds of out(pred)
+        if (!conservative)
+        {
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                for (BasicBlock* const block : Blocks())
+                {
+                    bool pinIn = false;
+                    for (BasicBlock* const pred : block->PredBlocks())
+                    {
+                        if (pinAtExit[pred->bbNum])
+                        {
+                            pinIn = true;
+                            break;
+                        }
+                    }
+
+                    bool const pinOut = genSet[block->bbNum] || (pinIn && !killSet[block->bbNum]);
+                    if (pinOut != pinAtExit[block->bbNum])
+                    {
+                        pinAtExit[block->bbNum] = pinOut;
+                        changed                 = true;
+                    }
+                }
+            }
+        }
+
+        // Keep the local alive to the end of every block the pin is still in effect in. Anchoring
+        // only at returns would not be enough: a "fixed" region can also be left by throwing, or
+        // never left at all (an infinite loop), and on those paths liveness would otherwise drop
+        // the local as soon as the raw pointer has been derived from it.
+        //
+        // Not being live across the terminator itself is fine: a terminator transfers control out
+        // of the block, and the only terminator that is a GC safe point is a tail call, after
+        // which this frame no longer exists.
+        //
+        // TODO-CQ: a keep-alive is only strictly needed where liveness would otherwise drop the
+        // local, i.e. in blocks that cannot reach another keep-alive through a pin-live path.
+        // Computing that frontier would avoid extending lifetimes more than necessary.
+
+        for (BasicBlock* const block : Blocks())
+        {
+            if ((!conservative && !pinAtExit[block->bbNum]) || LIR::AsRange(block).IsEmpty())
+            {
+                continue;
+            }
+
+            insertKeepAliveAtEnd(block, lclNum);
+        }
+    }
+
+    fgPinnedLocalsKeptAlive = true;
 }

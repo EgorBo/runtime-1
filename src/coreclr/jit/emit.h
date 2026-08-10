@@ -3589,7 +3589,7 @@ public:
     void emitGCregDeadSet(GCtype gcType, regMaskTP mask, BYTE* addr);
 
     void emitGCvarLiveUpd(int offs, int varNum, GCtype gcType, BYTE* addr DEBUG_ARG(unsigned actualVarNum));
-    void emitGCvarLiveSet(int offs, GCtype gcType, BYTE* addr, ssize_t disp = -1);
+    void emitGCvarLiveSet(int offs, GCtype gcType, BYTE* addr, ssize_t disp = -1, bool isPinned = false);
     void emitGCvarDeadUpd(int offs, BYTE* addr DEBUG_ARG(unsigned varNum));
     void emitGCvarDeadSet(int offs, BYTE* addr, ssize_t disp = -1);
 
