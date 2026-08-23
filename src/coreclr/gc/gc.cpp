@@ -2389,7 +2389,7 @@ extern "C" uint64_t __rdtsc();
         return (cyclesHi << 32) | cycles;
     }
 #else // _MSC_VER
-    extern "C" ptrdiff_t get_cycle_count(void);
+#error Unknown compiler
 #endif // _MSC_VER
 #elif defined(TARGET_LOONGARCH64)
     ptrdiff_t get_cycle_count()

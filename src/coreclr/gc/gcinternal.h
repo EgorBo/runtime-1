@@ -1231,11 +1231,7 @@ extern const int n_heaps;
 
 #ifdef MULTIPLE_HEAPS
 extern bool affinity_config_specified_p;
-#if defined(TARGET_AMD64) && !(defined(_MSC_VER) || defined(__GNUC__))
-extern "C" ptrdiff_t get_cycle_count(void);
-#else
 ptrdiff_t get_cycle_count();
-#endif
 
 // We may not be on contiguous numa nodes so need to store
 // the node index as well.

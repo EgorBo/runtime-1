@@ -1412,18 +1412,6 @@ HRESULT CordbThread::FindFrame(ICorDebugFrame ** ppFrame, FramePointer fp)
 }
 
 
-
-#if defined(CROSS_COMPILE) && (defined(TARGET_ARM64) || defined(TARGET_ARM) || defined(TARGET_RISCV64) || defined(TARGET_LOONGARCH64))
-extern "C" double FPFillR8(void* pFillSlot)
-{
-    _ASSERTE(!"nyi for platform");
-    return 0;
-}
-#elif defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_ARM) || defined(TARGET_RISCV64) || defined(TARGET_LOONGARCH64)
-extern "C" double FPFillR8(void* pFillSlot);
-#endif
-
-
 #if defined(TARGET_X86)
 
 // CordbThread::Get32bitFPRegisters
@@ -1525,7 +1513,7 @@ void CordbThread::Get32bitFPRegisters(CONTEXT * pContext)
 // code:CordbThread::LoadFloatState for more details. The size of FPRegister64 is per-architecture and
 // determines the stride between consecutive registers in the context (8 bytes on Arm/RISC-V64, 16 on
 // Amd64/Arm64, and 32 on LoongArch64, whose FPR64/LSX/LASX slot holds the scalar value in its first
-// 64 bits); FPFillR8 reads that scalar value.
+// 64 bits); only that scalar value is copied out.
 // Arguments:
 //     input:  rgContextFPRegisters - starting address of the floating point register storage of the CONTEXT
 //             start                - the index into m_floatValues where we start initializing
@@ -1534,13 +1522,11 @@ void CordbThread::Get32bitFPRegisters(CONTEXT * pContext)
 
 void CordbThread::Get64bitFPRegisters(FPRegister64 * rgContextFPRegisters, int start, int nRegisters)
 {
-    // We convert and copy all the fp registers.
+    // A register slot can be wider than a double and is not guaranteed to be suitably aligned, so
+    // the bits are copied out instead of being loaded with an architecture specific instruction.
     for (int reg = start; reg < nRegisters; reg++)
     {
-        // @dbgtodo Microsoft crossplat: the conversion from a FLOAT128 or M128A struct to a floating
-        // point value will need to be done with an explicit conversion routine instead
-        // of the call to FPFillR8
-        m_floatValues[reg] = FPFillR8(&rgContextFPRegisters[reg - start]);
+        memcpy(&m_floatValues[reg], &rgContextFPRegisters[reg - start], sizeof(double));
     }
 } // CordbThread::Get64bitFPRegisters
 
@@ -1550,12 +1536,9 @@ void CordbThread::Get64bitFPRegisters(FPRegister64 * rgContextFPRegisters, int s
 // Initializes the float state members of this instance of CordbThread. This function gets the context and
 // converts the floating point values from their context representation to a real number value. Floating
 // point numbers are represented in IEEE format on all current platforms. We store them in the context as a
-// pair of 64-bit integers (IA64 and AMD64) or a series of bytes (x86). Rather than unpack them explicitly
-// and do the appropriate mathematical operations to produce the corresponding floating point value, we let
-// the hardware do it instead. We load a floating point register with the representation from the context
-// and then store it in m_floatValues. Using the hardware is obviously a huge perf win. If/when we make
-// cross-plat work, we should at least code necessary conversion routines in assembly. Even with cross-plat,
-// we can probably still use the hardware in most cases, as long as the size is appropriate.
+// pair of 64-bit integers (IA64 and AMD64) or a series of bytes (x86). On x86 we let the hardware do the
+// conversion by loading the x87 stack from the context. On the other architectures the context already
+// holds an IEEE double in the first 64 bits of each register slot, so the value is simply copied out.
 //
 // Arguments: none
 // Return Value: none (initializes data members)
