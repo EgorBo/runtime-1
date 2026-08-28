@@ -672,17 +672,18 @@ namespace System.Net.WebSockets
             // Write the payload
             if (payloadBuffer.Length > 0)
             {
-                payloadBuffer.CopyTo(new Span<byte>(_sendBuffer, headerLength, payloadLength));
+                Span<byte> destination = new Span<byte>(_sendBuffer, headerLength, payloadLength);
+                if (maskOffset.HasValue)
+                {
+                    CopyAndMask(payloadBuffer, destination, CombineMaskBytes(_sendBuffer, maskOffset.Value), 0);
+                }
+                else
+                {
+                    payloadBuffer.CopyTo(destination);
+                }
 
                 // Release the deflater buffer if any, we're not going to need the payloadBuffer anymore.
                 _deflater?.ReleaseBuffer();
-
-                // If we added a mask to the header, XOR the payload with the mask.  We do the manipulation in the send buffer so as to avoid
-                // changing the data in the caller-supplied payload buffer.
-                if (maskOffset.HasValue)
-                {
-                    ApplyMask(new Span<byte>(_sendBuffer, headerLength, payloadLength), _sendBuffer, maskOffset.Value, 0);
-                }
             }
 
             // Return the number of bytes in the send buffer
@@ -1659,6 +1660,77 @@ namespace System.Net.WebSockets
 
         private static int CombineMaskBytes(ReadOnlySpan<byte> buffer, int maskOffset) =>
             BitConverter.ToInt32(buffer.Slice(maskOffset));
+
+        /// <summary>Copies a buffer while applying a mask.</summary>
+        /// <param name="source">The buffer to copy.</param>
+        /// <param name="destination">The destination buffer.</param>
+        /// <param name="mask">The four-byte mask, stored as an Int32.</param>
+        /// <param name="maskIndex">The index into the mask.</param>
+        /// <returns>The next index into the mask to be used for future applications of the mask.</returns>
+        private static int CopyAndMask(ReadOnlySpan<byte> source, Span<byte> destination, int mask, int maskIndex)
+        {
+            Debug.Assert(source.Length == destination.Length);
+            Debug.Assert(maskIndex < sizeof(int));
+
+            const int VectorsPerLoop = 4;
+
+            if (!Vector.IsHardwareAccelerated ||
+                source.Length < VectorsPerLoop * Vector<byte>.Count ||
+                source.Overlaps(destination))
+            {
+                source.CopyTo(destination);
+                return ApplyMask(destination, mask, maskIndex);
+            }
+
+            int rolledMask = BitConverter.IsLittleEndian ?
+                (int)BitOperations.RotateRight((uint)mask, maskIndex * 8) :
+                (int)BitOperations.RotateLeft((uint)mask, maskIndex * 8);
+            Vector<byte> maskVector = Vector.AsVectorByte(new Vector<int>(rolledMask));
+
+            ref byte sourceRef = ref MemoryMarshal.GetReference(source);
+            ref byte destinationRef = ref MemoryMarshal.GetReference(destination);
+            int offset = 0;
+            int bytesPerLoop = VectorsPerLoop * Vector<byte>.Count;
+
+            while (source.Length - offset >= bytesPerLoop)
+            {
+                Vector<byte> source0 = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref sourceRef, offset));
+                Vector<byte> source1 = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref sourceRef, offset + Vector<byte>.Count));
+                Vector<byte> source2 = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref sourceRef, offset + (2 * Vector<byte>.Count)));
+                Vector<byte> source3 = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref sourceRef, offset + (3 * Vector<byte>.Count)));
+
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset), source0 ^ maskVector);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset + Vector<byte>.Count), source1 ^ maskVector);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset + (2 * Vector<byte>.Count)), source2 ^ maskVector);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset + (3 * Vector<byte>.Count)), source3 ^ maskVector);
+                offset += bytesPerLoop;
+            }
+
+            while (source.Length - offset >= Vector<byte>.Count)
+            {
+                Vector<byte> sourceVector = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref sourceRef, offset));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset), sourceVector ^ maskVector);
+                offset += Vector<byte>.Count;
+            }
+
+            while (source.Length - offset >= sizeof(int))
+            {
+                int sourceValue = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref sourceRef, offset));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destinationRef, offset), sourceValue ^ rolledMask);
+                offset += sizeof(int);
+            }
+
+            ref byte maskRef = ref Unsafe.As<int, byte>(ref mask);
+            while (offset < source.Length)
+            {
+                Unsafe.Add(ref destinationRef, offset) =
+                    (byte)(Unsafe.Add(ref sourceRef, offset) ^ Unsafe.Add(ref maskRef, maskIndex));
+                maskIndex = (maskIndex + 1) & 3;
+                offset++;
+            }
+
+            return maskIndex;
+        }
 
         /// <summary>Applies a mask to a portion of a byte array.</summary>
         /// <param name="toMask">The buffer to which the mask should be applied.</param>
