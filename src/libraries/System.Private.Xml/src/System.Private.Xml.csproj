@@ -180,6 +180,7 @@
     <Compile Include="System\Xml\Core\XmlTextReaderImplHelpers.cs" />
     <Compile Include="System\Xml\Core\XmlTextReaderImplHelpersAsync.cs" />
     <Compile Include="System\Xml\Core\XmlTextWriter.cs" />
+    <Compile Include="System\Xml\Core\XmlUtf8RawTextWriterAscii.cs" />
     <Compile Include="System\Xml\Core\XmlValidatingReader.cs" />
     <Compile Include="System\Xml\Core\XmlValidatingReaderImpl.cs" />
     <Compile Include="System\Xml\Core\XmlValidatingReaderImplAsync.cs" />

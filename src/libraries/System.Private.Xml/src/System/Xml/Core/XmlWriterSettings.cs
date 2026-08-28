@@ -371,7 +371,18 @@ namespace System.Xml
                 switch (OutputMethod)
                 {
                     case XmlOutputMethod.Xml:
-                        writer = Indent ? new XmlUtf8RawTextWriterIndent(output, this) : new XmlUtf8RawTextWriter(output, this);
+                        if (Indent)
+                        {
+                            writer = new XmlUtf8RawTextWriterIndent(output, this);
+                        }
+                        else if (IsQuerySpecific)
+                        {
+                            writer = new XmlUtf8RawTextWriter(output, this);
+                        }
+                        else
+                        {
+                            writer = new XmlUtf8RawTextWriterAscii(output, this);
+                        }
                         break;
                     case XmlOutputMethod.Html:
                         writer = Indent ? new HtmlUtf8RawTextWriterIndent(output, this) : new HtmlUtf8RawTextWriter(output, this);

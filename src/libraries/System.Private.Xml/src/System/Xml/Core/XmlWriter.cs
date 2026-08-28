@@ -645,7 +645,7 @@ namespace System.Xml
             // Avoid using XmlWriter.Create(Stream, XmlReaderSettings), as it references a lot of types
             // that then can't be trimmed away.
             XmlWriterSettings settings = XmlWriterSettings.s_defaultWriterSettings;
-            XmlWriter writer = new XmlUtf8RawTextWriter(output, settings);
+            XmlWriter writer = new XmlUtf8RawTextWriterAscii(output, settings);
             return new XmlWellFormedWriter(writer, settings);
         }
 
