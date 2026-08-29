@@ -35,15 +35,19 @@ namespace ILCompiler.DependencyAnalysis
         public override IEnumerable<CombinedDependencyListEntry> GetConditionalStaticDependencies(NodeFactory context) => [];
         public override IEnumerable<DependencyListEntry> GetStaticDependencies(NodeFactory context)
         {
+            yield return new DependencyListEntry(context.NecessaryTypeSymbol(TypeMapGroup), "Analyzed proxy type map group");
+
             foreach (var (sourceType, proxyType) in entries)
             {
                 yield return new DependencyListEntry(context.MaximallyConstructableType(sourceType), "Analyzed proxy type map entry source type");
-                yield return new DependencyListEntry(context.MetadataTypeSymbol(proxyType), "Analyzed proxy type map entry proxy type");
+                yield return new DependencyListEntry(context.MetadataTypeSymbol(proxyType), "Analyzed proxy type map entry proxy metadata");
+                yield return new DependencyListEntry(context.NecessaryTypeSymbol(proxyType), "Analyzed proxy type map entry proxy type");
             }
         }
         public override IEnumerable<CombinedDependencyListEntry> SearchDynamicDependencies(List<DependencyNodeCore<NodeFactory>> markedNodes, int firstNode, NodeFactory context) => [];
         protected override string GetName(NodeFactory context) => $"Analyzed Proxy Type Map: {typeMapGroup}";
-        public IProxyTypeMapNode ToAnalysisBasedNode(NodeFactory factory) => this;
+        public IProxyTypeMapNode ToAnalysisBasedNode(NodeFactory factory)
+            => new AnalyzedProxyTypeMapNode(TypeMapGroup, entries);
         public override bool InterestingForDynamicDependencyAnalysis => false;
 
         public override bool HasDynamicDependencies => false;

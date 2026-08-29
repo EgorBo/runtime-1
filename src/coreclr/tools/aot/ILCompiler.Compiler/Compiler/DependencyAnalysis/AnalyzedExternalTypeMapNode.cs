@@ -35,14 +35,18 @@ namespace ILCompiler.DependencyAnalysis
         public override IEnumerable<CombinedDependencyListEntry> GetConditionalStaticDependencies(NodeFactory context) => [];
         public override IEnumerable<DependencyListEntry> GetStaticDependencies(NodeFactory context)
         {
+            yield return new DependencyListEntry(context.NecessaryTypeSymbol(TypeMapGroup), "Analyzed external type map group");
+
             foreach (TypeDesc targetType in entries.Values)
             {
-                yield return new DependencyListEntry(context.MetadataTypeSymbol(targetType), "Analyzed external type map entry target type");
+                yield return new DependencyListEntry(context.MetadataTypeSymbol(targetType), "Analyzed external type map entry target metadata");
+                yield return new DependencyListEntry(context.NecessaryTypeSymbol(targetType), "Analyzed external type map entry target type");
             }
         }
         public override IEnumerable<CombinedDependencyListEntry> SearchDynamicDependencies(List<DependencyNodeCore<NodeFactory>> markedNodes, int firstNode, NodeFactory context) => [];
         protected override string GetName(NodeFactory context) => $"Analyzed External Type Map: {TypeMapGroup}";
-        public IExternalTypeMapNode ToAnalysisBasedNode(NodeFactory factory) => this;
+        public IExternalTypeMapNode ToAnalysisBasedNode(NodeFactory factory)
+            => new AnalyzedExternalTypeMapNode(TypeMapGroup, entries);
 
         public override bool InterestingForDynamicDependencyAnalysis => false;
 

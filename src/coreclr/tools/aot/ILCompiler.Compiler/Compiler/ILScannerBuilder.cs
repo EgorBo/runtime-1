@@ -10,7 +10,22 @@ using Internal.IL;
 
 namespace ILCompiler
 {
-    public sealed class ILScannerBuilder
+    /// <summary>
+    /// Configures construction of an IL scanner.
+    /// </summary>
+    public interface IILScannerBuilder
+    {
+        IILScannerBuilder UseDependencyTracking(DependencyTrackingLevel trackingLevel);
+        IILScannerBuilder UseCompilationRoots(IEnumerable<ICompilationRootProvider> compilationRoots);
+        IILScannerBuilder UseMetadataManager(MetadataManager metadataManager);
+        IILScannerBuilder UseInteropStubManager(InteropStubManager interopStubManager);
+        IILScannerBuilder UseTypeMapManager(TypeMapManager typeMapManager);
+        IILScannerBuilder UseParallelism(int parallelism);
+        IILScannerBuilder UseLogger(Logger logger);
+        IILScanner ToILScanner();
+    }
+
+    public sealed class ILScannerBuilder : IILScannerBuilder
     {
         private readonly CompilerTypeSystemContext _context;
         private readonly CompilationModuleGroup _compilationGroup;
@@ -87,5 +102,13 @@ namespace ILCompiler
 
             return new ILScanner(graph, nodeFactory, [.._compilationRoots, _typeMapManager], _ilProvider, new NullDebugInformationProvider(), _logger, _parallelism);
         }
+
+        IILScannerBuilder IILScannerBuilder.UseDependencyTracking(DependencyTrackingLevel trackingLevel) => UseDependencyTracking(trackingLevel);
+        IILScannerBuilder IILScannerBuilder.UseCompilationRoots(IEnumerable<ICompilationRootProvider> compilationRoots) => UseCompilationRoots(compilationRoots);
+        IILScannerBuilder IILScannerBuilder.UseMetadataManager(MetadataManager metadataManager) => UseMetadataManager(metadataManager);
+        IILScannerBuilder IILScannerBuilder.UseInteropStubManager(InteropStubManager interopStubManager) => UseInteropStubManager(interopStubManager);
+        IILScannerBuilder IILScannerBuilder.UseTypeMapManager(TypeMapManager typeMapManager) => UseTypeMapManager(typeMapManager);
+        IILScannerBuilder IILScannerBuilder.UseParallelism(int parallelism) => UseParallelism(parallelism);
+        IILScannerBuilder IILScannerBuilder.UseLogger(Logger logger) => UseLogger(logger);
     }
 }

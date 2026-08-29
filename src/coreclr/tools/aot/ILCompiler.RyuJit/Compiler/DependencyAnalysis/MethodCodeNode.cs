@@ -15,9 +15,10 @@ using CombinedDependencyList = System.Collections.Generic.List<ILCompiler.Depend
 namespace ILCompiler.DependencyAnalysis
 {
     [DebuggerTypeProxy(typeof(MethodCodeNodeDebugView))]
-    public class MethodCodeNode : ObjectNode, IMethodBodyNode, INodeWithCodeInfo, INodeWithDebugInfo, INodeWithFunclets, ISpecialUnboxThunkNode, IMethodCodeNodeWithTypeSignature
+    public class MethodCodeNode : ObjectNode, IMethodBodyNodeWithCompilationError, INodeWithCodeInfo, INodeWithDebugInfo, INodeWithFunclets, ISpecialUnboxThunkNode, IMethodCodeNodeWithTypeSignature
     {
-        private MethodDesc _method;
+        private readonly MethodDesc _method;
+        private readonly bool _relocationsOnly;
         private ObjectData _methodCode;
         private FrameInfo[] _frameInfos;
         private byte[] _gcInfo;
@@ -28,22 +29,39 @@ namespace ILCompiler.DependencyAnalysis
         private DependencyList _nonRelocationDependencies;
         private MethodDebugInformation _debugInfo;
         private TypeDesc[] _localTypes;
+        private TypeSystemException _compilationError;
 
         public MethodCodeNode(MethodDesc method)
+            : this(method, relocationsOnly: false)
+        {
+        }
+
+        internal MethodCodeNode(MethodDesc method, bool relocationsOnly)
         {
             Debug.Assert(!method.IsAbstract);
             Debug.Assert(!method.IsGenericMethodDefinition && !method.OwningType.IsGenericDefinition);
             Debug.Assert(method.GetCanonMethodTarget(CanonicalFormKind.Specific) == method);
             _method = method;
+            _relocationsOnly = relocationsOnly;
         }
 
         public void SetCode(ObjectData data)
         {
             Debug.Assert(_methodCode == null);
-            _methodCode = data;
+            _methodCode = _relocationsOnly ?
+                new ObjectData(Array.Empty<byte>(), data.Relocs, data.Alignment, data.DefinedSymbols) :
+                data;
         }
 
         public MethodDesc Method =>  _method;
+
+        TypeSystemException IMethodBodyNodeWithCompilationError.CompilationError => _compilationError;
+
+        internal void SetCompilationError(TypeSystemException exception)
+        {
+            Debug.Assert(_compilationError == null);
+            _compilationError = exception;
+        }
 
         protected override string GetName(NodeFactory factory) => this.GetMangledName(factory.NameMangler);
 
@@ -132,20 +150,26 @@ namespace ILCompiler.DependencyAnalysis
         public void InitializeFrameInfos(FrameInfo[] frameInfos)
         {
             Debug.Assert(_frameInfos == null);
-            _frameInfos = frameInfos;
+            if (!_relocationsOnly)
+                _frameInfos = frameInfos;
         }
 
         public void InitializeGCInfo(byte[] gcInfo)
         {
             Debug.Assert(_gcInfo == null);
-            _gcInfo = gcInfo;
+            if (!_relocationsOnly)
+                _gcInfo = gcInfo;
         }
 
         public void InitializeEHInfo(ObjectData ehInfo)
         {
             Debug.Assert(_ehInfo == null);
             if (ehInfo != null)
+            {
+                if (_relocationsOnly)
+                    ehInfo = new ObjectData(Array.Empty<byte>(), ehInfo.Relocs, ehInfo.Alignment, ehInfo.DefinedSymbols);
                 _ehInfo = new MethodExceptionHandlingInfoNode(_method, ehInfo);
+            }
         }
 
         public DebugLocInfo[] DebugLocInfos => _debugLocInfos;
@@ -157,31 +181,36 @@ namespace ILCompiler.DependencyAnalysis
         public void InitializeDebugLocInfos(DebugLocInfo[] debugLocInfos)
         {
             Debug.Assert(_debugLocInfos == null);
-            _debugLocInfos = debugLocInfos;
+            if (!_relocationsOnly)
+                _debugLocInfos = debugLocInfos;
         }
 
         public void InitializeDebugVarInfos(DebugVarInfo[] debugVarInfos)
         {
             Debug.Assert(_debugVarInfos == null);
-            _debugVarInfos = debugVarInfos;
+            if (!_relocationsOnly)
+                _debugVarInfos = debugVarInfos;
         }
 
         public void InitializeDebugInfo(MethodDebugInformation debugInfo)
         {
             Debug.Assert(_debugInfo == null);
-            _debugInfo = debugInfo;
+            if (!_relocationsOnly)
+                _debugInfo = debugInfo;
         }
 
         public void InitializeLocalTypes(TypeDesc[] localTypes)
         {
             Debug.Assert(_localTypes == null);
-            _localTypes = localTypes;
+            if (!_relocationsOnly)
+                _localTypes = localTypes;
         }
 
         public void InitializeDebugEHClauseInfos(DebugEHClauseInfo[] debugEHClauseInfos)
         {
             Debug.Assert(_debugEHClauseInfos == null);
-            _debugEHClauseInfos = debugEHClauseInfos;
+            if (!_relocationsOnly)
+                _debugEHClauseInfos = debugEHClauseInfos;
         }
 
         public IEnumerable<DebugVarInfoMetadata> GetDebugVars()

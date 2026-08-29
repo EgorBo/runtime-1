@@ -10,13 +10,23 @@ namespace ILCompiler.DependencyAnalysis
     public sealed class RyuJitNodeFactory : NodeFactory
     {
         private readonly MethodBodyDeduplicator _methodBodyDeduplicator;
+        private readonly bool _relocationsOnly;
 
         public RyuJitNodeFactory(CompilerTypeSystemContext context, CompilationModuleGroup compilationModuleGroup, MetadataManager metadataManager,
             InteropStubManager interopStubManager, NameMangler nameMangler, VTableSliceProvider vtableSliceProvider, DictionaryLayoutProvider dictionaryLayoutProvider, InlinedThreadStatics inlinedThreadStatics, PreinitializationManager preinitializationManager,
             DevirtualizationManager devirtualizationManager, ObjectDataInterner dataInterner, MethodBodyDeduplicator methodBodyDeduplicator, TypeMapManager typeMapManager)
+            : this(context, compilationModuleGroup, metadataManager, interopStubManager, nameMangler, vtableSliceProvider, dictionaryLayoutProvider, inlinedThreadStatics, preinitializationManager,
+                  devirtualizationManager, dataInterner, methodBodyDeduplicator, typeMapManager, relocationsOnly: false)
+        {
+        }
+
+        internal RyuJitNodeFactory(CompilerTypeSystemContext context, CompilationModuleGroup compilationModuleGroup, MetadataManager metadataManager,
+            InteropStubManager interopStubManager, NameMangler nameMangler, VTableSliceProvider vtableSliceProvider, DictionaryLayoutProvider dictionaryLayoutProvider, InlinedThreadStatics inlinedThreadStatics, PreinitializationManager preinitializationManager,
+            DevirtualizationManager devirtualizationManager, ObjectDataInterner dataInterner, MethodBodyDeduplicator methodBodyDeduplicator, TypeMapManager typeMapManager, bool relocationsOnly)
             : base(context, compilationModuleGroup, metadataManager, interopStubManager, nameMangler, new LazyGenericsDisabledPolicy(), vtableSliceProvider, dictionaryLayoutProvider, inlinedThreadStatics, new ExternSymbolsImportedNodeProvider(), preinitializationManager, devirtualizationManager, dataInterner, typeMapManager)
         {
             _methodBodyDeduplicator = methodBodyDeduplicator;
+            _relocationsOnly = relocationsOnly;
         }
 
         protected override bool CanFold(MethodDesc method)
@@ -42,7 +52,7 @@ namespace ILCompiler.DependencyAnalysis
 
             if (CompilationModuleGroup.ContainsMethodBody(method, false))
             {
-                return new MethodCodeNode(method);
+                return new MethodCodeNode(method, _relocationsOnly);
             }
             else
             {
@@ -60,7 +70,7 @@ namespace ILCompiler.DependencyAnalysis
                 // 'this' and also provides an instantiation argument (we do a calling convention conversion).
                 // We don't do this for generic instance methods though because they don't use the MethodTable
                 // for the generic context anyway.
-                return new MethodCodeNode(TypeSystemContext.GetSpecialUnboxingThunk(method, TypeSystemContext.GeneratedAssembly));
+                return new MethodCodeNode(TypeSystemContext.GetSpecialUnboxingThunk(method, TypeSystemContext.GeneratedAssembly), _relocationsOnly);
             }
             else
             {

@@ -411,6 +411,13 @@ namespace ILCompiler
                 ilProvider = new ReachabilityInstrumentationFilter(reachabilityInstrumentationFileName, ilProvider);
             }
 
+            if (Get(_command.InstrumentReachability))
+            {
+                ReachabilityInstrumentationProvider reachabilityProvider = new ReachabilityInstrumentationProvider(ilProvider);
+                ilProvider = reachabilityProvider;
+                compilationRoots.Add(reachabilityProvider);
+            }
+
             SubstitutionProvider substitutionProvider = new SubstitutionProvider(logger, featureSwitches, substitutions);
             ILProvider unsubstitutedILProvider = ilProvider;
             ilProvider = new SubstitutedILProvider(ilProvider, substitutionProvider, new DevirtualizationManager());
@@ -493,12 +500,32 @@ namespace ILCompiler
                 .UsePreinitializationManager(preinitManager)
                 .UseTypeMapManager(typeMapManager);
 
+            int parallelism = Get(_command.Parallelism);
+            string ilDump = Get(_command.IlDump);
+            DebugInformationProvider debugInfoProvider = Get(_command.EnableDebugInfo) ?
+                (ilDump == null ? new DebugInformationProvider() : new ILAssemblyGeneratingMethodDebugInfoProvider(ilDump, new EcmaOnlyDebugInformationProvider())) :
+                new NullDebugInformationProvider();
+            MethodBodyFoldingMode foldingMode = string.IsNullOrEmpty(Get(_command.MethodBodyFolding))
+                ? MethodBodyFoldingMode.None
+                : Enum.Parse<MethodBodyFoldingMode>(Get(_command.MethodBodyFolding), ignoreCase: true);
+
+            builder
+                .UseInstructionSetSupport(instructionSetSupport)
+                .UseBackendOptions(Get(_command.CodegenOptions))
+                .UseMethodBodyFolding(foldingMode)
+                .UseParallelism(parallelism)
+                .UseLogger(logger)
+                .UseOptimizationMode(_command.OptimizationMode)
+                .UseSecurityMitigationOptions(securityMitigationOptions)
+                .UseDebugInfoProvider(debugInfoProvider)
+                .UseDwarf5(Get(_command.UseDwarf5))
+                .UseResilience(resilient);
+
 #if DEBUG
             List<TypeDesc> scannerConstructedTypes = null;
             List<MethodDesc> scannerCompiledMethods = null;
 #endif
 
-            int parallelism = Get(_command.Parallelism);
             if (useScanner)
             {
                 // Run the scanner in a separate stack frame so that there's no dangling references to
@@ -509,51 +536,36 @@ namespace ILCompiler
             [MethodImpl(MethodImplOptions.NoInlining)]
             void RunScanner()
             {
-                ILScannerBuilder scannerBuilder = builder.GetILScannerBuilder()
-                    .UseCompilationRoots(compilationRoots)
-                    .UseMetadataManager(metadataManager)
-                    .UseParallelism(parallelism)
-                    .UseInteropStubManager(interopStubManager)
-                    .UseTypeMapManager(typeMapManager)
-                    .UseLogger(logger);
+                const int MaxCodegenDiscoveryIterations = 8;
 
                 string scanDgmlLogFileName = Get(_command.ScanDgmlLogFileName);
-                if (scanDgmlLogFileName != null)
-                    scannerBuilder.UseDependencyTracking(Get(_command.GenerateFullScanDgmlLog) ?
-                            DependencyTrackingLevel.All : DependencyTrackingLevel.First);
+                UsageBasedMetadataManager usageBasedMetadataManager = null;
+                ILScanResults analysisScanResults = null;
 
-                IILScanner scanner = scannerBuilder.ToILScanner();
+                // Keep the C# scanner as the source of whole-program analysis facts.
+                analysisScanResults = Scan(codegenScan: false);
 
-                ILScanResults scanResults = scanner.Scan();
+                DevirtualizationManager devirtualizationManager = analysisScanResults.GetDevirtualizationManager();
 
-#if DEBUG
-                scannerCompiledMethods = new List<MethodDesc>(scanResults.CompiledMethodBodies);
-                scannerConstructedTypes = new List<TypeDesc>(scanResults.ConstructedEETypes);
-#endif
+                usageBasedMetadataManager = (UsageBasedMetadataManager)metadataManager;
+                metadataManager = usageBasedMetadataManager.ToAnalysisBasedMetadataManager();
 
-                if (scanDgmlLogFileName != null)
-                    scanResults.WriteDependencyLog(scanDgmlLogFileName);
+                builder.UseTypeMapManager(analysisScanResults.GetTypeMapManager());
 
-                DevirtualizationManager devirtualizationManager = scanResults.GetDevirtualizationManager();
+                interopStubManager = analysisScanResults.GetInteropStubManager(interopStateManager, pinvokePolicy);
 
-                metadataManager = ((UsageBasedMetadataManager)metadataManager).ToAnalysisBasedMetadataManager();
-
-                builder.UseTypeMapManager(scanResults.GetTypeMapManager());
-
-                interopStubManager = scanResults.GetInteropStubManager(interopStateManager, pinvokePolicy);
-
-                ilProvider = new SubstitutedILProvider(unsubstitutedILProvider, substitutionProvider, devirtualizationManager, metadataManager, scanResults.GetAnalysisCharacteristics());
+                ilProvider = new SubstitutedILProvider(unsubstitutedILProvider, substitutionProvider, devirtualizationManager, metadataManager, analysisScanResults.GetAnalysisCharacteristics());
 
                 // Use a more precise IL provider that uses whole program analysis for dead branch elimination
                 builder.UseILProvider(ilProvider);
 
                 // If we have a scanner, feed the vtable analysis results to the compilation.
                 // This could be a command line switch if we really wanted to.
-                builder.UseVTableSliceProvider(scanResults.GetVTableLayoutInfo());
+                builder.UseVTableSliceProvider(analysisScanResults.GetVTableLayoutInfo());
 
                 // If we have a scanner, feed the generic dictionary results to the compilation.
                 // This could be a command line switch if we really wanted to.
-                builder.UseGenericDictionaryLayoutProvider(scanResults.GetDictionaryLayoutInfo());
+                builder.UseGenericDictionaryLayoutProvider(analysisScanResults.GetDictionaryLayoutInfo(optimizeSlots: false));
 
                 // If we have a scanner, we can drive devirtualization using the information
                 // we collected at scanning time (effectively sealing unsealed types if possible).
@@ -563,20 +575,20 @@ namespace ILCompiler
                 // If we use the scanner's result, we need to consult it to drive inlining.
                 // This prevents e.g. devirtualizing and inlining methods on types that were
                 // never actually allocated.
-                builder.UseInliningPolicy(scanResults.GetInliningPolicy());
+                builder.UseInliningPolicy(analysisScanResults.GetInliningPolicy());
 
                 // Use an error provider that prevents us from re-importing methods that failed
                 // to import with an exception during scanning phase. We would see the same failure during
                 // compilation, but before RyuJIT gets there, it might ask questions that we don't
                 // have answers for because we didn't scan the entire method.
-                builder.UseMethodImportationErrorProvider(scanResults.GetMethodImportationErrorProvider());
+                builder.UseMethodImportationErrorProvider(analysisScanResults.GetMethodImportationErrorProvider());
 
                 // If we're doing preinitialization, use a new preinitialization manager that
                 // has the whole program view.
                 if (preinitStatics)
                 {
-                    var readOnlyFieldPolicy = scanResults.GetReadOnlyFieldPolicy();
-                    preinitManager = new PreinitializationManager(typeSystemContext, compilationGroup, ilProvider, scanResults.GetPreinitializationPolicy(),
+                    var readOnlyFieldPolicy = analysisScanResults.GetReadOnlyFieldPolicy();
+                    preinitManager = new PreinitializationManager(typeSystemContext, compilationGroup, ilProvider, analysisScanResults.GetPreinitializationPolicy(),
                         readOnlyFieldPolicy, flowAnnotations);
                     builder.UsePreinitializationManager(preinitManager)
                         .UseReadOnlyFieldPolicy(readOnlyFieldPolicy);
@@ -587,22 +599,106 @@ namespace ILCompiler
                     ((targetOS == TargetOS.Linux && targetArchitecture is TargetArchitecture.X64 or TargetArchitecture.ARM64) ||
                      (targetOS == TargetOS.Windows && targetArchitecture is TargetArchitecture.X64 or TargetArchitecture.ARM64)))
                 {
-                    builder.UseInlinedThreadStatics(scanResults.GetInlinedThreadStatics());
+                    builder.UseInlinedThreadStatics(analysisScanResults.GetInlinedThreadStatics());
+                }
+
+                var forcedLazyDictionaryOwners = new HashSet<TypeSystemEntity>(analysisScanResults.GetForcedLazyDictionaryOwners());
+
+                // Discover RyuJIT's codegen requirements using the final whole-program policies.
+                ILScanResults codegenScanResults;
+                for (int discoveryIteration = 1; ; discoveryIteration++)
+                {
+                    codegenScanResults = Scan(codegenScan: true, allowNewGenericDictionaryEntries: true);
+                    builder
+                        .UseVTableSliceProvider(codegenScanResults.GetVTableLayoutInfo())
+                        .UseGenericDictionaryLayoutProvider(codegenScanResults.GetDictionaryLayoutInfo(optimizeSlots: false))
+                        .UseMethodImportationErrorProvider(codegenScanResults.GetMethodImportationErrorProvider());
+
+                    var discoveryResults = (IRyuJitILScanResults)codegenScanResults;
+                    var newlyForcedLazyOwners = new List<TypeSystemEntity>();
+                    foreach (TypeSystemEntity owner in discoveryResults.ForcedLazyDictionaryOwners)
+                    {
+                        if (forcedLazyDictionaryOwners.Add(owner))
+                            newlyForcedLazyOwners.Add(owner);
+                    }
+
+                    if (!discoveryResults.HasNewGenericDictionaryEntries && newlyForcedLazyOwners.Count == 0)
+                        break;
+
+                    if (discoveryIteration == MaxCodegenDiscoveryIterations)
+                    {
+                        var message = new StringBuilder()
+                            .Append("RyuJIT generic dictionary discovery did not converge after ")
+                            .Append(MaxCodegenDiscoveryIterations)
+                            .AppendLine(" iterations. Dictionary layouts changed in the final iteration:");
+                        foreach (TypeSystemEntity entity in discoveryResults.ChangedGenericDictionaryEntities)
+                            message.Append("  ").AppendLine(entity.ToString());
+                        message.AppendLine("Dictionary layouts that became forced-lazy in the final iteration:");
+                        foreach (TypeSystemEntity entity in newlyForcedLazyOwners)
+                            message.Append("  ").AppendLine(entity.ToString());
+                        throw new InternalCompilerErrorException(message.ToString());
+                    }
+                }
+
+                DictionaryLayoutProvider optimizedDictionaryLayoutProvider = codegenScanResults.GetDictionaryLayoutInfo(optimizeSlots: true);
+                builder.UseGenericDictionaryLayoutProvider(optimizedDictionaryLayoutProvider);
+
+                // Verify once more with fixed layouts. This is the exact configuration used by
+                // final compilation, and any newly requested slot remains a strict scanner failure.
+                codegenScanResults = Scan(
+                    codegenScan: true,
+                    allowNewGenericDictionaryEntries: false,
+                    trackDependencies: scanDgmlLogFileName != null);
+                // Keep the exact vtable and optimized dictionary providers that verification used.
+                builder.UseMethodImportationErrorProvider(codegenScanResults.GetMethodImportationErrorProvider());
+
+#if DEBUG
+                scannerCompiledMethods = new List<MethodDesc>(codegenScanResults.CompiledMethodBodies);
+                scannerConstructedTypes = new List<TypeDesc>(codegenScanResults.ConstructedEETypes);
+#endif
+
+                if (scanDgmlLogFileName != null)
+                    codegenScanResults.WriteDependencyLog(scanDgmlLogFileName);
+
+                analysisScanResults = null;
+
+                ILScanResults Scan(bool codegenScan, bool allowNewGenericDictionaryEntries = false, bool trackDependencies = false)
+                {
+                    MetadataManager scannerMetadataManager = metadataManager;
+                    InteropStubManager scannerInteropStubManager = interopStubManager;
+                    TypeMapManager scannerTypeMapManager = typeMapManager;
+                    IEnumerable<ICompilationRootProvider> scannerRoots = compilationRoots;
+                    if (codegenScan)
+                    {
+                        // Code generation mutates the metadata manager as it discovers nodes.
+                        // Keep those mutations isolated from the instance used by final compilation.
+                        scannerMetadataManager = usageBasedMetadataManager.ToAnalysisBasedMetadataManager();
+                        scannerTypeMapManager = analysisScanResults.GetTypeMapManager();
+                        var rootedResults = new List<ICompilationRootProvider>(compilationRoots);
+                        rootedResults.Add(scannerMetadataManager);
+                        rootedResults.Add(scannerInteropStubManager);
+                        scannerRoots = rootedResults;
+                    }
+
+                    IILScannerBuilder scannerBuilder = (codegenScan ?
+                        builder.GetCodegenILScannerBuilder(allowNewGenericDictionaryEntries: allowNewGenericDictionaryEntries) :
+                        builder.GetILScannerBuilder())
+                        .UseCompilationRoots(scannerRoots)
+                        .UseMetadataManager(scannerMetadataManager)
+                        .UseParallelism(parallelism)
+                        .UseInteropStubManager(scannerInteropStubManager)
+                        .UseTypeMapManager(scannerTypeMapManager)
+                        .UseLogger(logger);
+
+                    if (trackDependencies)
+                    {
+                        scannerBuilder.UseDependencyTracking(Get(_command.GenerateFullScanDgmlLog) ?
+                            DependencyTrackingLevel.All : DependencyTrackingLevel.First);
+                    }
+
+                    return scannerBuilder.ToILScanner().Scan();
                 }
             }
-
-            if (Get(_command.InstrumentReachability))
-            {
-                ReachabilityInstrumentationProvider reachabilityProvider = new ReachabilityInstrumentationProvider(ilProvider);
-                ilProvider = reachabilityProvider;
-                builder.UseILProvider(ilProvider);
-                compilationRoots.Add(reachabilityProvider);
-            }
-
-            string ilDump = Get(_command.IlDump);
-            DebugInformationProvider debugInfoProvider = Get(_command.EnableDebugInfo) ?
-                (ilDump == null ? new DebugInformationProvider() : new ILAssemblyGeneratingMethodDebugInfoProvider(ilDump, new EcmaOnlyDebugInformationProvider())) :
-                new NullDebugInformationProvider();
 
             string dgmlLogFileName = Get(_command.DgmlLogFileName);
             DependencyTrackingLevel trackingLevel = dgmlLogFileName == null ?
@@ -612,25 +708,11 @@ namespace ILCompiler
             compilationRoots.Add(metadataManager);
             compilationRoots.Add(interopStubManager);
 
-            MethodBodyFoldingMode foldingMode = string.IsNullOrEmpty(Get(_command.MethodBodyFolding))
-                ? MethodBodyFoldingMode.None
-                : Enum.Parse<MethodBodyFoldingMode>(Get(_command.MethodBodyFolding), ignoreCase: true);
-
             builder
-                .UseInstructionSetSupport(instructionSetSupport)
-                .UseBackendOptions(Get(_command.CodegenOptions))
-                .UseMethodBodyFolding(foldingMode)
-                .UseParallelism(parallelism)
                 .UseMetadataManager(metadataManager)
                 .UseInteropStubManager(interopStubManager)
-                .UseLogger(logger)
                 .UseDependencyTracking(trackingLevel)
-                .UseCompilationRoots(compilationRoots)
-                .UseOptimizationMode(_command.OptimizationMode)
-                .UseSecurityMitigationOptions(securityMitigationOptions)
-                .UseDebugInfoProvider(debugInfoProvider)
-                .UseDwarf5(Get(_command.UseDwarf5))
-                .UseResilience(resilient);
+                .UseCompilationRoots(compilationRoots);
 
             ICompilation compilation = builder.ToCompilation();
 

@@ -23,6 +23,7 @@ namespace ILCompiler
         private ProfileDataManager _profileDataManager;
         private string _orderFile;
         private string _jitPath;
+        private bool _jitConfigurationInitialized;
 
         public RyuJitCompilationBuilder(CompilerTypeSystemContext context, CompilationModuleGroup group)
             : base(context, group,
@@ -91,7 +92,31 @@ namespace ILCompiler
             return _ilProvider;
         }
 
-        public override ICompilation ToCompilation()
+        public override IILScannerBuilder GetCodegenILScannerBuilder(CompilationModuleGroup compilationGroup = null, bool allowNewGenericDictionaryEntries = false)
+        {
+            EnsureJitConfigurationInitialized();
+
+            return new RyuJitILScannerBuilder(
+                _context,
+                compilationGroup ?? _compilationGroup,
+                _nameMangler,
+                _ilProvider,
+                GetPreinitializationManager(),
+                _instructionSetSupport,
+                _profileDataManager,
+                _devirtualizationManager,
+                _inliningPolicy ?? _compilationGroup,
+                _vtableSliceProvider,
+                _dictionaryLayoutProvider,
+                _inlinedThreadStatics,
+                _methodImportationErrorProvider,
+                _readOnlyFieldPolicy,
+                GetRyuJitCompilationOptions(),
+                _methodBodyFolding,
+                allowNewGenericDictionaryEntries);
+        }
+
+        private CorJitFlag[] GetJitFlags()
         {
             ArrayBuilder<CorJitFlag> jitFlagBuilder = default(ArrayBuilder<CorJitFlag>);
 
@@ -123,33 +148,55 @@ namespace ILCompiler
             if (!(_debugInformationProvider is NullDebugInformationProvider))
                 jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_DEBUG_INFO);
 
+            if ((_mitigationOptions & SecurityMitigationOptions.ControlFlowGuardAnnotations) != 0)
+                jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_ENABLE_CFG);
+
+            return jitFlagBuilder.ToArray();
+        }
+
+        private RyuJitCompilationOptions GetRyuJitCompilationOptions()
+        {
             RyuJitCompilationOptions options = 0;
             if ((_mitigationOptions & SecurityMitigationOptions.ControlFlowGuardAnnotations) != 0)
-            {
-                jitFlagBuilder.Add(CorJitFlag.CORJIT_FLAG_ENABLE_CFG);
                 options |= RyuJitCompilationOptions.ControlFlowGuardAnnotations;
-            }
-
             if (_useDwarf5)
                 options |= RyuJitCompilationOptions.UseDwarf5;
-
             if (_resilient)
                 options |= RyuJitCompilationOptions.UseResilience;
 
-            MethodBodyDeduplicator methodBodyDeduplicator = _methodBodyFolding switch
+            return options;
+        }
+
+        private void EnsureJitConfigurationInitialized()
+        {
+            if (_jitConfigurationInitialized)
+                return;
+
+            JitConfigProvider.Initialize(_context.Target, GetJitFlags(), _ryujitOptions, _jitPath);
+            _jitConfigurationInitialized = true;
+        }
+
+        internal static MethodBodyDeduplicator CreateMethodBodyDeduplicator(MethodBodyFoldingMode methodBodyFolding)
+        {
+            return methodBodyFolding switch
             {
                 MethodBodyFoldingMode.Generic => new MethodBodyDeduplicator(genericsOnly: true),
                 MethodBodyFoldingMode.All => new MethodBodyDeduplicator(genericsOnly: false),
                 _ => null,
             };
+        }
+
+        public override ICompilation ToCompilation()
+        {
+            EnsureJitConfigurationInitialized();
+
+            MethodBodyDeduplicator methodBodyDeduplicator = CreateMethodBodyDeduplicator(_methodBodyFolding);
 
             ObjectDataInterner interner = methodBodyDeduplicator is not null
                 ? new ObjectDataInterner(methodBodyDeduplicator)
                 : ObjectDataInterner.Null;
-
             var factory = new RyuJitNodeFactory(_context, _compilationGroup, _metadataManager, _interopStubManager, _nameMangler, _vtableSliceProvider, _dictionaryLayoutProvider, _inlinedThreadStatics, GetPreinitializationManager(), _devirtualizationManager, interner, methodBodyDeduplicator, _typeMapManager);
 
-            JitConfigProvider.Initialize(_context.Target, jitFlagBuilder.ToArray(), _ryujitOptions, _jitPath);
             DependencyAnalyzerBase<NodeFactory> graph = CreateDependencyGraph(factory, new ObjectNode.ObjectNodeComparer(CompilerComparer.Instance));
             return new RyuJitCompilation(graph,
                 factory,
@@ -162,7 +209,7 @@ namespace ILCompiler
                 _profileDataManager,
                 _methodImportationErrorProvider,
                 _readOnlyFieldPolicy,
-                options,
+                GetRyuJitCompilationOptions(),
                 _methodLayoutAlgorithm,
                 _fileLayoutAlgorithm,
                 _parallelism,

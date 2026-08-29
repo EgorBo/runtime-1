@@ -225,7 +225,7 @@ namespace ILCompiler
 
     public class ILScanResults : CompilationResults
     {
-        internal ILScanResults(DependencyAnalyzerBase<NodeFactory> graph, NodeFactory factory)
+        protected internal ILScanResults(DependencyAnalyzerBase<NodeFactory> graph, NodeFactory factory)
             : base(graph, factory)
         {
         }
@@ -242,9 +242,32 @@ namespace ILCompiler
             return new ScannedVTableProvider(MarkedNodes);
         }
 
-        public DictionaryLayoutProvider GetDictionaryLayoutInfo()
+        public DictionaryLayoutProvider GetDictionaryLayoutInfo(bool optimizeSlots = true)
         {
-            return new ScannedDictionaryLayoutProvider(_factory, MarkedNodes);
+            return new ScannedDictionaryLayoutProvider(_factory, MarkedNodes, optimizeSlots);
+        }
+
+        public IReadOnlyCollection<TypeSystemEntity> GetForcedLazyDictionaryOwners()
+        {
+            var owners = new HashSet<TypeSystemEntity>();
+            foreach (DependencyNodeCore<NodeFactory> node in MarkedNodes)
+            {
+                if (node is DictionaryLayoutNode layoutNode
+                    && layoutNode.HasInvalidEntries(_factory))
+                {
+                    owners.Add(layoutNode.OwningMethodOrType);
+                }
+                else if (node is ReadyToRunGenericHelperNode genericLookup
+                    && genericLookup.HandlesInvalidEntries(_factory))
+                {
+                    owners.Add(genericLookup.DictionaryOwner);
+                }
+            }
+
+            TypeSystemEntity[] result = new TypeSystemEntity[owners.Count];
+            owners.CopyTo(result);
+            Array.Sort(result, static (x, y) => StringComparer.Ordinal.Compare(x.ToString(), y.ToString()));
+            return result;
         }
 
         public DevirtualizationManager GetDevirtualizationManager()
@@ -339,15 +362,27 @@ namespace ILCompiler
             private Dictionary<TypeSystemEntity, (GenericLookupResult[] Slots, GenericLookupResult[] DiscardedSlots)> _layouts = new();
             private HashSet<TypeSystemEntity> _entitiesWithForcedLazyLookups = new HashSet<TypeSystemEntity>();
 
-            public ScannedDictionaryLayoutProvider(NodeFactory factory, ImmutableArray<DependencyNodeCore<NodeFactory>> markedNodes)
+            public ScannedDictionaryLayoutProvider(NodeFactory factory, ImmutableArray<DependencyNodeCore<NodeFactory>> markedNodes, bool optimizeSlots)
             {
                 foreach (var node in markedNodes)
                 {
                     if (node is DictionaryLayoutNode layoutNode)
                     {
                         TypeSystemEntity owningMethodOrType = layoutNode.OwningMethodOrType;
-                        GenericLookupResult[] layout = OptimizeSlots(factory, layoutNode.Entries, out GenericLookupResult[] discarded);
+                        GenericLookupResult[] layout;
+                        GenericLookupResult[] discarded;
+                        if (optimizeSlots)
+                        {
+                            layout = OptimizeSlots(factory, layoutNode.Entries, out discarded);
+                        }
+                        else
+                        {
+                            layout = [..layoutNode.Entries];
+                            discarded = Array.Empty<GenericLookupResult>();
+                        }
                         _layouts.Add(owningMethodOrType, (layout, discarded));
+                        if (layoutNode.HasInvalidEntries(factory))
+                            _entitiesWithForcedLazyLookups.Add(owningMethodOrType);
                     }
                     else if (node is ReadyToRunGenericHelperNode genericLookup
                         && genericLookup.HandlesInvalidEntries(factory))
@@ -414,39 +449,37 @@ namespace ILCompiler
                 return slotBuilder.ToArray();
             }
 
-            private PrecomputedDictionaryLayoutNode GetPrecomputedLayout(TypeSystemEntity methodOrType)
+            public override DictionaryLayoutNode GetLayout(TypeSystemEntity methodOrType)
             {
-                if (!_layouts.TryGetValue(methodOrType, out var layout))
-                {
-                    // If we couldn't find the dictionary layout information for this, it's because the scanner
-                    // didn't correctly predict what will be needed.
-                    // To troubleshoot, compare the dependency graph of the scanner and the compiler.
-                    // Follow the path from the node that requested this node to the root.
-                    // On the path, you'll find a node that exists in both graphs, but it's predecessor
-                    // only exists in the compiler's graph. That's the place to focus the investigation on.
-                    // Use the ILCompiler-DependencyGraph-Viewer tool to investigate.
-                    throw new ScannerFailedException($"Dictionary layout of '{methodOrType}' was not computed by the IL scanner.");
-                }
-                return new PrecomputedDictionaryLayoutNode(methodOrType, layout.Slots, layout.DiscardedSlots);
+                if (TryGetLayout(methodOrType, out DictionaryLayoutNode layout))
+                    return layout;
+
+                // If we couldn't find the dictionary layout information for this, it's because the scanner
+                // didn't correctly predict what will be needed.
+                // To troubleshoot, compare the dependency graph of the scanner and the compiler.
+                // Follow the path from the node that requested this node to the root.
+                // On the path, you'll find a node that exists in both graphs, but it's predecessor
+                // only exists in the compiler's graph. That's the place to focus the investigation on.
+                // Use the ILCompiler-DependencyGraph-Viewer tool to investigate.
+                throw new ScannerFailedException($"Dictionary layout of '{methodOrType}' was not computed by the IL scanner.");
             }
 
-            public override DictionaryLayoutNode GetLayout(TypeSystemEntity methodOrType)
+            public override bool TryGetLayout(TypeSystemEntity methodOrType, out DictionaryLayoutNode layout)
             {
                 if (_entitiesWithForcedLazyLookups.Contains(methodOrType))
                 {
-                    return new LazilyBuiltDictionaryLayoutNode(methodOrType);
+                    layout = new LazilyBuiltDictionaryLayoutNode(methodOrType);
+                    return true;
                 }
 
-                if (methodOrType is TypeDesc type)
+                if (_layouts.TryGetValue(methodOrType, out var scannedLayout))
                 {
-                    return GetPrecomputedLayout(type);
+                    layout = new PrecomputedDictionaryLayoutNode(methodOrType, scannedLayout.Slots, scannedLayout.DiscardedSlots);
+                    return true;
                 }
-                else
-                {
-                    Debug.Assert(methodOrType is MethodDesc);
-                    MethodDesc method = (MethodDesc)methodOrType;
-                    return GetPrecomputedLayout(method);
-                }
+
+                layout = null;
+                return false;
             }
         }
 
@@ -860,10 +893,10 @@ namespace ILCompiler
             {
                 foreach (var markedNode in markedNodes)
                 {
-                    if (markedNode is ScannedMethodNode scannedMethod
-                        && scannedMethod.Exception != null)
+                    if (markedNode is IMethodBodyNodeWithCompilationError methodBody
+                        && methodBody.CompilationError != null)
                     {
-                        _importationErrors.Add(scannedMethod.Method, scannedMethod.Exception);
+                        _importationErrors.Add(methodBody.Method, methodBody.CompilationError);
                     }
                 }
             }

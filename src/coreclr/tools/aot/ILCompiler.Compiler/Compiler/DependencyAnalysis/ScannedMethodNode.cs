@@ -15,10 +15,18 @@ using Debug = System.Diagnostics.Debug;
 namespace ILCompiler.DependencyAnalysis
 {
     /// <summary>
+    /// Identifies a scanned method body that was replaced with a throwing body after importation failed.
+    /// </summary>
+    public interface IMethodBodyNodeWithCompilationError : IMethodBodyNode
+    {
+        TypeSystemException CompilationError { get; }
+    }
+
+    /// <summary>
     /// Represents a method that should be scanned by an IL scanner and its dependencies
     /// analyzed.
     /// </summary>
-    public class ScannedMethodNode : DependencyNodeCore<NodeFactory>, IMethodBodyNode
+    public class ScannedMethodNode : DependencyNodeCore<NodeFactory>, IMethodBodyNodeWithCompilationError
     {
         private readonly MethodDesc _method;
         private DependencyList _dependencies;
@@ -38,6 +46,8 @@ namespace ILCompiler.DependencyAnalysis
         public MethodDesc Method => _method;
 
         public TypeSystemException Exception => _exception;
+
+        TypeSystemException IMethodBodyNodeWithCompilationError.CompilationError => _exception;
 
         public int Offset => 0;
 

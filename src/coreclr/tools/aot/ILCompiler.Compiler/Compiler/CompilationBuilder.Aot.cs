@@ -147,6 +147,11 @@ namespace ILCompiler
         {
             return new ILScannerBuilder(_context, compilationGroup ?? _compilationGroup, _nameMangler, GetILProvider(), GetPreinitializationManager());
         }
+
+        public virtual IILScannerBuilder GetCodegenILScannerBuilder(CompilationModuleGroup compilationGroup = null, bool allowNewGenericDictionaryEntries = false)
+        {
+            return GetILScannerBuilder(compilationGroup);
+        }
     }
 
     [Flags]

@@ -18,9 +18,11 @@ using Internal.IL.Stubs;
 using Internal.TypeSystem;
 using Internal.JitInterface;
 
+using DependencyList = ILCompiler.DependencyAnalysisFramework.DependencyNodeCore<ILCompiler.DependencyAnalysis.NodeFactory>.DependencyList;
+
 namespace ILCompiler
 {
-    public sealed class RyuJitCompilation : Compilation
+    public class RyuJitCompilation : Compilation
     {
         private readonly ConditionalWeakTable<Thread, CorInfoImpl> _corinfos = new ConditionalWeakTable<Thread, CorInfoImpl>();
         internal readonly RyuJitCompilationOptions _compilationOptions;
@@ -68,6 +70,10 @@ namespace ILCompiler
         public ProfileDataManager ProfileData => _profileDataManager;
 
         public bool IsInitOnly(FieldDesc field) => _readOnlyFieldPolicy.IsReadOnly(field);
+
+        internal virtual void AddDependenciesDueToGenericLookup(ref DependencyList dependencies, MethodDesc contextMethod, GenericLookupResult lookupSignature)
+        {
+        }
 
         public override IEETypeNode NecessaryTypeSymbolIfPossible(TypeDesc type)
         {
@@ -213,21 +219,27 @@ namespace ILCompiler
 
             if (exception != null)
             {
-                if (exception is TypeSystemException.InvalidProgramException
-                    && method.OwningType is MetadataType mdOwningType
-                    && mdOwningType.HasCustomAttribute("System.Runtime.InteropServices", "ClassInterfaceAttribute"))
-                {
-                    Logger.LogWarning(method, DiagnosticId.COMInteropNotSupportedInFullAOT);
-                }
-                if ((_compilationOptions & RyuJitCompilationOptions.UseResilience) != 0)
-                    Logger.LogMessage($"Method '{method}' will always throw because: {exception.Message}");
-                else
-                    Logger.LogError($"Method will always throw because: {exception.Message}", 1005, method, MessageSubCategory.AotAnalysis);
+                methodCodeNodeNeedingCode.SetCompilationError(exception);
+                ReportCompilationError(method, exception);
 
                 // Try to compile the method again, but with a throwing method body this time.
                 MethodIL throwingIL = TypeSystemThrowingILEmitter.EmitIL(method, exception);
                 corInfo.CompileMethod(methodCodeNodeNeedingCode, throwingIL);
             }
+        }
+
+        protected virtual void ReportCompilationError(MethodDesc method, TypeSystemException exception)
+        {
+            if (exception is TypeSystemException.InvalidProgramException
+                && method.OwningType is MetadataType mdOwningType
+                && mdOwningType.HasCustomAttribute("System.Runtime.InteropServices", "ClassInterfaceAttribute"))
+            {
+                Logger.LogWarning(method, DiagnosticId.COMInteropNotSupportedInFullAOT);
+            }
+            if ((_compilationOptions & RyuJitCompilationOptions.UseResilience) != 0)
+                Logger.LogMessage($"Method '{method}' will always throw because: {exception.Message}");
+            else
+                Logger.LogError($"Method will always throw because: {exception.Message}", 1005, method, MessageSubCategory.AotAnalysis);
         }
     }
 

@@ -281,7 +281,8 @@ namespace Internal.JitInterface
 
             if (_compilation.NeedsRuntimeLookup(helperId, entity))
             {
-                GenericDictionaryLookup genericLookup = _compilation.ComputeGenericLookup(callerHandle, helperId, entity);
+                GenericDictionaryLookup genericLookup = _compilation.ComputeGenericLookup(callerHandle, helperId, entity, out GenericLookupResult lookupSignature);
+                _compilation.AddDependenciesDueToGenericLookup(ref _additionalDependencies, callerHandle, lookupSignature);
 
                 lookup.lookupKind.needsRuntimeLookup = true;
                 lookup.lookupKind.runtimeLookupKind = GetLookupKindFromContextSource(genericLookup.ContextSource);

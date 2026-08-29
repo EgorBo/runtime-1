@@ -112,7 +112,10 @@ namespace ILCompiler.DependencyAnalysis
             return true;
         }
 
-        public virtual void EmitDictionaryEntry(ref ObjectDataBuilder builder, NodeFactory factory, GenericLookupResultContext dictionary, GenericDictionaryNode dictionaryNode)
+        /// <summary>
+        /// Emits a concrete dictionary entry and returns whether a non-null target was emitted.
+        /// </summary>
+        public virtual bool EmitDictionaryEntry(ref ObjectDataBuilder builder, NodeFactory factory, GenericLookupResultContext dictionary, GenericDictionaryNode dictionaryNode)
         {
             ISymbolNode target;
             try
@@ -129,10 +132,12 @@ namespace ILCompiler.DependencyAnalysis
             if (target == null)
             {
                 builder.EmitZeroPointer();
+                return false;
             }
             else
             {
                 builder.EmitPointerReloc(target);
+                return true;
             }
         }
 

@@ -12,6 +12,15 @@ namespace ILCompiler
     public abstract class DictionaryLayoutProvider
     {
         public abstract DictionaryLayoutNode GetLayout(TypeSystemEntity methodOrType);
+
+        /// <summary>
+        /// Attempts to get a dictionary layout, allowing providers with a closed result set to report a missing layout.
+        /// </summary>
+        public virtual bool TryGetLayout(TypeSystemEntity methodOrType, out DictionaryLayoutNode layout)
+        {
+            layout = GetLayout(methodOrType);
+            return true;
+        }
     }
 
     /// <summary>

@@ -56,6 +56,8 @@ namespace ILCompiler.DependencyAnalysis
 
         public override IEnumerable<DependencyListEntry> GetStaticDependencies(NodeFactory context)
         {
+            yield return new DependencyListEntry(context.NecessaryTypeSymbol(TypeMapGroup), "External type map group");
+
             foreach (var entry in _mapEntries)
             {
                 var (targetType, trimmingTargetType) = entry.Value;

@@ -31,6 +31,7 @@
     <Compile Include="Compiler\ProfileDataManager.cs" />
     <Compile Include="Compiler\RyuJitCompilation.cs" />
     <Compile Include="Compiler\RyuJitCompilationBuilder.cs" />
+    <Compile Include="Compiler\RyuJitILScanner.cs" />
     <Compile Include="JitInterface\CorInfoImpl.RyuJit.cs" />
   </ItemGroup>
 

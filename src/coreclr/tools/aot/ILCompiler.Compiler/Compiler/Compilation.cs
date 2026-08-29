@@ -378,6 +378,11 @@ namespace ILCompiler
 
         public GenericDictionaryLookup ComputeGenericLookup(MethodDesc contextMethod, ReadyToRunHelperId lookupKind, object targetOfLookup)
         {
+            return ComputeGenericLookup(contextMethod, lookupKind, targetOfLookup, out _);
+        }
+
+        public GenericDictionaryLookup ComputeGenericLookup(MethodDesc contextMethod, ReadyToRunHelperId lookupKind, object targetOfLookup, out GenericLookupResult lookupSignature)
+        {
             if (targetOfLookup is TypeSystemEntity typeSystemEntity)
             {
                 _nodeFactory.TypeSystemContext.DetectGenericCycles(contextMethod, typeSystemEntity);
@@ -423,13 +428,14 @@ namespace ILCompiler
             else
                 dictionaryLayout = _nodeFactory.GenericDictionaryLayout(contextMethod.OwningType);
 
+            lookupSignature = ReadyToRunGenericHelperNode.GetLookupSignature(_nodeFactory, lookupKind, targetOfLookup);
+
             // If the dictionary layout has fixed slots, we can compute the lookup now. Otherwise defer to helper.
             if (dictionaryLayout.HasFixedSlots)
             {
                 int pointerSize = _nodeFactory.Target.PointerSize;
 
-                GenericLookupResult lookup = ReadyToRunGenericHelperNode.GetLookupSignature(_nodeFactory, lookupKind, targetOfLookup);
-                if (dictionaryLayout.TryGetSlotForEntry(lookup, out int dictionarySlot))
+                if (dictionaryLayout.TryGetSlotForEntry(lookupSignature, out int dictionarySlot))
                 {
                     int dictionaryOffset = dictionarySlot * pointerSize;
 

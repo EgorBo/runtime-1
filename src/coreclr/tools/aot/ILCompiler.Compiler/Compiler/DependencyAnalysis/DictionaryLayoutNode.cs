@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 
 using Internal.TypeSystem;
 
@@ -24,6 +25,7 @@ namespace ILCompiler.DependencyAnalysis
     public abstract class DictionaryLayoutNode : DependencyNodeCore<NodeFactory>
     {
         private readonly TypeSystemEntity _owningMethodOrType;
+        private int _hasInvalidEntries;
 
         public DictionaryLayoutNode(TypeSystemEntity owningMethodOrType)
         {
@@ -93,6 +95,12 @@ namespace ILCompiler.DependencyAnalysis
 
         public TypeSystemEntity OwningMethodOrType => _owningMethodOrType;
 
+        internal bool HasInvalidEntries(NodeFactory factory)
+        {
+            Debug.Assert(factory.MarkingComplete);
+            return Volatile.Read(ref _hasInvalidEntries) != 0;
+        }
+
         /// <summary>
         /// Gets a value indicating whether the slot assignment is determined at the node creation time.
         /// </summary>
@@ -129,7 +137,12 @@ namespace ILCompiler.DependencyAnalysis
                 int offsetBefore = builder.CountBytes;
 #endif
 
-                lookupResult.EmitDictionaryEntry(ref builder, factory, context, dictionary);
+                if (!lookupResult.EmitDictionaryEntry(ref builder, factory, context, dictionary))
+                {
+                    Interlocked.Exchange(ref _hasInvalidEntries, 1);
+                    if (HasFixedSlots && !HasUnfixedSlots)
+                        throw new InvalidOperationException($"Unable to emit fixed dictionary entry '{lookupResult}' for '{OwningMethodOrType}'.");
+                }
 
 #if DEBUG
                 Debug.Assert(builder.CountBytes - offsetBefore == factory.Target.PointerSize);
