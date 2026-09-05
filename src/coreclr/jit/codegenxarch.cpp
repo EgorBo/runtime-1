@@ -5335,12 +5335,11 @@ void CodeGen::genCodeForStoreInd(GenTreeStoreInd* tree)
             return;
         }
 
-        // At this point, we should not have any interference.
-        // That is, 'data' must not be in REG_WRITE_BARRIER_DST, as that is where 'addr' must go.
-        noway_assert(data->GetRegNum() != REG_WRITE_BARRIER_DST);
+        regNumber dstReg = m_compiler->compGetWriteBarrierDstReg();
+        // At this point, 'data' must not interfere with the destination register.
+        noway_assert(data->GetRegNum() != dstReg);
 
-        // addr goes in REG_WRITE_BARRIER_DST
-        genCopyRegIfNeeded(addr, REG_WRITE_BARRIER_DST);
+        genCopyRegIfNeeded(addr, dstReg);
 
         // data goes in REG_WRITE_BARRIER_SRC
         genCopyRegIfNeeded(data, REG_WRITE_BARRIER_SRC);

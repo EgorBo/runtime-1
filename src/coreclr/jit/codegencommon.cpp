@@ -911,6 +911,24 @@ void CodeGenInterface::genUpdateRegLife(const LclVarDsc* varDsc, bool isBorn, bo
 }
 
 #ifndef TARGET_WASM
+//------------------------------------------------------------------------
+// compGetWriteBarrierDstReg: Get the destination register for a reference write barrier.
+//
+// Return Value:
+//    The destination register required by the target runtime's write barrier ABI.
+//
+regNumber Compiler::compGetWriteBarrierDstReg()
+{
+#ifdef TARGET_AMD64
+    if (TargetOS::IsWindows && IsTargetAbi(CORINFO_NATIVEAOT_ABI))
+    {
+        return REG_WRITE_BARRIER_DST_NATIVEAOT;
+    }
+#endif // TARGET_AMD64
+
+    return REG_WRITE_BARRIER_DST;
+}
+
 //----------------------------------------------------------------------
 // compHelperCallKillSet: Gets a register mask that represents the kill set for a helper call.
 // Not all JIT Helper calls follow the standard ABI on the target architecture.
@@ -933,6 +951,12 @@ regMaskTP Compiler::compHelperCallKillSet(CorInfoHelpFunc helper)
         //
         case CORINFO_HELP_ASSIGN_REF:
         case CORINFO_HELP_CHECKED_ASSIGN_REF:
+#ifdef TARGET_AMD64
+            if (TargetOS::IsWindows && IsTargetAbi(CORINFO_NATIVEAOT_ABI))
+            {
+                return RBM_CALLEE_TRASH_WRITEBARRIER_NATIVEAOT;
+            }
+#endif // TARGET_AMD64
             return RBM_CALLEE_TRASH_WRITEBARRIER;
 
         case CORINFO_HELP_PROF_FCN_ENTER:

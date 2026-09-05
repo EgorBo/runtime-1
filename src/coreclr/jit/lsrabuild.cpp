@@ -4526,7 +4526,7 @@ int LinearScan::BuildGCWriteBarrier(GenTree* tree)
     // is an indir through an lea, we need to actually instantiate the
     // lea in a register
     assert(!addr->isContained() && !src->isContained());
-    SingleTypeRegSet addrCandidates = RBM_WRITE_BARRIER_DST.GetIntRegSet();
+    SingleTypeRegSet addrCandidates = genSingleTypeRegMask(m_compiler->compGetWriteBarrierDstReg());
     SingleTypeRegSet srcCandidates  = RBM_WRITE_BARRIER_SRC.GetIntRegSet();
 
 #if defined(TARGET_X86) && NOGC_WRITE_BARRIERS

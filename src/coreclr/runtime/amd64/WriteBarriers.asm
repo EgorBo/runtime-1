@@ -3,6 +3,14 @@
 
 include AsmMacros_Shared.inc
 
+ifdef FEATURE_NATIVEAOT
+WB_DST_REG TEXTEQU <r10>
+WB_TMP_REG TEXTEQU <r9>
+else
+WB_DST_REG TEXTEQU <rcx>
+WB_TMP_REG TEXTEQU <r10>
+endif
+
 ;; Macro used to copy contents of newly updated GC heap locations to a shadow copy of the heap. This is used
 ;; during garbage collections to verify that object references where never written to the heap without using a
 ;; write barrier. Note that we're potentially racing to update the shadow heap while other threads are writing
@@ -90,27 +98,25 @@ endm
 
 endif ; WRITE_BARRIER_CHECK
 
-;; There are several different helpers used depending on which register holds the object reference. Since all
-;; the helpers have identical structure we use a macro to define this structure. Two arguments are taken, the
-;; name of the register that points to the location to be updated and the name of the register that holds the
-;; object reference (this should be in upper case as it's used in the definition of the name of the helper).
-DEFINE_UNCHECKED_WRITE_BARRIER_CORE macro BASENAME, REFREG
+;; Share the card-table update while allowing NativeAOT stores to use different registers
+;; from the atomic helpers, which retain their normal calling convention.
+DEFINE_UNCHECKED_WRITE_BARRIER_CORE macro BASENAME, REFREG, DESTREG, TEMPREG
 
     ;; Update the shadow copy of the heap with the same value just written to the same heap. (A no-op unless
     ;; we're in a debug build and write barrier checking has been enabled).
-    UPDATE_GC_SHADOW BASENAME, REFREG, rcx
+    UPDATE_GC_SHADOW BASENAME, REFREG, DESTREG
 
 ifdef FEATURE_USE_SOFTWARE_WRITE_WATCH_FOR_GC_HEAP
     mov     r11, [g_write_watch_table]
     cmp     r11, 0
     je      &BASENAME&_CheckCardTable_&REFREG&
 
-    mov     r10, rcx
-    shr     r10, 0Ch ;; SoftwareWriteWatch::AddressToTableByteIndexShift
-    add     r10, r11
-    cmp     byte ptr [r10], 0
+    mov     TEMPREG, DESTREG
+    shr     TEMPREG, 0Ch ;; SoftwareWriteWatch::AddressToTableByteIndexShift
+    add     TEMPREG, r11
+    cmp     byte ptr [TEMPREG], 0
     jne     &BASENAME&_CheckCardTable_&REFREG&
-    mov     byte ptr [r10], 0FFh
+    mov     byte ptr [TEMPREG], 0FFh
 endif
 
 &BASENAME&_CheckCardTable_&REFREG&:
@@ -126,22 +132,22 @@ endif
     ;; track this write. The location address is translated into an offset in the card table bitmap. We set
     ;; an entire byte in the card table since it's quicker than messing around with bitmasks and we only write
     ;; the byte if it hasn't already been done since writes are expensive and impact scaling.
-    shr     rcx, 0Bh
-    mov     r10, [g_card_table]
-    cmp     byte ptr [rcx + r10], 0FFh
+    shr     DESTREG, 0Bh
+    mov     TEMPREG, [g_card_table]
+    cmp     byte ptr [DESTREG + TEMPREG], 0FFh
     je      &BASENAME&_NoBarrierRequired_&REFREG&
 
     ;; We get here if it's necessary to update the card table.
-    mov     byte ptr [rcx + r10], 0FFh
+    mov     byte ptr [DESTREG + TEMPREG], 0FFh
 
 ifdef FEATURE_MANUALLY_MANAGED_CARD_BUNDLES
-    ;; Shift rcx by 0Ah more to get the card bundle byte (we shifted by 0x0B already)
-    shr     rcx, 0Ah
-    add     rcx, [g_card_bundle_table]
-    cmp     byte ptr [rcx], 0FFh
+    ;; Shift the destination by 0Ah more to get the card bundle byte (we shifted by 0x0B already).
+    shr     DESTREG, 0Ah
+    add     DESTREG, [g_card_bundle_table]
+    cmp     byte ptr [DESTREG], 0FFh
     je      &BASENAME&_NoBarrierRequired_&REFREG&
 
-    mov     byte ptr [rcx], 0FFh
+    mov     byte ptr [DESTREG], 0FFh
 endif
 
 &BASENAME&_NoBarrierRequired_&REFREG&:
@@ -172,9 +178,9 @@ LEAF_ENTRY RhpAssignRef&EXPORT_REG_NAME&, _TEXT
 
     ;; Write the reference into the location. Note that we rely on the fact that no GC can occur between here
     ;; and the card table update we may perform below.
-    mov     qword ptr [rcx], REFREG
+    mov     qword ptr [WB_DST_REG], REFREG
 
-    DEFINE_UNCHECKED_WRITE_BARRIER_CORE RhpAssignRef, REFREG
+    DEFINE_UNCHECKED_WRITE_BARRIER_CORE RhpAssignRef, REFREG, WB_DST_REG, WB_TMP_REG
 
 LEAF_END RhpAssignRef&EXPORT_REG_NAME&, _TEXT
 endm
@@ -190,16 +196,16 @@ DEFINE_UNCHECKED_WRITE_BARRIER RDX, EDX
 ;; collection.
 ;;
 
-DEFINE_CHECKED_WRITE_BARRIER_CORE macro BASENAME, REFREG
+DEFINE_CHECKED_WRITE_BARRIER_CORE macro BASENAME, REFREG, DESTREG, TEMPREG
 
     ;; The location being updated might not even lie in the GC heap (a handle or stack location for instance),
     ;; in which case no write barrier is required.
-    cmp     rcx, [g_lowest_address]
+    cmp     DESTREG, [g_lowest_address]
     jb      &BASENAME&_NoBarrierRequired_&REFREG&
-    cmp     rcx, [g_highest_address]
+    cmp     DESTREG, [g_highest_address]
     jae     &BASENAME&_NoBarrierRequired_&REFREG&
 
-    DEFINE_UNCHECKED_WRITE_BARRIER_CORE BASENAME, REFREG
+    DEFINE_UNCHECKED_WRITE_BARRIER_CORE BASENAME, REFREG, DESTREG, TEMPREG
 
 endm
 
@@ -210,7 +216,7 @@ endm
 DEFINE_CHECKED_WRITE_BARRIER macro REFREG, EXPORT_REG_NAME
 
 ;; Define a helper with a name of the form RhpCheckedAssignRefEAX etc. (along with suitable calling standard
-;; decoration). The location to be updated is always in RCX. The object reference that will be assigned into
+;; decoration). The location to be updated is in WB_DST_REG. The object reference that will be assigned into
 ;; that location is in one of the other general registers determined by the value of REFREG.
 
 ;; WARNING: Code in EHHelpers.cpp makes assumptions about write barrier code, in particular:
@@ -226,9 +232,9 @@ LEAF_ENTRY RhpCheckedAssignRef&EXPORT_REG_NAME&, _TEXT
 
     ;; Write the reference into the location. Note that we rely on the fact that no GC can occur between here
     ;; and the card table update we may perform below.
-    mov     qword ptr [rcx], REFREG
+    mov     qword ptr [WB_DST_REG], REFREG
 
-    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedAssignRef, REFREG
+    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedAssignRef, REFREG, WB_DST_REG, WB_TMP_REG
 
 LEAF_END RhpCheckedAssignRef&EXPORT_REG_NAME&, _TEXT
 endm
@@ -242,7 +248,7 @@ LEAF_ENTRY RhpCheckedLockCmpXchg, _TEXT
     lock cmpxchg    [rcx], rdx
     jne             RhpCheckedLockCmpXchg_NoBarrierRequired_RDX
 
-    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedLockCmpXchg, RDX
+    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedLockCmpXchg, RDX, rcx, r10
 
 LEAF_END RhpCheckedLockCmpXchg, _TEXT
 
@@ -253,7 +259,7 @@ LEAF_ENTRY RhpCheckedXchg, _TEXT
     mov             rax, rdx
     xchg            [rcx], rax
 
-    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedXchg, RDX
+    DEFINE_CHECKED_WRITE_BARRIER_CORE RhpCheckedXchg, RDX, rcx, r10
 
 LEAF_END RhpCheckedXchg, _TEXT
 

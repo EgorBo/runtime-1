@@ -10777,7 +10777,11 @@ regMaskTP emitter::emitGetGCRegsKilledByNoGCCall(CorInfoHelpFunc helper)
     {
         case CORINFO_HELP_ASSIGN_REF:
         case CORINFO_HELP_CHECKED_ASSIGN_REF:
+#ifdef TARGET_AMD64
+            result = m_compiler->compHelperCallKillSet(helper);
+#else
             result = RBM_CALLEE_GCTRASH_WRITEBARRIER;
+#endif // TARGET_AMD64
             break;
 
 #if !defined(TARGET_LOONGARCH64) && !defined(TARGET_RISCV64)

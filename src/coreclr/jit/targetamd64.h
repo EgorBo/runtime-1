@@ -183,7 +183,7 @@
 #define RBM_CALLEE_TRASH        (RBM_INT_CALLEE_TRASH | RBM_FLT_CALLEE_TRASH | RBM_MSK_CALLEE_TRASH)
 #define RBM_CALLEE_SAVED        (RBM_INT_CALLEE_SAVED | RBM_FLT_CALLEE_SAVED | RBM_MSK_CALLEE_SAVED)
 
-// AMD64 write barrier ABI (see vm\amd64\JitHelpers_FastWriteBarriers.{asm,S},
+// CoreCLR AMD64 write barrier ABI (see vm\amd64\JitHelpers_FastWriteBarriers.{asm,S},
 // vm\amd64\patchedcode.{asm,S}, vm\amd64\JitHelpers_Slow.asm,
 // runtime\amd64\WriteBarriers.{asm,S}):
 //
@@ -198,7 +198,7 @@
 //       All integer callee-trash registers: must be considered clobbered. RAX, R8 and R9
 //           are unconditionally used by some variant. R10/R11 are touched by the _DEBUG
 //           variant (JIT_WriteBarrier_Debug) and by the RhpAssignRef path that runs when
-//           DOTNET_UseGCWriteBarrierCopy=0.
+//           DOTNET_UseGCWriteBarrierCopy=0, as well as the SysV write-watch variants.
 //       Flags: clobbered.
 //       XMM/YMM/ZMM/mask registers: PRESERVED. The write barrier helpers never execute
 //           any SSE/AVX/AVX-512/EVEX-mask instruction, so no FP/SIMD/mask register is
@@ -223,6 +223,10 @@
 
 // Registers no longer containing GC pointers after CORINFO_HELP_ASSIGN_REF and CORINFO_HELP_CHECKED_ASSIGN_REF.
 #define RBM_CALLEE_GCTRASH_WRITEBARRIER       RBM_INT_CALLEE_TRASH_INIT
+
+// Windows NativeAOT barriers use R10 for the destination and preserve the source in RDX.
+#define REG_WRITE_BARRIER_DST_NATIVEAOT          REG_R10
+#define RBM_CALLEE_TRASH_WRITEBARRIER_NATIVEAOT   (RBM_R9 | RBM_R10 | RBM_R11)
 
 // We have two register classifications
 // * callee trash: aka     volatile or caller saved
