@@ -9,8 +9,8 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Text;
-using System.Text.Unicode;
 
 namespace System
 {
@@ -753,244 +753,283 @@ namespace System
         // Important GetNonRandomizedHashCode{OrdinalIgnoreCase} notes:
         //
         // Use if and only if 'Denial of Service' attacks are not a concern (i.e. never used for free-form user input),
-        // or are otherwise mitigated.
+        // or are otherwise mitigated. Dictionary<> upgrades to the randomized Marvin hash once a bucket collides too
+        // often, so these only have to be fast and well distributed.
         //
-        // The string-based implementation relies on System.String being null terminated. All reads are performed
-        // two characters at a time, so for odd-length strings, the final read will include the null terminator.
-        // This implementation must not be used as-is with spans, or otherwise arbitrary char refs/pointers, as
-        // they're not guaranteed to be null-terminated.
-        //
-        // For spans, we must produce the exact same value as is used for strings: consumers like Dictionary<>
-        // rely on str.GetNonRandomizedHashCode() == GetNonRandomizedHashCode(str.AsSpan()). As such, we must
-        // restructure the comparison so that for odd-length spans, we simulate the null terminator and include
-        // it in the hash computation exactly as does str.GetNonRandomizedHashCode().
+        // Consumers like Dictionary<> rely on str.GetNonRandomizedHashCode() == GetNonRandomizedHashCode(str.AsSpan()),
+        // so strings and spans run the exact same code. Characters are consumed two at a time; an odd trailing
+        // character is padded with a zero, which for strings is just their null terminator.
 
-        internal unsafe int GetNonRandomizedHashCode()
-        {
-            fixed (char* src = &_firstChar)
-            {
-                Debug.Assert(src[Length] == '\0', "src[Length] == '\\0'");
-                Debug.Assert(((int)src) % 4 == 0, "Managed string should start at 4 bytes boundary");
-
-                uint hash1 = (5381 << 16) + 5381;
-                uint hash2 = hash1;
-
-                uint* ptr = (uint*)src;
-                int length = Length;
-
-                while (length > 2)
-                {
-                    length -= 4;
-                    hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ ptr[0];
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ ptr[1];
-                    ptr += 2;
-                }
-
-                if (length > 0)
-                {
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ ptr[0];
-                }
-
-                return (int)(hash1 + (hash2 * 1566083941));
-            }
-        }
-
-        internal static unsafe int GetNonRandomizedHashCode(ReadOnlySpan<char> span)
-        {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
-
-            int length = span.Length;
-            fixed (char* src = &MemoryMarshal.GetReference(span))
-            {
-                uint* ptr = (uint*)src;
-
-                LengthSwitch:
-                switch (length)
-                {
-                    default:
-                        do
-                        {
-                            length -= 4;
-                            hash1 = BitOperations.RotateLeft(hash1, 5) + hash1 ^ Unsafe.ReadUnaligned<uint>(ptr);
-                            hash2 = BitOperations.RotateLeft(hash2, 5) + hash2 ^ Unsafe.ReadUnaligned<uint>(ptr + 1);
-                            ptr += 2;
-                        }
-                        while (length >= 4);
-                        goto LengthSwitch;
-
-                    case 3:
-                        hash1 = BitOperations.RotateLeft(hash1, 5) + hash1 ^ Unsafe.ReadUnaligned<uint>(ptr);
-                        uint p1 = *(char*)(ptr + 1);
-                        if (!BitConverter.IsLittleEndian)
-                        {
-                            p1 <<= 16;
-                        }
-
-                        hash2 = BitOperations.RotateLeft(hash2, 5) + hash2 ^ p1;
-                        break;
-
-                    case 2:
-                        hash2 = BitOperations.RotateLeft(hash2, 5) + hash2 ^ Unsafe.ReadUnaligned<uint>(ptr);
-                        break;
-
-                    case 1:
-                        uint p0 = *(char*)ptr;
-                        if (!BitConverter.IsLittleEndian)
-                        {
-                            p0 <<= 16;
-                        }
-
-                        hash2 = BitOperations.RotateLeft(hash2, 5) + hash2 ^ p0;
-                        break;
-
-                    case 0:
-                        break;
-                }
-            }
-
-            return (int)(hash1 + (hash2 * 1_566_083_941));
-        }
+        private const uint NonRandomizedSeed1 = 0x9E3779B9;
+        private const uint NonRandomizedSeed2 = 0x85EBCA77;
+        private const ulong NonRandomizedMul1 = 0xC2B2AE3D27D4EB4F;
+        private const ulong NonRandomizedMul2 = 0xD6E8FEB86659FD93;
 
         // We "normalize to lowercase" every char by ORing with 0x0020. This casts
         // a very wide net because it will change, e.g., '^' to '~'. But that should
         // be ok because we expect this to be very rare in practice. These are valid
         // for both for big-endian and for little-endian.
         private const uint NormalizeToLowercase = 0x0020_0020u;
+        private const uint NonAsciiChars = 0xFF80_FF80u;
 
-        internal unsafe int GetNonRandomizedHashCodeOrdinalIgnoreCase()
+        // Only the vectorized path is generic over this: it lets the ORs and the ASCII tracking fold away
+        // for the case sensitive instantiation.
+        private interface INonRandomizedCasing
         {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
+            static abstract uint Mask { get; }
+        }
 
+        private readonly struct CaseSensitive : INonRandomizedCasing
+        {
+            public static uint Mask => 0;
+        }
+
+        private readonly struct CaseInsensitive : INonRandomizedCasing
+        {
+            public static uint Mask => NormalizeToLowercase;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint NonRandomizedRound(uint hash, uint value) =>
+            (BitOperations.RotateLeft(hash, 5) + hash) ^ value;
+
+        // Slicing to exactly two chars keeps the length arithmetic inside MemoryMarshal constant, otherwise
+        // its overflow and length checks survive into the loop body.
+        // TODO: read 'chars[0] | ((uint)chars[1] << 16)' instead once the JIT coalesces adjacent element loads.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint NonRandomizedRead(ReadOnlySpan<ushort> chars) =>
+            MemoryMarshal.Read<uint>(MemoryMarshal.AsBytes(chars.Slice(0, 2)));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint NonRandomizedRead(ref ushort chars) =>
+            Unsafe.ReadUnaligned<uint>(ref Unsafe.As<ushort, byte>(ref chars));
+
+        // A trailing char padded with the zero that a string's null terminator would have provided.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint NonRandomizedReadLast(ReadOnlySpan<ushort> chars) =>
+            BitConverter.IsLittleEndian ? chars[0] : (uint)chars[0] << 16;
+
+        // Taking the upper half of the products is what spreads the accumulators over the whole result.
+        // Combining them with 32-bit arithmetic would leave the low bits of the hash code depending on the
+        // low bits of the first characters only. The length picks one of many odd multipliers, which keeps
+        // it off the dependency chain; the vectorized path needs it because its overlapping trailing block
+        // does not otherwise tell e.g. a key padded to 17 chars from the same key padded to 24.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int NonRandomizedFinish(ulong hash1, ulong hash2, int length) =>
+            (int)(uint)(((hash1 * (NonRandomizedMul1 + (uint)(length << 1))) + (hash2 * NonRandomizedMul2)) >> 32);
+
+        // A string is null terminated, so an odd length may be rounded up to have the final read pick that
+        // terminator up rather than going through NonRandomizedReadLast.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ReadOnlySpan<ushort> NonRandomizedChars(int length) =>
+            MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<char, ushort>(ref _firstChar), length);
+
+        // Reads two chars at a time; odd lengths pick up the null terminator. Kept small and loop shaped so
+        // that it still inlines into Dictionary<> and unrolls for constant keys.
+        internal int GetNonRandomizedHashCode()
+        {
             int length = Length;
-            fixed (char* src = &_firstChar)
+            if (length > 8)
             {
-                Debug.Assert(src[Length] == '\0', "src[this.Length] == '\\0'");
-                Debug.Assert(((int) src) % 4 == 0, "Managed string should start at 4 bytes boundary");
-
-                uint* ptr = (uint*) src;
-
-                while (length > 2)
-                {
-                    uint p0 = ptr[0];
-                    uint p1 = ptr[1];
-                    if (!Utf16Utility.AllCharsInUInt32AreAscii(p0 | p1))
-                    {
-                        goto NotAscii;
-                    }
-
-                    length -= 4;
-                    hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ (p0 | NormalizeToLowercase);
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p1 | NormalizeToLowercase);
-                    ptr += 2;
-                }
-
-                if (length > 0)
-                {
-                    uint p0 = ptr[0];
-                    if (!Utf16Utility.AllCharsInUInt32AreAscii(p0))
-                    {
-                        goto NotAscii;
-                    }
-
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p0 | NormalizeToLowercase);
-                }
+                return NonRandomizedHashLong<CaseSensitive>(NonRandomizedChars(length), this);
             }
 
-            return (int)(hash1 + (hash2 * 1566083941));
+            ref ushort chars = ref Unsafe.As<char, ushort>(ref _firstChar);
+            uint hash1 = NonRandomizedSeed1;
+            uint hash2 = NonRandomizedSeed2;
 
-        NotAscii:
-            return GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(hash1, hash2, this.AsSpan(Length - length));
+            while (length > 2)
+            {
+                hash1 = NonRandomizedRound(hash1, NonRandomizedRead(ref chars));
+                hash2 = NonRandomizedRound(hash2, NonRandomizedRead(ref Unsafe.Add(ref chars, 2)));
+                chars = ref Unsafe.Add(ref chars, 4);
+                length -= 4;
+            }
+
+            if (length > 0)
+            {
+                hash2 = NonRandomizedRound(hash2, NonRandomizedRead(ref chars));
+            }
+
+            return NonRandomizedFinish(hash1, hash2, Length);
         }
 
-        internal static unsafe int GetNonRandomizedHashCodeOrdinalIgnoreCase(ReadOnlySpan<char> span)
+        internal static int GetNonRandomizedHashCode(ReadOnlySpan<char> value)
         {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
-
-            uint p0, p1;
-            int length = span.Length;
-
-            fixed (char* src = &MemoryMarshal.GetReference(span))
-            {
-                uint* ptr = (uint*)src;
-
-                LengthSwitch:
-                switch (length)
-                {
-                    default:
-                        do
-                        {
-                            p0 = Unsafe.ReadUnaligned<uint>(ptr);
-                            p1 = Unsafe.ReadUnaligned<uint>(ptr + 1);
-                            if (!Utf16Utility.AllCharsInUInt32AreAscii(p0 | p1))
-                            {
-                                goto NotAscii;
-                            }
-
-                            length -= 4;
-                            hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ (p0 | NormalizeToLowercase);
-                            hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p1 | NormalizeToLowercase);
-                            ptr += 2;
-                        }
-                        while (length >= 4);
-                        goto LengthSwitch;
-
-                    case 3:
-                        p0 = Unsafe.ReadUnaligned<uint>(ptr);
-                        p1 = *(char*)(ptr + 1);
-                        if (!BitConverter.IsLittleEndian)
-                        {
-                            p1 <<= 16;
-                        }
-
-                        if (!Utf16Utility.AllCharsInUInt32AreAscii(p0 | p1))
-                        {
-                            goto NotAscii;
-                        }
-
-                        hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ (p0 | NormalizeToLowercase);
-                        hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p1 | NormalizeToLowercase);
-                        break;
-
-                    case 2:
-                        p0 = Unsafe.ReadUnaligned<uint>(ptr);
-                        if (!Utf16Utility.AllCharsInUInt32AreAscii(p0))
-                        {
-                            goto NotAscii;
-                        }
-
-                        hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p0 | NormalizeToLowercase);
-                        break;
-
-                    case 1:
-                        p0 = *(char*)ptr;
-                        if (!BitConverter.IsLittleEndian)
-                        {
-                            p0 <<= 16;
-                        }
-
-                        if (p0 > 0x7f)
-                        {
-                            goto NotAscii;
-                        }
-
-                        hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (p0 | NormalizeToLowercase);
-                        break;
-
-                    case 0:
-                        break;
-                }
-            }
-
-            return (int)(hash1 + (hash2 * 1566083941));
-
-        NotAscii:
-            return GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(hash1, hash2, span.Slice(span.Length - length));
+            ReadOnlySpan<ushort> chars = MemoryMarshal.Cast<char, ushort>(value);
+            return chars.Length > 8
+                ? NonRandomizedHashLong<CaseSensitive>(chars, value)
+                : NonRandomizedHashShort<CaseSensitive>(chars, value);
         }
 
-        private static unsafe int GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(uint hash1, uint hash2, ReadOnlySpan<char> str)
+        internal int GetNonRandomizedHashCodeOrdinalIgnoreCase()
+        {
+            int length = Length;
+            if (length > 8)
+            {
+                return NonRandomizedHashLong<CaseInsensitive>(NonRandomizedChars(length), this);
+            }
+
+            ref ushort chars = ref Unsafe.As<char, ushort>(ref _firstChar);
+            uint hash1 = NonRandomizedSeed1;
+            uint hash2 = NonRandomizedSeed2;
+            uint seen = 0;
+
+            while (length > 2)
+            {
+                uint p1 = NonRandomizedRead(ref chars) | NormalizeToLowercase;
+                uint p2 = NonRandomizedRead(ref Unsafe.Add(ref chars, 2)) | NormalizeToLowercase;
+                hash1 = NonRandomizedRound(hash1, p1);
+                hash2 = NonRandomizedRound(hash2, p2);
+                seen |= p1 | p2;
+                chars = ref Unsafe.Add(ref chars, 4);
+                length -= 4;
+            }
+
+            if (length > 0)
+            {
+                uint p = NonRandomizedRead(ref chars) | NormalizeToLowercase;
+                hash2 = NonRandomizedRound(hash2, p);
+                seen |= p;
+            }
+
+            return (seen & NonAsciiChars) != 0
+                ? GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(NonRandomizedSeed1, NonRandomizedSeed2, this)
+                : NonRandomizedFinish(hash1, hash2, Length);
+        }
+
+        internal static int GetNonRandomizedHashCodeOrdinalIgnoreCase(ReadOnlySpan<char> value)
+        {
+            ReadOnlySpan<ushort> chars = MemoryMarshal.Cast<char, ushort>(value);
+            return chars.Length > 8
+                ? NonRandomizedHashLong<CaseInsensitive>(chars, value)
+                : NonRandomizedHashShort<CaseInsensitive>(chars, value);
+        }
+
+        // Span counterpart of the loops above: no null terminator, so an odd trailing char is padded here.
+        private static int NonRandomizedHashShort<TCasing>(ReadOnlySpan<ushort> chars, ReadOnlySpan<char> value) where TCasing : INonRandomizedCasing
+        {
+            uint hash1 = NonRandomizedSeed1;
+            uint hash2 = NonRandomizedSeed2;
+            uint seen = 0;
+
+            while (chars.Length > 3)
+            {
+                uint p1 = NonRandomizedRead(chars) | TCasing.Mask;
+                uint p2 = NonRandomizedRead(chars.Slice(2)) | TCasing.Mask;
+                hash1 = NonRandomizedRound(hash1, p1);
+                hash2 = NonRandomizedRound(hash2, p2);
+                seen |= p1 | p2;
+                chars = chars.Slice(4);
+            }
+
+            if (chars.Length > 1)
+            {
+                uint p = NonRandomizedRead(chars) | TCasing.Mask;
+                if (chars.Length > 2)
+                {
+                    hash1 = NonRandomizedRound(hash1, p);
+                    seen |= p;
+                    p = NonRandomizedReadLast(chars.Slice(2)) | TCasing.Mask;
+                }
+                hash2 = NonRandomizedRound(hash2, p);
+                seen |= p;
+            }
+            else if (chars.Length > 0)
+            {
+                uint p = NonRandomizedReadLast(chars) | TCasing.Mask;
+                hash2 = NonRandomizedRound(hash2, p);
+                seen |= p;
+            }
+
+            return TCasing.Mask != 0 && (seen & NonAsciiChars) != 0
+                ? GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(NonRandomizedSeed1, NonRandomizedSeed2, value)
+                : NonRandomizedFinish(hash1, hash2, value.Length);
+        }
+
+        // Lengths above 8 are consumed eight characters at a time. The trailing block overlaps the previous
+        // one, so no padding is involved and strings and spans share this path unchanged.
+        private static int NonRandomizedHashLong<TCasing>(ReadOnlySpan<ushort> chars, ReadOnlySpan<char> value) where TCasing : INonRandomizedCasing
+        {
+            int length = chars.Length;
+            ulong a, b;
+            bool nonAscii;
+
+            if (Vector128.IsHardwareAccelerated)
+            {
+                Vector128<uint> mask = Vector128.Create(TCasing.Mask);
+                Vector128<uint> hash = Vector128.Create(NonRandomizedSeed1, NonRandomizedSeed2, NonRandomizedSeed2, NonRandomizedSeed1);
+                Vector128<uint> seen = Vector128<uint>.Zero;
+
+                ReadOnlySpan<ushort> remaining = chars;
+                while (remaining.Length > 8)
+                {
+                    Vector128<uint> block = Vector128.Create(remaining).AsUInt32() | mask;
+                    hash = (((hash << 5) | (hash >>> 27)) + hash) ^ block;
+                    if (TCasing.Mask != 0)
+                    {
+                        seen |= block;
+                    }
+                    remaining = remaining.Slice(8);
+                }
+
+                Vector128<uint> tail = Vector128.Create(chars.Slice(length - 8)).AsUInt32() | mask;
+                hash = (((hash << 5) | (hash >>> 27)) + hash) ^ tail;
+                seen |= tail;
+
+
+                Vector128<ulong> pair = hash.AsUInt64();
+                a = pair.ToScalar();
+                b = pair.GetElement(1);
+                nonAscii = (seen & Vector128.Create(NonAsciiChars)) != Vector128<uint>.Zero;
+            }
+            else
+            {
+                // Mirrors the vector loop lane for lane, never reading more than four bytes at a time.
+                uint h1 = NonRandomizedSeed1, h2 = NonRandomizedSeed2, h3 = NonRandomizedSeed2, h4 = NonRandomizedSeed1;
+                uint seen = 0;
+
+                ReadOnlySpan<ushort> remaining = chars;
+                while (remaining.Length > 8)
+                {
+                    ReadOnlySpan<ushort> block = remaining.Slice(0, 8);
+                    uint p4 = NonRandomizedRead(block.Slice(6)) | TCasing.Mask;
+                    uint p3 = NonRandomizedRead(block.Slice(4)) | TCasing.Mask;
+                    uint p2 = NonRandomizedRead(block.Slice(2)) | TCasing.Mask;
+                    uint p1 = NonRandomizedRead(block) | TCasing.Mask;
+                    h1 = NonRandomizedRound(h1, p1);
+                    h2 = NonRandomizedRound(h2, p2);
+                    h3 = NonRandomizedRound(h3, p3);
+                    h4 = NonRandomizedRound(h4, p4);
+                    if (TCasing.Mask != 0)
+                    {
+                        seen |= p1 | p2 | p3 | p4;
+                    }
+                    remaining = remaining.Slice(8);
+                }
+
+                ReadOnlySpan<ushort> last = chars.Slice(length - 8);
+                uint t4 = NonRandomizedRead(last.Slice(6)) | TCasing.Mask;
+                uint t3 = NonRandomizedRead(last.Slice(4)) | TCasing.Mask;
+                uint t2 = NonRandomizedRead(last.Slice(2)) | TCasing.Mask;
+                uint t1 = NonRandomizedRead(last) | TCasing.Mask;
+                h1 = NonRandomizedRound(h1, t1);
+                h2 = NonRandomizedRound(h2, t2);
+                h3 = NonRandomizedRound(h3, t3);
+                h4 = NonRandomizedRound(h4, t4);
+                seen |= t1 | t2 | t3 | t4;
+
+                a = BitConverter.IsLittleEndian ? h1 | ((ulong)h2 << 32) : h2 | ((ulong)h1 << 32);
+                b = BitConverter.IsLittleEndian ? h3 | ((ulong)h4 << 32) : h4 | ((ulong)h3 << 32);
+                nonAscii = (seen & NonAsciiChars) != 0;
+            }
+
+            return TCasing.Mask != 0 && nonAscii
+                ? GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(NonRandomizedSeed1, NonRandomizedSeed2, value)
+                : NonRandomizedFinish(a ^ (a >> 32), b ^ (b >> 32), length);
+        }
+
+        private static int GetNonRandomizedHashCodeOrdinalIgnoreCaseSlow(uint hash1, uint hash2, ReadOnlySpan<char> str)
         {
             int length = str.Length;
 
@@ -1006,22 +1045,23 @@ namespace System
             Debug.Assert(charsWritten == length);
             scratch[length] = '\0';
 
-            // Duplicate the main loop, can be removed once JIT gets "Loop Unswitching" optimization
-            fixed (char* src = scratch)
+            ReadOnlySpan<ushort> chars = MemoryMarshal.Cast<char, ushort>(scratch.Slice(0, length + (length & 1)));
+            while (chars.Length > 3)
             {
-                uint* ptr = (uint*)src;
-                while (length > 2)
-                {
-                    length -= 4;
-                    hash1 = (BitOperations.RotateLeft(hash1, 5) + hash1) ^ (ptr[0] | NormalizeToLowercase);
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (ptr[1] | NormalizeToLowercase);
-                    ptr += 2;
-                }
+                hash1 = NonRandomizedRound(hash1, NonRandomizedRead(chars) | NormalizeToLowercase);
+                hash2 = NonRandomizedRound(hash2, NonRandomizedRead(chars.Slice(2)) | NormalizeToLowercase);
+                chars = chars.Slice(4);
+            }
 
-                if (length > 0)
+            if (chars.Length > 1)
+            {
+                uint value = NonRandomizedRead(chars) | NormalizeToLowercase;
+                if (chars.Length > 2)
                 {
-                    hash2 = (BitOperations.RotateLeft(hash2, 5) + hash2) ^ (ptr[0] | NormalizeToLowercase);
+                    hash1 = NonRandomizedRound(hash1, value);
+                    value = NonRandomizedRead(chars.Slice(2)) | NormalizeToLowercase;
                 }
+                hash2 = NonRandomizedRound(hash2, value);
             }
 
             if (borrowedArr != null)
@@ -1029,7 +1069,7 @@ namespace System
                 ArrayPool<char>.Shared.Return(borrowedArr);
             }
 
-            return (int)(hash1 + (hash2 * 1566083941));
+            return NonRandomizedFinish(hash1, hash2, length);
         }
 
         // Determines whether a specified string is a prefix of the current instance
