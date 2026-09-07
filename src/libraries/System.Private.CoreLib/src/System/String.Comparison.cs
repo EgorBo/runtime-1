@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Text;
 using System.Text.Unicode;
 
@@ -765,6 +766,89 @@ namespace System
         // restructure the comparison so that for odd-length spans, we simulate the null terminator and include
         // it in the hash computation exactly as does str.GetNonRandomizedHashCode().
 
+        // Classic scalar seed: matches the pre-existing (non-vectorized) algorithm below.
+        private const uint HashSeed = (5381 << 16) + 5381;
+
+        // Below this length (in chars), the plain scalar loop is used unmodified: for small inputs the
+        // extra setup/fold cost of the vectorized path outweighs any benefit, so we must not touch this path.
+        private const int VectorizedHashThreshold = 64;
+
+        // Per-lane seeds for the vectorized bulk hashing below. Each lane starts from HashSeed XORed with a
+        // distinct odd multiple of the golden ratio constant, so that uniform/repetitive input (e.g. a run of
+        // identical chars) doesn't make every lane evolve identically and cancel out when folded together.
+        // Four independent accumulator groups (16 lanes total) are used, rather than two, so that the CPU
+        // has enough independent dependency chains in flight to hide the per-lane update latency: with only
+        // two chains the loop is latency- rather than throughput-bound and SIMD width alone doesn't help.
+        //
+        // These are intentionally created inline (as locals) inside the methods that use them rather than
+        // stashed in static fields: the JIT recognizes Vector128.Create(<constants>) as an intrinsic and
+        // embeds the data directly at the call site, so a static field would just add a layer of indirection.
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<uint> RotateLeftVector(Vector128<uint> value, int offset) =>
+            (value << offset) | (value >>> (32 - offset));
+
+        // Folds the (independent) SIMD lanes down to a single uint using the same mixing shape as the
+        // scalar loop, so no entropy that was accumulated in the vectorized phase is lost.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint FoldLanes(Vector128<uint> v)
+        {
+            uint h = v.GetElement(0);
+            h = (BitOperations.RotateLeft(h, 5) + h) ^ v.GetElement(1);
+            h = (BitOperations.RotateLeft(h, 5) + h) ^ v.GetElement(2);
+            h = (BitOperations.RotateLeft(h, 5) + h) ^ v.GetElement(3);
+            return h;
+        }
+
+        // Consumes 32-char (64-byte) blocks using four groups of 4 independent SIMD lanes (16 lanes total),
+        // advancing 'ptr'/length, then folds the lanes down to the classic hash1/hash2 pair so that the
+        // remaining (< 32 char) tail can be finished off by the existing scalar loop below.
+        //
+        // Intentionally NOT gated on Vector128.IsHardwareAccelerated: all Vector128 operations used here
+        // (Create/+/^/<<//>>>/LoadUnsafe) have correct, fully portable software-fallback implementations,
+        // so this method always produces the same result regardless of hardware support. Branching on
+        // IsHardwareAccelerated to instead run a different (scalar-only) algorithm would mean a string's
+        // hash could differ depending on the machine's ISA - which must never happen, since e.g. R2R-compiled
+        // code and later re-JITted Tier1 code must agree on the exact same value for the exact same string.
+        //
+        // Kept as a plain unsafe pointer (rather than a byref advanced via Unsafe.Add): a byref that gets
+        // reassigned mid-method is more error-prone around GC holes than a simple pointer inside a 'fixed'
+        // block, so this intentionally mirrors the pointer style used by the rest of this file.
+        //
+        // Not inlined: this is the cold/rarely-hit bulk path (only for strings at/above
+        // VectorizedHashThreshold), so inlining it into every hash call site would just bloat the
+        // (much more common) small-string callers for no benefit.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static unsafe void ConsumeVectorized(ref uint* ptr, ref int length, out uint hash1, out uint hash2)
+        {
+            Debug.Assert(length >= VectorizedHashThreshold);
+
+            Vector128<uint> acc1 = Vector128.Create(0x15051505u, 0x8B326CBCu, 0x296BE677u, 0xCFA3782Eu);
+            Vector128<uint> acc2 = Vector128.Create(0x6DD8F3E1u, 0x02107598u, 0xA049CF53u, 0x4681410Au);
+            Vector128<uint> acc3 = Vector128.Create(0xE528A5DDu, 0x832F5B1Cu, 0x21170B7Fu, 0xC760A9A2u);
+            Vector128<uint> acc4 = Vector128.Create(0x5A8412CFu, 0xF9C6D3B4u, 0x386E1247u, 0xAB27E9D0u);
+
+            do
+            {
+                Vector128<uint> v1 = Vector128.LoadUnsafe(ref *ptr);
+                Vector128<uint> v2 = Vector128.LoadUnsafe(ref *(ptr + 4));
+                Vector128<uint> v3 = Vector128.LoadUnsafe(ref *(ptr + 8));
+                Vector128<uint> v4 = Vector128.LoadUnsafe(ref *(ptr + 12));
+
+                acc1 = (RotateLeftVector(acc1, 5) + acc1) ^ v1;
+                acc2 = (RotateLeftVector(acc2, 5) + acc2) ^ v2;
+                acc3 = (RotateLeftVector(acc3, 5) + acc3) ^ v3;
+                acc4 = (RotateLeftVector(acc4, 5) + acc4) ^ v4;
+
+                ptr += 16;
+                length -= 32;
+            }
+            while (length >= 32);
+
+            hash1 = FoldLanes(acc1 ^ RotateLeftVector(acc3, 1));
+            hash2 = FoldLanes(acc2 ^ RotateLeftVector(acc4, 1));
+        }
+
         internal unsafe int GetNonRandomizedHashCode()
         {
             fixed (char* src = &_firstChar)
@@ -772,11 +856,19 @@ namespace System
                 Debug.Assert(src[Length] == '\0', "src[Length] == '\\0'");
                 Debug.Assert(((int)src) % 4 == 0, "Managed string should start at 4 bytes boundary");
 
-                uint hash1 = (5381 << 16) + 5381;
-                uint hash2 = hash1;
-
                 uint* ptr = (uint*)src;
                 int length = Length;
+                uint hash1, hash2;
+
+                if (length >= VectorizedHashThreshold)
+                {
+                    ConsumeVectorized(ref ptr, ref length, out hash1, out hash2);
+                }
+                else
+                {
+                    hash1 = HashSeed;
+                    hash2 = HashSeed;
+                }
 
                 while (length > 2)
                 {
@@ -797,13 +889,22 @@ namespace System
 
         internal static unsafe int GetNonRandomizedHashCode(ReadOnlySpan<char> span)
         {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
-
             int length = span.Length;
+            uint hash1, hash2;
+
             fixed (char* src = &MemoryMarshal.GetReference(span))
             {
                 uint* ptr = (uint*)src;
+
+                if (length >= VectorizedHashThreshold)
+                {
+                    ConsumeVectorized(ref ptr, ref length, out hash1, out hash2);
+                }
+                else
+                {
+                    hash1 = HashSeed;
+                    hash2 = HashSeed;
+                }
 
                 LengthSwitch:
                 switch (length)
@@ -858,18 +959,77 @@ namespace System
         // for both for big-endian and for little-endian.
         private const uint NormalizeToLowercase = 0x0020_0020u;
 
+        // Same shape as ConsumeVectorized, but bails out (returning false) as soon as a non-ASCII char is
+        // found in a block, folding whatever was already accumulated so the caller can fall back to the
+        // slow, culture/case-correct path starting exactly where the vectorized phase left off.
+        //
+        // See ConsumeVectorized for why a plain pointer (rather than a byref) is used here, and why this
+        // isn't inlined.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static unsafe bool ConsumeVectorizedOrdinalIgnoreCase(ref uint* ptr, ref int length, out uint hash1, out uint hash2)
+        {
+            Debug.Assert(length >= VectorizedHashThreshold);
+
+            Vector128<uint> acc1 = Vector128.Create(0x15051505u, 0x8B326CBCu, 0x296BE677u, 0xCFA3782Eu);
+            Vector128<uint> acc2 = Vector128.Create(0x6DD8F3E1u, 0x02107598u, 0xA049CF53u, 0x4681410Au);
+            Vector128<uint> acc3 = Vector128.Create(0xE528A5DDu, 0x832F5B1Cu, 0x21170B7Fu, 0xC760A9A2u);
+            Vector128<uint> acc4 = Vector128.Create(0x5A8412CFu, 0xF9C6D3B4u, 0x386E1247u, 0xAB27E9D0u);
+            Vector128<uint> nonAsciiMask = Vector128.Create(unchecked((uint)~0x007F007F));
+            Vector128<uint> normalize = Vector128.Create(NormalizeToLowercase);
+
+            do
+            {
+                Vector128<uint> v1 = Vector128.LoadUnsafe(ref *ptr);
+                Vector128<uint> v2 = Vector128.LoadUnsafe(ref *(ptr + 4));
+                Vector128<uint> v3 = Vector128.LoadUnsafe(ref *(ptr + 8));
+                Vector128<uint> v4 = Vector128.LoadUnsafe(ref *(ptr + 12));
+
+                if (!Vector128.EqualsAll((v1 | v2 | v3 | v4) & nonAsciiMask, Vector128<uint>.Zero))
+                {
+                    hash1 = FoldLanes(acc1 ^ RotateLeftVector(acc3, 1));
+                    hash2 = FoldLanes(acc2 ^ RotateLeftVector(acc4, 1));
+                    return false;
+                }
+
+                acc1 = (RotateLeftVector(acc1, 5) + acc1) ^ (v1 | normalize);
+                acc2 = (RotateLeftVector(acc2, 5) + acc2) ^ (v2 | normalize);
+                acc3 = (RotateLeftVector(acc3, 5) + acc3) ^ (v3 | normalize);
+                acc4 = (RotateLeftVector(acc4, 5) + acc4) ^ (v4 | normalize);
+
+                ptr += 16;
+                length -= 32;
+            }
+            while (length >= 32);
+
+            hash1 = FoldLanes(acc1 ^ RotateLeftVector(acc3, 1));
+            hash2 = FoldLanes(acc2 ^ RotateLeftVector(acc4, 1));
+            return true;
+        }
+
         internal unsafe int GetNonRandomizedHashCodeOrdinalIgnoreCase()
         {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
-
             int length = Length;
+            uint hash1, hash2;
+
             fixed (char* src = &_firstChar)
             {
                 Debug.Assert(src[Length] == '\0', "src[this.Length] == '\\0'");
                 Debug.Assert(((int) src) % 4 == 0, "Managed string should start at 4 bytes boundary");
 
                 uint* ptr = (uint*) src;
+
+                if (length >= VectorizedHashThreshold)
+                {
+                    if (!ConsumeVectorizedOrdinalIgnoreCase(ref ptr, ref length, out hash1, out hash2))
+                    {
+                        goto NotAscii;
+                    }
+                }
+                else
+                {
+                    hash1 = HashSeed;
+                    hash2 = HashSeed;
+                }
 
                 while (length > 2)
                 {
@@ -906,15 +1066,26 @@ namespace System
 
         internal static unsafe int GetNonRandomizedHashCodeOrdinalIgnoreCase(ReadOnlySpan<char> span)
         {
-            uint hash1 = (5381 << 16) + 5381;
-            uint hash2 = hash1;
-
+            uint hash1, hash2;
             uint p0, p1;
             int length = span.Length;
 
             fixed (char* src = &MemoryMarshal.GetReference(span))
             {
                 uint* ptr = (uint*)src;
+
+                if (length >= VectorizedHashThreshold)
+                {
+                    if (!ConsumeVectorizedOrdinalIgnoreCase(ref ptr, ref length, out hash1, out hash2))
+                    {
+                        goto NotAscii;
+                    }
+                }
+                else
+                {
+                    hash1 = HashSeed;
+                    hash2 = HashSeed;
+                }
 
                 LengthSwitch:
                 switch (length)
