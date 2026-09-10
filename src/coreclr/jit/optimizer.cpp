@@ -5447,6 +5447,20 @@ void Compiler::optComputeLoopSideEffectsOfBlock(BasicBlock* blk, FlowGraphNatura
                 }
                 break;
 
+                case GT_IND:
+                case GT_BLK:
+                {
+                    // Value numbering mutates GcHeap/ByrefExposed for a volatile load (it is an
+                    // acquire barrier), so the loop's memory summary has to do the same. Otherwise
+                    // the memory state computed for the loop entry would not account for it and
+                    // loads in the loop would look invariant.
+                    if (tree->AsIndir()->IsVolatile())
+                    {
+                        memoryHavoc |= memoryKindSet(GcHeap, ByrefExposed);
+                    }
+                }
+                break;
+
                 case GT_COMMA:
                     tree->gtVNPair = tree->AsOp()->gtOp2->gtVNPair;
                     break;
