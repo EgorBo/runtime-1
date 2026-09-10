@@ -7703,7 +7703,7 @@ protected:
     bool optIsProfitableToHoistTree(GenTree* tree, FlowGraphNaturalLoop* loop, LoopHoistContext* hoistCtxt, bool defExecuted);
 
     // Performs the hoisting "tree" into the PreHeader for "loop"
-    void optHoistCandidate(GenTree* tree, BasicBlock* treeBb, FlowGraphNaturalLoop* loop, LoopHoistContext* hoistCtxt, bool defExecuted);
+    bool optHoistCandidate(GenTree* tree, BasicBlock* treeBb, FlowGraphNaturalLoop* loop, LoopHoistContext* hoistCtxt, bool defExecuted);
 
     // Note the new SSA uses in tree
     void optRecordSsaUses(GenTree* tree, BasicBlock* block);
