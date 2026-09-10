@@ -12453,6 +12453,31 @@ void Lowering::LowerLclHeap(GenTree* node)
 {
     assert(node->OperIs(GT_LCLHEAP));
 
+    if (node->gtGetOp1()->IsCnsIntOrI())
+    {
+        // The size is an unsigned byte count that codegen rounds up to STACK_ALIGN. For
+        // sizes near the top of the address space that rounding wraps to zero, emitting a
+        // zero byte allocation that still hands back a non-null pointer. No stack can
+        // satisfy a request that large, so clamp it to the largest size that codegen can
+        // both round without wrapping and encode: that size is just as impossible to
+        // satisfy, and it keeps the stack probing well behaved so the allocation faults.
+        //
+        // STACK_ALIGN is a power of two, hence the mask.
+        const size_t   maxCnsSize = (size_t)UINT_MAX & ~((size_t)STACK_ALIGN - 1);
+        GenTreeIntCon* sizeNode   = node->gtGetOp1()->AsIntCon();
+
+        if ((size_t)sizeNode->IconValue() > maxCnsSize)
+        {
+            sizeNode->SetValueTruncating((ssize_t)maxCnsSize);
+
+#if defined(TARGET_XARCH) || defined(TARGET_ARM64)
+            // Zeroing an allocation that cannot succeed is pointless, so don't mark
+            // sizeNode as contained; codegen will grow and probe the stack instead.
+            return;
+#endif
+        }
+    }
+
 #if defined(TARGET_XARCH) || defined(TARGET_ARM64)
     if (node->gtGetOp1()->IsCnsIntOrI())
     {
