@@ -12571,12 +12571,17 @@ bool Lowering::TryDecomposeBlockStoreAsIndirs(GenTreeBlk* blkNode)
     assert((layout->GetSize() == (layout->GetSlotCount() * TARGET_POINTER_SIZE)));
     assert(src->OperIs(GT_IND, GT_LCL_VAR, GT_LCL_FLD));
 
+    const bool srcIsWide = src->OperIsLocalRead() &&
+                           m_compiler->IsWideAccess(src->AsLclVarCommon()->GetLclNum(),
+                                                    src->AsLclVarCommon()->GetLclOffs(), ValueSize(layout->GetSize()));
+
     // Always decompose for volatile blocks as the bulk helper doesn't support those.
     if (!(blkNode->IsVolatile() || (src->OperIs(GT_IND) && src->AsIndir()->IsVolatile())))
     {
-        // More than 3 GC pointers, use the bulk copy helper.
+        // Use the bulk helper for large local accesses that cannot be represented by LCL_FLDs.
+        // More than 3 GC pointers also favor the bulk copy helper.
         // TODO-CQ: find a better heuristic here.
-        if (layout->GetGCPtrCount() >= 4)
+        if (srcIsWide || (layout->GetGCPtrCount() >= 4))
         {
             return false;
         }
@@ -12587,6 +12592,23 @@ bool Lowering::TryDecomposeBlockStoreAsIndirs(GenTreeBlk* blkNode)
         {
             return false;
         }
+    }
+
+    if (srcIsWide)
+    {
+        // Volatile copies still need decomposition. Use an explicit address so the
+        // generated accesses are not limited by local-field or emitter offset encodings.
+        unsigned lclNum    = src->AsLclVarCommon()->GetLclNum();
+        unsigned lclOffset = src->AsLclVarCommon()->GetLclOffs();
+        m_compiler->lvaSetVarDoNotEnregister(lclNum DEBUGARG(DoNotEnregisterReason::LclAddrNode));
+        src->ChangeOper(GT_LCL_ADDR);
+        src->ChangeType(TYP_I_IMPL);
+        src->AsLclFld()->SetLclOffs(lclOffset);
+        src->ClearContained();
+        GenTree* indir = m_compiler->gtNewIndir(TYP_STRUCT, src);
+        BlockRange().InsertAfter(src, indir);
+        blkNode->Data() = src = indir;
+        src->SetContained();
     }
 
     JITDUMP("Decomposing STORE_BLK [%06u] as individual indirections\n", m_compiler->dspTreeID(blkNode));
@@ -12638,6 +12660,7 @@ bool Lowering::TryDecomposeBlockStoreAsIndirs(GenTreeBlk* blkNode)
         }
         else
         {
+            assert(m_compiler->IsValidLclAddr(srcLclNum, srcLclOffs + offset));
             srcVal = m_compiler->gtNewLclFldNode(srcLclNum, valType, srcLclOffs + offset, runLayout);
         }
 
