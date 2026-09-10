@@ -5433,11 +5433,25 @@ void Compiler::optComputeLoopSideEffectsOfBlock(BasicBlock* blk, FlowGraphNatura
                         {
                             assert(fldSeq != nullptr);
 
-                            FieldKindForVN fieldKind =
-                                (baseAddr != nullptr) ? FieldKindForVN::WithBaseAddr : FieldKindForVN::SimpleStatic;
-                            AddModifiedFieldAllContainingLoops(mostNestedLoop, fldSeq->GetFieldHandle(), fieldKind);
-                            // Conservatively assume byrefs may alias this object.
-                            memoryHavoc |= memoryKindSet(ByrefExposed);
+                            ValueSize fieldSize;
+                            var_types fieldType;
+                            vnStore->VNForFieldSelector(fldSeq->GetFieldHandle(), &fieldType, &fieldSize);
+
+                            if (!ValueNumStore::LoadStoreIsWithin(fieldSize, offset, tree->AsIndir()->ValueSize()))
+                            {
+                                // Value numbering invalidates the whole heap for a store that does not
+                                // fit in the field (see fgValueNumberFieldStore), as it may modify other
+                                // fields; the summary has to be just as conservative.
+                                memoryHavoc |= memoryKindSet(GcHeap, ByrefExposed);
+                            }
+                            else
+                            {
+                                FieldKindForVN fieldKind =
+                                    (baseAddr != nullptr) ? FieldKindForVN::WithBaseAddr : FieldKindForVN::SimpleStatic;
+                                AddModifiedFieldAllContainingLoops(mostNestedLoop, fldSeq->GetFieldHandle(), fieldKind);
+                                // Conservatively assume byrefs may alias this object.
+                                memoryHavoc |= memoryKindSet(ByrefExposed);
+                            }
                         }
                         else
                         {

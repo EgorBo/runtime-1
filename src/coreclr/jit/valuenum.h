@@ -1087,6 +1087,24 @@ public:
         return (offset == 0) && (locationSize == indSize);
     }
 
+    // Returns true if an access of "indSize" bytes at "offset" is fully contained in a location
+    // of "locationSize" bytes. If it is not, value numbering cannot model the access precisely
+    // and the memory containing the location has to be invalidated instead.
+    static bool LoadStoreIsWithin(ValueSize locationSize, ssize_t offset, ValueSize indSize)
+    {
+        if (LoadStoreIsEntire(locationSize, offset, indSize))
+        {
+            return true;
+        }
+
+        if (!locationSize.IsExact() || !indSize.IsExact() || (offset < 0))
+        {
+            return false;
+        }
+
+        return (static_cast<unsigned>(offset) + indSize.GetExact()) <= locationSize.GetExact();
+    }
+
     ValueNum VNForLoadStoreBitCast(ValueNum value, var_types indType, ValueSize indSize);
 
     ValueNumPair VNPairForLoadStoreBitCast(ValueNumPair value, var_types indType, ValueSize indSize);

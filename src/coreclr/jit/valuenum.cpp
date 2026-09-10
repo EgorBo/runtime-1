@@ -6484,7 +6484,7 @@ ValueNum ValueNumStore::VNForStore(
     unsigned exactStoreSize    = storeSize.GetExact();
     unsigned storeOffset       = static_cast<unsigned>(offset);
 
-    if ((offset < 0) || (exactLocationSize < (storeOffset + exactStoreSize)))
+    if (!LoadStoreIsWithin(locationSize, offset, storeSize))
     {
         JITDUMP("    *** VNForStore: out-of-bounds store -- location size is %u, offset is %zd, store size is %u\n",
                 exactLocationSize, offset, exactStoreSize);
