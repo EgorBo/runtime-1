@@ -1332,7 +1332,7 @@ bool Compiler::optRedundantBranch(BasicBlock* const block)
                         // However we may be able to update the flow from block's predecessors so they
                         // bypass block and instead transfer control to jump's successors (aka jump threading).
                         //
-                        const bool wasThreaded = optJumpThreadDom(block, domBlock, !rii.reverseSense);
+                        const bool wasThreaded = optJumpThreadDom(block, domBlock, !rii.reverseSense, domCmpExcVN);
 
                         if (wasThreaded)
                         {
@@ -1895,11 +1895,14 @@ bool Compiler::optCanRewritePhiUses(JumpThreadInfo& jti)
 // Arguments:
 //   block - block in question
 //   domBlock - dom block used in inferencing (if any)
+//   domCmpExcVN - exception set of the dominating compare (NoVN if there is no dom block)
 //
 // Returns:
 //   Viability of jump threading: either CannotThread, CanThread, or NeedsPhiUseResolution.
 //
-Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const block, BasicBlock* const domBlock)
+Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const block,
+                                                             BasicBlock* const domBlock,
+                                                             ValueNum const    domCmpExcVN)
 {
     // If the block is the first block of try-region, then skip jump threading
     if (bbIsTryBeg(block))
@@ -1994,10 +1997,10 @@ Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const b
 
         // This is a "real" statement.
         //
-        // We can ignore exception side effects in the jump tree.
-        //
-        // They are covered by the exception effects in the dominating compare.
-        // We know this because the VNs match and they encode exception states.
+        // We can ignore exception side effects in the jump tree, but only when they are covered by
+        // the exception effects in the dominating compare. Note the two compares are matched on
+        // their normal VNs, so the jump tree's exception set can be a strict superset of the
+        // dominating compare's; bypassing block would then drop those extra exceptions.
         //
         if ((tree->gtFlags & GTF_SIDE_EFFECT) != 0)
         {
@@ -2010,7 +2013,9 @@ Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const b
                     // same EH region, as we might not be able to fully
                     // describe control flow between them.
                     //
-                    if ((domBlock != nullptr) && BasicBlock::sameEHRegion(block, domBlock))
+                    if ((domBlock != nullptr) && BasicBlock::sameEHRegion(block, domBlock) &&
+                        vnStore->VNExcIsSubset(domCmpExcVN,
+                                               vnStore->VNExceptionSet(tree->gtGetOp1()->GetVN(VNK_Liberal))))
                     {
                         // We will ignore the side effect on this tree.
                         //
@@ -2036,6 +2041,7 @@ Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const b
 //   domBlock - a dominating block that has an equivalent branch
 //   domIsSameRelop - if true, dominating block does the same compare;
 //                    if false, dominating block does a reverse compare
+//   domCmpExcVN - exception set of the dominating compare
 //
 // Returns:
 //   True if the branch was optimized.
@@ -2070,7 +2076,10 @@ Compiler::JumpThreadCheckResult Compiler::optJumpThreadCheck(BasicBlock* const b
 //     /     \           |       |
 //    Tt     Ft          Tt      Ft    True/false target
 //
-bool Compiler::optJumpThreadDom(BasicBlock* const block, BasicBlock* const domBlock, bool domIsSameRelop)
+bool Compiler::optJumpThreadDom(BasicBlock* const block,
+                                BasicBlock* const domBlock,
+                                bool              domIsSameRelop,
+                                ValueNum const    domCmpExcVN)
 {
     assert(block->KindIs(BBJ_COND));
     assert(domBlock->KindIs(BBJ_COND));
@@ -2109,7 +2118,7 @@ bool Compiler::optJumpThreadDom(BasicBlock* const block, BasicBlock* const domBl
     JITDUMP("Both successors of %sdom " FMT_BB " reach " FMT_BB " -- attempting jump threading\n", isIDom ? "i" : "",
             domBlock->bbNum, block->bbNum);
 
-    const JumpThreadCheckResult check = optJumpThreadCheck(block, domBlock);
+    const JumpThreadCheckResult check = optJumpThreadCheck(block, domBlock, domCmpExcVN);
     if (check == JumpThreadCheckResult::CannotThread)
     {
         return false;
@@ -2243,7 +2252,7 @@ bool Compiler::optJumpThreadPhi(BasicBlock* block, GenTree* tree, ValueNum treeN
 {
     // First see if block is eligible for threading.
     //
-    const JumpThreadCheckResult check = optJumpThreadCheck(block, /* domBlock*/ nullptr);
+    const JumpThreadCheckResult check = optJumpThreadCheck(block, /* domBlock*/ nullptr, ValueNumStore::NoVN);
     if (check == JumpThreadCheckResult::CannotThread)
     {
         return false;

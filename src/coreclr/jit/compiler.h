@@ -8391,9 +8391,14 @@ public:
     bool                  optRedundantRelop(BasicBlock* const block);
     bool                  optRedundantDominatingBranch(BasicBlock* const block);
     bool                  optRedundantBranch(BasicBlock* const block);
-    bool                  optJumpThreadDom(BasicBlock* const block, BasicBlock* const domBlock, bool domIsSameRelop);
+    bool                  optJumpThreadDom(BasicBlock* const block,
+                                           BasicBlock* const domBlock,
+                                           bool              domIsSameRelop,
+                                           ValueNum const    domCmpExcVN);
     bool                  optJumpThreadPhi(BasicBlock* const block, GenTree* tree, ValueNum treeNormVN);
-    JumpThreadCheckResult optJumpThreadCheck(BasicBlock* const block, BasicBlock* const domBlock);
+    JumpThreadCheckResult optJumpThreadCheck(BasicBlock* const block,
+                                             BasicBlock* const domBlock,
+                                             ValueNum const    domCmpExcVN);
     bool optFindPhiUsesInBlockAndSuccessors(BasicBlock* block, GenTreeLclVar* phiDef, JumpThreadInfo& jti);
     bool optCanRewritePhiUses(JumpThreadInfo& jti);
     bool optJumpThreadCore(JumpThreadInfo& jti);
