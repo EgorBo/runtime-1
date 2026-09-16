@@ -1058,6 +1058,22 @@ bool Compiler::optRedundantDominatingBranch(BasicBlock* const block)
                     break;
                 }
 
+                // Unlike the classic case (which only bashes the dominating relop), strengthening
+                // block's relop is only valid if the dominating predicate holds on every path into
+                // block, that is, if block can only be reached via the dominator's edge to
+                // currentBlock. Otherwise the stronger condition is applied on paths where the
+                // dominating predicate does not hold.
+                //
+                BasicBlock* const domOtherSucc =
+                    currentIsDomTrueSucc ? domBlockProbe->GetFalseTarget() : domBlockProbe->GetTrueTarget();
+
+                if (optReachable(domOtherSucc, block, domBlockProbe))
+                {
+                    JITDUMP("; " FMT_BB " is also reachable from " FMT_BB ", cannot simplify\n", block->bbNum,
+                            domOtherSucc->bbNum);
+                    break;
+                }
+
                 newRelop = vnStore->VNRelopToGenTreeOp(newRelopFunc, &isUnsigned);
 
                 if (newRelop != GT_NONE)
