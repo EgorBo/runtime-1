@@ -5780,31 +5780,33 @@ void Compiler::optRemoveRedundantZeroInits()
 
     assert(fgNodeThreading == NodeThreading::AllTrees);
 
-    for (BasicBlock* block = fgFirstBB; block != nullptr; block = block->GetUniqueSucc())
-    {
-        if (m_dfsTree->HasCycle())
-        {
-            // See if this block is a cycle entry
-            //
-            bool stop = false;
-            for (FlowEdge* predEdge = BlockPredsWithEH(block); predEdge != nullptr;
-                 predEdge           = predEdge->getNextPredEdge())
-            {
-                BasicBlock* const predBlock = predEdge->getSourceBlock();
-                if (m_dfsTree->Contains(predBlock) && m_dfsTree->IsAncestor(block, predBlock))
-                {
-                    JITDUMP(FMT_BB " is part of a cycle, stopping the block scan\n", block->bbNum);
-                    stop = true;
-                    break;
-                }
-            }
+    BasicBlock* prevBlock = nullptr;
 
-            // If so, stop looking for redundant zero inits
-            //
-            if (stop)
+    for (BasicBlock* block = fgFirstBB; block != nullptr; prevBlock = block, block = block->GetUniqueSucc())
+    {
+        // The scan assumes it has seen every definition that can reach this block. That only holds if
+        // the sole way into the block is from the block we just analyzed. Any other reachable
+        // predecessor -- a back edge, or flow out of an EH handler that the unique-successor walk does
+        // not visit -- may redefine a local behind our back.
+        //
+        bool stop = false;
+        for (FlowEdge* predEdge = BlockPredsWithEH(block); predEdge != nullptr; predEdge = predEdge->getNextPredEdge())
+        {
+            BasicBlock* const predBlock = predEdge->getSourceBlock();
+            if ((predBlock != prevBlock) && m_dfsTree->Contains(predBlock))
             {
+                JITDUMP(FMT_BB " has an unanalyzed predecessor " FMT_BB ", stopping the block scan\n", block->bbNum,
+                        predBlock->bbNum);
+                stop = true;
                 break;
             }
+        }
+
+        // If so, stop looking for redundant zero inits
+        //
+        if (stop)
+        {
+            break;
         }
 
         JITDUMP("Analyzing " FMT_BB "\n", block->bbNum);
