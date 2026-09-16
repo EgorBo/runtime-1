@@ -1770,6 +1770,28 @@ bool Compiler::optCanRewritePhiUses(JumpThreadInfo& jti)
             continue;
         }
 
+        // An earlier jump thread in this phase may have redirected an edge into block via
+        // fgReplaceJumpTarget, which updates the pred list but adds no phi arg for the new edge.
+        // The reaching-def analysis below only walks the phi args, so it would not see such a
+        // pred at all. Bail out unless the phi describes every pred of block.
+        //
+        GenTreePhi* const phi = phiDef->Data()->AsPhi();
+        for (BasicBlock* const predBlock : block->PredBlocks())
+        {
+            bool covered = false;
+            for (GenTreePhi::Use& use : phi->Uses())
+            {
+                covered |= (use.GetNode()->AsPhiArg()->gtPredBB == predBlock);
+            }
+
+            if (!covered)
+            {
+                JITDUMP("PHI for V%02u.%u in " FMT_BB " has no arg for pred " FMT_BB "; cannot rewrite phi uses\n",
+                        lclNum, ssaNum, block->bbNum, predBlock->bbNum);
+                return false;
+            }
+        }
+
         if (!optFindPhiUsesInBlockAndSuccessors(block, phiDef, jti))
         {
             JITDUMP("Could not find all uses for V%02u.%u in " FMT_BB " or its successors\n", lclNum, ssaNum,
@@ -2386,10 +2408,9 @@ bool Compiler::optJumpThreadPhi(BasicBlock* block, GenTree* tree, ValueNum treeN
             }
         }
 
-        // We may not find predBlock in the phi args, as we only have one phi
-        // arg per ssa num, not one per pred.
-        //
-        // See SsaBuilder::AddPhiArgsToSuccessors.
+        // We may not find a usable phi arg for predBlock. SSA builds one phi arg per pred,
+        // but an earlier jump thread in this phase may have redirected an edge into block
+        // without adding a phi arg for it, and phi args on back edges may not have VNs.
         //
         if (!updatedArg)
         {
