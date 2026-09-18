@@ -2560,18 +2560,26 @@ AssertionIndex Compiler::optAssertionIsSubrange(GenTree* tree, IntegralRange ran
 //   objVN      - VN to check
 //   castToVN   - VN representing the type handle being cast to.
 //   assertions - set of live assertions
-//   budget     - limits the depth of recursion when chasing assertions across
-//                phi-def reaching VNs.
+//   pBudget    - shared remaining VN visit budget, when recursing through PHIs
 //
 // Return Value:
 //   True if the VN is known to be a subtype of castTo.
 //
-bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions, int budget)
+bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions)
 {
-    if ((budget <= 0) || (objVN == ValueNumStore::NoVN))
+    int budget = 100;
+    return optAssertionVNIsSubtype(objVN, castToVN, assertions, &budget);
+}
+
+bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions, int* pBudget)
+{
+    if ((*pBudget <= 0) || (objVN == ValueNumStore::NoVN))
     {
         return false;
     }
+
+    // Bound total work, not just recursion depth: PHIs can repeatedly reach the same VN.
+    --*pBudget;
 
     bool isExact;
     bool isNonNull;
@@ -2631,9 +2639,9 @@ bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT
 
     // For PHI-defs, walk reaching assertions/VNs and recursively check.
     return optVisitReachingAssertions(objVN,
-                                      [this, castToVN, budget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
-        return optAssertionVNIsSubtype(reachingVN, castToVN, reachingAssertions, budget - 1) ? AssertVisit::Continue
-                                                                                             : AssertVisit::Abort;
+                                      [this, castToVN, pBudget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
+        return optAssertionVNIsSubtype(reachingVN, castToVN, reachingAssertions, pBudget) ? AssertVisit::Continue
+                                                                                          : AssertVisit::Abort;
     }) == AssertVisit::Continue;
 }
 
@@ -4693,8 +4701,10 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
     if (op2->IsIntegralConst(0) && op1->TypeIs(TYP_REF))
     {
         JITDUMP("Checking PHI [%06u] arguments for non-nullness\n", dspTreeID(op1))
-        auto visitor = [this](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
-            return optAssertionVNIsNonNull(reachingVN, reachingAssertions) ? AssertVisit::Continue : AssertVisit::Abort;
+        int  budget  = 100;
+        auto visitor = [this, &budget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
+            return optAssertionVNIsNonNull(reachingVN, reachingAssertions, &budget) ? AssertVisit::Continue
+                                                                                    : AssertVisit::Abort;
         };
 
         ValueNum op1vn = vnStore->VNConservativeNormalValue(op1->gtVNPair);
@@ -5267,17 +5277,25 @@ bool Compiler::optAssertionIsNonNull(GenTree* op, ASSERT_VALARG_TP assertions)
 // Arguments:
 //   vn         - VN to check
 //   assertions - set of live assertions
-//   budget     - limits the depth of recursion when chasing assertions across VNs.
+//   pBudget    - shared remaining VN visit budget, when recursing through PHIs
 //
 // Return Value:
 //   True if the VN could be proven non-null.
 //
-bool Compiler::optAssertionVNIsNonNull(ValueNum vn, ASSERT_VALARG_TP assertions, int budget)
+bool Compiler::optAssertionVNIsNonNull(ValueNum vn, ASSERT_VALARG_TP assertions)
 {
-    if (vn == ValueNumStore::NoVN)
+    int budget = 100;
+    return optAssertionVNIsNonNull(vn, assertions, &budget);
+}
+
+bool Compiler::optAssertionVNIsNonNull(ValueNum vn, ASSERT_VALARG_TP assertions, int* pBudget)
+{
+    if ((*pBudget <= 0) || (vn == ValueNumStore::NoVN))
     {
         return false;
     }
+
+    --*pBudget;
 
     if (vnStore->IsKnownNonNull(vn))
     {
@@ -5315,16 +5333,11 @@ bool Compiler::optAssertionVNIsNonNull(ValueNum vn, ASSERT_VALARG_TP assertions,
         }
     }
 
-    if (budget <= 0)
-    {
-        return false;
-    }
-
     // Inspect the reaching assertions for the vn and vnBase.
     //
-    auto visitor = [this, budget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
-        return optAssertionVNIsNonNull(reachingVN, reachingAssertions, budget - 1) ? AssertVisit::Continue
-                                                                                   : AssertVisit::Abort;
+    auto visitor = [this, pBudget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
+        return optAssertionVNIsNonNull(reachingVN, reachingAssertions, pBudget) ? AssertVisit::Continue
+                                                                                : AssertVisit::Abort;
     };
 
     if (optVisitReachingAssertions(vn, visitor) == AssertVisit::Continue)
