@@ -224,45 +224,44 @@ namespace System
                 bool isStatic = (RuntimeMethodHandle.GetAttributes(method) & MethodAttributes.Static) != 0;
                 if (!isStatic)
                 {
-                    if (IsClosed)
+                    Type instanceType = IsClosed
+                        ? _target!.GetType()
+                        : GetInvokeMethod(GetType()).GetParametersAsSpan()[0].ParameterType;
+                    if (instanceType.IsByRef)
                     {
-                        // The target may be of a derived type that doesn't have visibility onto the
-                        // target method. We don't want to call RuntimeType.GetMethodBase below with that
-                        // or reflection can end up generating a MethodInfo where the ReflectedType cannot
-                        // see the MethodInfo itself and that breaks an important invariant. But the
-                        // target type could include important generic type information we need in order
-                        // to work out what the exact instantiation of the method's declaring type is. So
-                        // we'll walk up the inheritance chain (which will yield exactly instantiated
-                        // types at each step) until we find the declaring type. Since the declaring type
-                        // we get from the method is probably shared and those in the hierarchy we're
-                        // walking won't be we compare using the generic type definition forms instead.
-                        Type targetType = declaringType.GetGenericTypeDefinition();
-                        Type? currentType;
-                        for (currentType = _target!.GetType(); currentType != null; currentType = currentType.BaseType)
-                        {
-                            if (currentType.IsGenericType &&
-                                currentType.GetGenericTypeDefinition() == targetType)
-                            {
-                                declaringType = currentType as RuntimeType;
-                                break;
-                            }
-                        }
+                        instanceType = instanceType.GetElementType()!;
+                    }
 
-                        // RCWs don't need to be "strongly-typed" in which case we don't find a base type
-                        // that matches the declaring type of the method. This is fine because interop needs
-                        // to work with exact methods anyway so declaringType is never shared at this point.
-                        // The targetType may also be an interface with a Default interface method (DIM).
-                        Debug.Assert(
-                            currentType != null
-                            || _target.GetType().IsCOMObject
-                            || targetType.IsInterface, "The class hierarchy should declare the method or be a DIM");
-                    }
-                    else
+                    // The instance type may be a derived type that doesn't have visibility onto the
+                    // target method. We don't want to call RuntimeType.GetMethodBase below with that
+                    // or reflection can end up generating a MethodInfo where the ReflectedType cannot
+                    // see the MethodInfo itself and that breaks an important invariant. But the
+                    // instance type could include important generic type information we need in order
+                    // to work out what the exact instantiation of the method's declaring type is. So
+                    // we'll walk up the inheritance chain (which will yield exactly instantiated
+                    // types at each step) until we find the declaring type. Since the declaring type
+                    // we get from the method is probably shared and those in the hierarchy we're
+                    // walking won't be we compare using the generic type definition forms instead.
+                    Type targetType = declaringType.GetGenericTypeDefinition();
+                    Type? currentType;
+                    for (currentType = instanceType; currentType != null; currentType = currentType.BaseType)
                     {
-                        // it's an open one, need to fetch the first arg of the instantiation
-                        MethodInfo invoke = GetInvokeMethod(GetType());
-                        declaringType = (RuntimeType)invoke.GetParametersAsSpan()[0].ParameterType;
+                        if (currentType.IsGenericType &&
+                            currentType.GetGenericTypeDefinition() == targetType)
+                        {
+                            declaringType = currentType as RuntimeType;
+                            break;
+                        }
                     }
+
+                    // RCWs don't need to be "strongly-typed" in which case we don't find a base type
+                    // that matches the declaring type of the method. This is fine because interop needs
+                    // to work with exact methods anyway so declaringType is never shared at this point.
+                    // The targetType may also be an interface with a Default interface method (DIM).
+                    Debug.Assert(
+                        currentType != null
+                        || instanceType.IsCOMObject
+                        || targetType.IsInterface, "The class hierarchy should declare the method or be a DIM");
                 }
             }
 
