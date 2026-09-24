@@ -295,23 +295,22 @@ namespace System.Buffers.Text
 
 #if NET
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public unsafe void StoreVector512ToDestination(byte* dest, byte* destStart, int destLength, Vector512<byte> str) =>
-                default(Base64EncoderByte).StoreVector512ToDestination(dest, destStart, destLength, str);
+            public void StoreVector512ToDestination(Span<byte> dest, Vector512<byte> str) =>
+                default(Base64EncoderByte).StoreVector512ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            [CompExactlyDependsOn(typeof(Avx2))]
-            public unsafe void StoreVector256ToDestination(byte* dest, byte* destStart, int destLength, Vector256<byte> str) =>
-                default(Base64EncoderByte).StoreVector256ToDestination(dest, destStart, destLength, str);
+            public void StoreVector256ToDestination(Span<byte> dest, Vector256<byte> str) =>
+                default(Base64EncoderByte).StoreVector256ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public unsafe void StoreVector128ToDestination(byte* dest, byte* destStart, int destLength, Vector128<byte> str) =>
-                default(Base64EncoderByte).StoreVector128ToDestination(dest, destStart, destLength, str);
+            public void StoreVector128ToDestination(Span<byte> dest, Vector128<byte> str) =>
+                default(Base64EncoderByte).StoreVector128ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-            public unsafe void StoreArmVector128x4ToDestination(byte* dest, byte* destStart, int destLength,
+            public void StoreArmVector128x4ToDestination(Span<byte> dest,
                 Vector128<byte> res1, Vector128<byte> res2, Vector128<byte> res3, Vector128<byte> res4) =>
-                default(Base64EncoderByte).StoreArmVector128x4ToDestination(dest, destStart, destLength, res1, res2, res3, res4);
+                default(Base64EncoderByte).StoreArmVector128x4ToDestination(dest, res1, res2, res3, res4);
 #endif // NET
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -352,22 +351,22 @@ namespace System.Buffers.Text
 
 #if NET
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public unsafe void StoreVector512ToDestination(ushort* dest, ushort* destStart, int destLength, Vector512<byte> str) =>
-                default(Base64EncoderChar).StoreVector512ToDestination(dest, destStart, destLength, str);
+            public void StoreVector512ToDestination(Span<ushort> dest, Vector512<byte> str) =>
+                default(Base64EncoderChar).StoreVector512ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public unsafe void StoreVector256ToDestination(ushort* dest, ushort* destStart, int destLength, Vector256<byte> str) =>
-                default(Base64EncoderChar).StoreVector256ToDestination(dest, destStart, destLength, str);
+            public void StoreVector256ToDestination(Span<ushort> dest, Vector256<byte> str) =>
+                default(Base64EncoderChar).StoreVector256ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public unsafe void StoreVector128ToDestination(ushort* dest, ushort* destStart, int destLength, Vector128<byte> str) =>
-                default(Base64EncoderChar).StoreVector128ToDestination(dest, destStart, destLength, str);
+            public void StoreVector128ToDestination(Span<ushort> dest, Vector128<byte> str) =>
+                default(Base64EncoderChar).StoreVector128ToDestination(dest, str);
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             [CompExactlyDependsOn(typeof(AdvSimd.Arm64))]
-            public unsafe void StoreArmVector128x4ToDestination(ushort* dest, ushort* destStart, int destLength,
+            public void StoreArmVector128x4ToDestination(Span<ushort> dest,
                 Vector128<byte> res1, Vector128<byte> res2, Vector128<byte> res3, Vector128<byte> res4) =>
-                default(Base64EncoderChar).StoreArmVector128x4ToDestination(dest, destStart, destLength, res1, res2, res3, res4);
+                default(Base64EncoderChar).StoreArmVector128x4ToDestination(dest, res1, res2, res3, res4);
 #endif // NET
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

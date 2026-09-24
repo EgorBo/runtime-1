@@ -54,20 +54,6 @@ namespace System.Buffers.Text
             }
         }
 
-        [Conditional("DEBUG")]
-        internal static unsafe void AssertWrite<TVector>(ushort* dest, ushort* destStart, int destLength)
-        {
-            int vectorElements = sizeof(TVector);
-            ushort* writeEnd = dest + vectorElements;
-            ushort* destEnd = destStart + destLength;
-
-            if (writeEnd > destEnd)
-            {
-                int destIndex = (int)(dest - destStart);
-                Debug.Fail($"Write for {typeof(TVector)} is not within safe bounds. destIndex: {destIndex}, destLength: {destLength}");
-            }
-        }
-
         [DoesNotReturn]
         internal static void ThrowUnreachableException()
         {
@@ -94,10 +80,11 @@ namespace System.Buffers.Text
             int IncrementPadTwo { get; }
             int IncrementPadOne { get; }
 #if NET
-            unsafe void StoreVector512ToDestination(T* dest, T* destStart, int destLength, Vector512<byte> str);
-            unsafe void StoreVector256ToDestination(T* dest, T* destStart, int destLength, Vector256<byte> str);
-            unsafe void StoreVector128ToDestination(T* dest, T* destStart, int destLength, Vector128<byte> str);
-            unsafe void StoreArmVector128x4ToDestination(T* dest, T* destStart, int destLength, Vector128<byte> res1,
+            // The callers guarantee that dest has room for the whole (widened) vector.
+            void StoreVector512ToDestination(Span<T> dest, Vector512<byte> str);
+            void StoreVector256ToDestination(Span<T> dest, Vector256<byte> str);
+            void StoreVector128ToDestination(Span<T> dest, Vector128<byte> str);
+            void StoreArmVector128x4ToDestination(Span<T> dest, Vector128<byte> res1,
                 Vector128<byte> res2, Vector128<byte> res3, Vector128<byte> res4);
 #endif // NET
         }
