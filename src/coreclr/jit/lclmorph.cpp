@@ -1867,7 +1867,6 @@ private:
 #endif // FEATURE_HW_INTRINSICS
 
             case IndirTransform::LclVar:
-                // TODO-ADDR: use "BashToLclVar" here.
                 if (indir->TypeGet() != varDsc->TypeGet())
                 {
                     assert(genTypeSize(indir) == genTypeSize(varDsc)); // BOOL <-> UBYTE.
