@@ -290,7 +290,7 @@ namespace System.Xml.Xsl
         /// </summary>
         public bool IsNode
         {
-            get { return (s_typeCodeToFlags[(int)TypeCode] & TypeFlags.IsNode) != 0; }
+            get { return (TypeCodeToFlags[(int)TypeCode] & TypeFlags.IsNode) != 0; }
         }
 
         /// <summary>
@@ -299,7 +299,7 @@ namespace System.Xml.Xsl
         /// </summary>
         public bool IsAtomicValue
         {
-            get { return (s_typeCodeToFlags[(int)TypeCode] & TypeFlags.IsAtomicValue) != 0; }
+            get { return (TypeCodeToFlags[(int)TypeCode] & TypeFlags.IsAtomicValue) != 0; }
         }
 
         /// <summary>
@@ -308,7 +308,7 @@ namespace System.Xml.Xsl
         /// </summary>
         public bool IsNumeric
         {
-            get { return (s_typeCodeToFlags[(int)TypeCode] & TypeFlags.IsNumeric) != 0; }
+            get { return (TypeCodeToFlags[(int)TypeCode] & TypeFlags.IsNumeric) != 0; }
         }
 
 
@@ -501,7 +501,7 @@ namespace System.Xml.Xsl
                     return false;
 
                 // Now check whether TypeCode is derived from baseType.TypeCode
-                return s_typeCodeDerivation[TypeCode, baseType.TypeCode];
+                return (TypeCodeDerivation[(int)TypeCode] & (1UL << (int)baseType.TypeCode)) != 0;
             }
             else if (baseType.IsStrict)
             {
@@ -672,7 +672,8 @@ namespace System.Xml.Xsl
         #endregion
 
         #region  TypeCodeToFlags
-        private static readonly TypeFlags[] s_typeCodeToFlags = {
+        private static ReadOnlySpan<TypeFlags> TypeCodeToFlags =>
+        [
                 /* XmlTypeCode.None                  */ TypeFlags.IsNode | TypeFlags.IsAtomicValue | TypeFlags.IsNumeric,
                 /* XmlTypeCode.Item                  */ TypeFlags.None,
                 /* XmlTypeCode.Node                  */ TypeFlags.IsNode,
@@ -728,65 +729,67 @@ namespace System.Xml.Xsl
                 /* XmlTypeCode.PositiveInteger       */ TypeFlags.IsAtomicValue | TypeFlags.IsNumeric,
                 /* XmlTypeCode.YearMonthDuration     */ TypeFlags.IsAtomicValue,
                 /* XmlTypeCode.DayTimeDuration       */ TypeFlags.IsAtomicValue,
-        };
+        ];
 
-        private static readonly XmlTypeCode[] s_baseTypeCodes = {
-            /* None                        */ XmlTypeCode.None,
-            /* Item                        */ XmlTypeCode.Item,
-            /* Node                        */ XmlTypeCode.Item,
-            /* Document                    */ XmlTypeCode.Node,
-            /* Element                     */ XmlTypeCode.Node,
-            /* Attribute                   */ XmlTypeCode.Node,
-            /* Namespace                   */ XmlTypeCode.Node,
-            /* ProcessingInstruction       */ XmlTypeCode.Node,
-            /* Comment                     */ XmlTypeCode.Node,
-            /* Text                        */ XmlTypeCode.Node,
-            /* AnyAtomicType               */ XmlTypeCode.Item,
-            /* UntypedAtomic               */ XmlTypeCode.AnyAtomicType,
-            /* String                      */ XmlTypeCode.AnyAtomicType,
-            /* Boolean                     */ XmlTypeCode.AnyAtomicType,
-            /* Decimal                     */ XmlTypeCode.AnyAtomicType,
-            /* Float                       */ XmlTypeCode.AnyAtomicType,
-            /* Double                      */ XmlTypeCode.AnyAtomicType,
-            /* Duration                    */ XmlTypeCode.AnyAtomicType,
-            /* DateTime                    */ XmlTypeCode.AnyAtomicType,
-            /* Time                        */ XmlTypeCode.AnyAtomicType,
-            /* Date                        */ XmlTypeCode.AnyAtomicType,
-            /* GYearMonth                  */ XmlTypeCode.AnyAtomicType,
-            /* GYear                       */ XmlTypeCode.AnyAtomicType,
-            /* GMonthDay                   */ XmlTypeCode.AnyAtomicType,
-            /* GDay                        */ XmlTypeCode.AnyAtomicType,
-            /* GMonth                      */ XmlTypeCode.AnyAtomicType,
-            /* HexBinary                   */ XmlTypeCode.AnyAtomicType,
-            /* Base64Binary                */ XmlTypeCode.AnyAtomicType,
-            /* AnyUri                      */ XmlTypeCode.AnyAtomicType,
-            /* QName                       */ XmlTypeCode.AnyAtomicType,
-            /* Notation                    */ XmlTypeCode.AnyAtomicType,
-            /* NormalizedString            */ XmlTypeCode.String,
-            /* Token                       */ XmlTypeCode.NormalizedString,
-            /* Language                    */ XmlTypeCode.Token,
-            /* NmToken                     */ XmlTypeCode.Token,
-            /* Name                        */ XmlTypeCode.Token,
-            /* NCName                      */ XmlTypeCode.Name,
-            /* Id                          */ XmlTypeCode.NCName,
-            /* Idref                       */ XmlTypeCode.NCName,
-            /* Entity                      */ XmlTypeCode.NCName,
-            /* Integer                     */ XmlTypeCode.Decimal,
-            /* NonPositiveInteger          */ XmlTypeCode.Integer,
-            /* NegativeInteger             */ XmlTypeCode.NonPositiveInteger,
-            /* Long                        */ XmlTypeCode.Integer,
-            /* Int                         */ XmlTypeCode.Long,
-            /* Short                       */ XmlTypeCode.Int,
-            /* Byte                        */ XmlTypeCode.Short,
-            /* NonNegativeInteger          */ XmlTypeCode.Integer,
-            /* UnsignedLong                */ XmlTypeCode.NonNegativeInteger,
-            /* UnsignedInt                 */ XmlTypeCode.UnsignedLong,
-            /* UnsignedShort               */ XmlTypeCode.UnsignedInt,
-            /* UnsignedByte                */ XmlTypeCode.UnsignedShort,
-            /* PositiveInteger             */ XmlTypeCode.NonNegativeInteger,
-            /* YearMonthDuration           */ XmlTypeCode.Duration,
-            /* DayTimeDuration             */ XmlTypeCode.Duration,
-        };
+        // Bit N of entry M is set if XmlTypeCode M is XmlTypeCode N or derives from it.
+        private static ReadOnlySpan<ulong> TypeCodeDerivation =>
+        [
+            /* None                  */ 0x0000000000000001,
+            /* Item                  */ 0x0000000000000002,
+            /* Node                  */ 0x0000000000000006,
+            /* Document              */ 0x000000000000000E,
+            /* Element               */ 0x0000000000000016,
+            /* Attribute             */ 0x0000000000000026,
+            /* Namespace             */ 0x0000000000000046,
+            /* ProcessingInstruction */ 0x0000000000000086,
+            /* Comment               */ 0x0000000000000106,
+            /* Text                  */ 0x0000000000000206,
+            /* AnyAtomicType         */ 0x0000000000000402,
+            /* UntypedAtomic         */ 0x0000000000000C02,
+            /* String                */ 0x0000000000001402,
+            /* Boolean               */ 0x0000000000002402,
+            /* Decimal               */ 0x0000000000004402,
+            /* Float                 */ 0x0000000000008402,
+            /* Double                */ 0x0000000000010402,
+            /* Duration              */ 0x0000000000020402,
+            /* DateTime              */ 0x0000000000040402,
+            /* Time                  */ 0x0000000000080402,
+            /* Date                  */ 0x0000000000100402,
+            /* GYearMonth            */ 0x0000000000200402,
+            /* GYear                 */ 0x0000000000400402,
+            /* GMonthDay             */ 0x0000000000800402,
+            /* GDay                  */ 0x0000000001000402,
+            /* GMonth                */ 0x0000000002000402,
+            /* HexBinary             */ 0x0000000004000402,
+            /* Base64Binary          */ 0x0000000008000402,
+            /* AnyUri                */ 0x0000000010000402,
+            /* QName                 */ 0x0000000020000402,
+            /* Notation              */ 0x0000000040000402,
+            /* NormalizedString      */ 0x0000000080001402,
+            /* Token                 */ 0x0000000180001402,
+            /* Language              */ 0x0000000380001402,
+            /* NmToken               */ 0x0000000580001402,
+            /* Name                  */ 0x0000000980001402,
+            /* NCName                */ 0x0000001980001402,
+            /* Id                    */ 0x0000003980001402,
+            /* Idref                 */ 0x0000005980001402,
+            /* Entity                */ 0x0000009980001402,
+            /* Integer               */ 0x0000010000004402,
+            /* NonPositiveInteger    */ 0x0000030000004402,
+            /* NegativeInteger       */ 0x0000070000004402,
+            /* Long                  */ 0x0000090000004402,
+            /* Int                   */ 0x0000190000004402,
+            /* Short                 */ 0x0000390000004402,
+            /* Byte                  */ 0x0000790000004402,
+            /* NonNegativeInteger    */ 0x0000810000004402,
+            /* UnsignedLong          */ 0x0001810000004402,
+            /* UnsignedInt           */ 0x0003810000004402,
+            /* UnsignedShort         */ 0x0007810000004402,
+            /* UnsignedByte          */ 0x000F810000004402,
+            /* PositiveInteger       */ 0x0010810000004402,
+            /* YearMonthDuration     */ 0x0020000000020402,
+            /* DayTimeDuration       */ 0x0040000000020402,
+        ];
 
         private static readonly string[] s_typeNames = {
             /* None                        */ "none",
@@ -845,91 +848,6 @@ namespace System.Xml.Xsl
             /* YearMonthDuration           */ "xdt:yearMonthDuration",
             /* DayTimeDuration             */ "xdt:dayTimeDuration",
         };
-
-        private static readonly BitMatrix s_typeCodeDerivation = CreateTypeCodeDerivation();
-
-        private static BitMatrix CreateTypeCodeDerivation()
-        {
-            var matrix = new BitMatrix(s_baseTypeCodes.Length);
-
-            for (int i = 0; i < s_baseTypeCodes.Length; i++)
-            {
-                int nextAncestor = i;
-
-                while (true)
-                {
-                    matrix[i, nextAncestor] = true;
-                    if ((int)s_baseTypeCodes[nextAncestor] == nextAncestor)
-                        break;
-
-                    nextAncestor = (int)s_baseTypeCodes[nextAncestor];
-                }
-            }
-
-            return matrix;
-        }
         #endregion
-
-        /// <summary>
-        /// Implements an NxN bit matrix.
-        /// </summary>
-        private sealed class BitMatrix
-        {
-            private readonly ulong[] _bits;
-
-            /// <summary>
-            /// Create NxN bit matrix, where N = count.
-            /// </summary>
-            public BitMatrix(int count)
-            {
-                Debug.Assert(count < 64, "BitMatrix currently only handles up to 64x64 matrix.");
-                _bits = new ulong[count];
-            }
-
-            //            /// <summary>
-            //            /// Return the number of rows and columns in the matrix.
-            //            /// </summary>
-            //            public int Size {
-            //                get { return bits.Length; }
-            //            }
-            //
-            /// <summary>
-            /// Get or set a bit in the matrix at position (index1, index2).
-            /// </summary>
-            public bool this[int index1, int index2]
-            {
-                get
-                {
-                    Debug.Assert(index1 < _bits.Length && index2 < _bits.Length, "Index out of range.");
-                    return (_bits[index1] & ((ulong)1 << index2)) != 0;
-                }
-                set
-                {
-                    Debug.Assert(index1 < _bits.Length && index2 < _bits.Length, "Index out of range.");
-                    if (value)
-                    {
-                        _bits[index1] |= (ulong)1 << index2;
-                    }
-                    else
-                    {
-                        _bits[index1] &= ~((ulong)1 << index2);
-                    }
-                }
-            }
-
-            /// <summary>
-            /// Strongly typed indexer.
-            /// </summary>
-            public bool this[XmlTypeCode index1, XmlTypeCode index2]
-            {
-                get
-                {
-                    return this[(int)index1, (int)index2];
-                }
-                //                set {
-                //                    this[(int)index1, (int)index2] = value;
-                //                }
-            }
-        }
     }
 }

@@ -174,7 +174,8 @@ namespace System.Xml
             "Whitespace",               // Token.Whitespace
         };
 
-        private static readonly WriteState[] s_state2WriteState = {
+        private static ReadOnlySpan<WriteState> State2WriteState =>
+        [
             WriteState.Start,       // State.Start
             WriteState.Prolog,      // State.TopLevel
             WriteState.Prolog,      // State.Document
@@ -192,7 +193,7 @@ namespace System.Xml
             WriteState.Attribute,   // State.AfterRootLevelAttr
             WriteState.Closed,      // State.Closed
             WriteState.Error,       // State.Error
-        };
+        ];
 
         private static readonly State[] s_stateTableDocument = {
     //                         State.Start           State.TopLevel   State.Document     State.Element          State.Content     State.B64Content      State.B64Attribute   State.AfterRootEle    State.Attribute,      State.SpecialAttr,   State.EndDocument,  State.RootLevelAttr,      State.RootLevelSpecAttr,  State.RootLevelB64Attr   State.AfterRootLevelAttr, // 16
@@ -288,7 +289,7 @@ namespace System.Xml
             {
                 if ((int)_currentState <= (int)State.Error)
                 {
-                    return s_state2WriteState[(int)_currentState];
+                    return State2WriteState[(int)_currentState];
                 }
                 else
                 {

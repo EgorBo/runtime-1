@@ -1894,7 +1894,8 @@ namespace System.Xml.XPath
         internal const int AllMask = 0x7FFFFFFF;
         internal const int NoAttrNmspMask = AllMask & ~(1 << (int)XPathNodeType.Attribute) & ~(1 << (int)XPathNodeType.Namespace);
         internal const int TextMask = (1 << (int)XPathNodeType.Text) | (1 << (int)XPathNodeType.SignificantWhitespace) | (1 << (int)XPathNodeType.Whitespace);
-        internal static readonly int[] ContentKindMasks = {
+        internal static ReadOnlySpan<int> ContentKindMasks =>
+        [
             (1 << (int) XPathNodeType.Root),                        // Root
             (1 << (int) XPathNodeType.Element),                     // Element
             0,                                                      // Attribute (not content)
@@ -1905,7 +1906,7 @@ namespace System.Xml.XPath
             (1 << (int) XPathNodeType.ProcessingInstruction),       // ProcessingInstruction
             (1 << (int) XPathNodeType.Comment),                     // Comment
             NoAttrNmspMask,                                         // All
-        };
+        ];
 
         internal static int GetContentKindMask(XPathNodeType type)
         {

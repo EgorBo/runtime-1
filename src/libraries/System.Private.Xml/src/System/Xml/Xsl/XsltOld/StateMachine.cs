@@ -25,6 +25,7 @@ namespace System.Xml.Xsl.XsltOld
         private const int InPI = 0x00000b;       // Adding text to a processing instruction
 
         private const int StateMask = 0x00000F;       // State mask
+        private const int StateCount = InPI + 1;      // Number of states (columns in the transition tables)
 
         internal const int Error = 0x000010;       // Invalid XML state
 
@@ -80,6 +81,7 @@ namespace System.Xml.Xsl.XsltOld
             set
             {
                 // Hope you know what you are doing ...
+                Debug.Assert((uint)value < StateCount);
                 _State = value;
             }
         }
@@ -96,14 +98,14 @@ namespace System.Xml.Xsl.XsltOld
 
         internal int BeginOutlook(XPathNodeType nodeType)
         {
-            int newState = s_BeginTransitions[(int)nodeType][_State];
+            int newState = BeginTransitions[(int)nodeType * StateCount + _State];
             Debug.Assert(newState != Assrt);
             return newState;
         }
 
         internal int Begin(XPathNodeType nodeType)
         {
-            int newState = s_BeginTransitions[(int)nodeType][_State];
+            int newState = BeginTransitions[(int)nodeType * StateCount + _State];
             Debug.Assert(newState != Assrt);
 
             if (newState != Error && newState != Ignor)
@@ -115,14 +117,14 @@ namespace System.Xml.Xsl.XsltOld
 
         internal int EndOutlook(XPathNodeType nodeType)
         {
-            int newState = s_EndTransitions[(int)nodeType][_State];
+            int newState = EndTransitions[(int)nodeType * StateCount + _State];
             Debug.Assert(newState != Assrt);
             return newState;
         }
 
         internal int End(XPathNodeType nodeType)
         {
-            int newState = s_EndTransitions[(int)nodeType][_State];
+            int newState = EndTransitions[(int)nodeType * StateCount + _State];
             Debug.Assert(newState != Assrt);
 
             if (newState != Error && newState != Ignor)
@@ -132,32 +134,34 @@ namespace System.Xml.Xsl.XsltOld
             return newState;
         }
 
-        private static readonly int[][] s_BeginTransitions = {
-            /*                                    { Init,      Elem,          NsN,     NsV,     Ns,              AttrN,   AttrV,   Attr,            InElm,           EndEm,           InCmt,   InPI  }, */
-            /* Root                  */ new int[] { Error,     Error,         Error,   Error,   Error,           Error,   Error,   Error,           Error,           Error,           Error,   Error },
-            /* Element               */ new int[] { Elem |B|S, Elem |U|C|B|S, Error,   Error,   Elem |C|B|S,     Error,   Error,   Elem |C|B|S,     Elem |B|S,       Elem |B|P|S,     Error,   Error },
-            /* Attribute             */ new int[] { Error,     AttrN|U,       Error,   Error,   AttrN,           Error,   Error,   AttrN,           Error,           Error,           Error,   Error },
-            /* Namespace             */ new int[] { Error,     NsN|U,         Error,   Error,   NsN,             Error,   Error,   Error,           Error,           Error,           Error,   Error },
-            /* Text                  */ new int[] { InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI  },
-            /* SignificantWhitespace */ new int[] { InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI  },
-            /* Whitespace            */ new int[] { InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI  },
-            /* ProcessingInstruction */ new int[] { InPI |B,   InPI |U|C|B,   Error,   Error,   InPI |C|B,       Error,   Error,   InPI |C|B,       InPI |B,         InPI |B|P,       Error,   Error },
-            /* Comment               */ new int[] { InCmt|B,   InCmt|U|C|B,   Error,   Error,   InCmt|C|B,       Error,   Error,   InCmt|C|B,       InCmt|B,         InCmt|B|P,       Error,   Error },
-            /* All                   */ new int[] { Error,     Error,         Error,   Error,   Error,           Error,   Error,   Error,           Error,           Error,           Error,   Error },
-        };
+        private static ReadOnlySpan<int> BeginTransitions =>
+        [
+            /*                          Init,      Elem,          NsN,     NsV,     Ns,              AttrN,   AttrV,   Attr,            InElm,           EndEm,           InCmt,   InPI */
+            /* Root                  */ Error,     Error,         Error,   Error,   Error,           Error,   Error,   Error,           Error,           Error,           Error,   Error,
+            /* Element               */ Elem |B|S, Elem |U|C|B|S, Error,   Error,   Elem |C|B|S,     Error,   Error,   Elem |C|B|S,     Elem |B|S,       Elem |B|P|S,     Error,   Error,
+            /* Attribute             */ Error,     AttrN|U,       Error,   Error,   AttrN,           Error,   Error,   AttrN,           Error,           Error,           Error,   Error,
+            /* Namespace             */ Error,     NsN|U,         Error,   Error,   NsN,             Error,   Error,   Error,           Error,           Error,           Error,   Error,
+            /* Text                  */ InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI,
+            /* SignificantWhitespace */ InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI,
+            /* Whitespace            */ InElm|B,   InElm|U|C|B,   NsV|U,   NsV,     InElm|C|B,       AttrV|U, AttrV,   InElm|C|B,       InElm,           InElm|B|P,       InCmt,   InPI,
+            /* ProcessingInstruction */ InPI |B,   InPI |U|C|B,   Error,   Error,   InPI |C|B,       Error,   Error,   InPI |C|B,       InPI |B,         InPI |B|P,       Error,   Error,
+            /* Comment               */ InCmt|B,   InCmt|U|C|B,   Error,   Error,   InCmt|C|B,       Error,   Error,   InCmt|C|B,       InCmt|B,         InCmt|B|P,       Error,   Error,
+            /* All                   */ Error,     Error,         Error,   Error,   Error,           Error,   Error,   Error,           Error,           Error,           Error,   Error,
+        ];
 
-        private static readonly int[][] s_EndTransitions = {
-            /*                                    { Init,      Elem,          NsN,     NsV,     Ns,              AttrN,   AttrV,   Attr,            InElm,           EndEm,           InCmt,   InPI   }, */
-            /* Root                  */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* Element               */ new int[] { Assrt,     EndEm|B|E|P|M, Assrt,   Assrt,   EndEm|D|B|E|P|M, Assrt,   Assrt,   EndEm|D|B|E|P|M, EndEm|D|H|B|E|P, EndEm|D|H|B|E|P, Assrt,   Assrt  },
-            /* Attribute             */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Attr,    Attr |D, Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* Namespace             */ new int[] { Assrt,     Assrt,         Ns,      Ns |D,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* Text                  */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* SignificantWhitespace */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* Whitespace            */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-            /* ProcessingInstruction */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   EndEm|E},
-            /* Comment               */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           EndEm|E, Assrt  },
-            /* All                   */ new int[] { Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt  },
-        };
+        private static ReadOnlySpan<int> EndTransitions =>
+        [
+            /*                          Init,      Elem,          NsN,     NsV,     Ns,              AttrN,   AttrV,   Attr,            InElm,           EndEm,           InCmt,   InPI */
+            /* Root                  */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* Element               */ Assrt,     EndEm|B|E|P|M, Assrt,   Assrt,   EndEm|D|B|E|P|M, Assrt,   Assrt,   EndEm|D|B|E|P|M, EndEm|D|H|B|E|P, EndEm|D|H|B|E|P, Assrt,   Assrt,
+            /* Attribute             */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Attr,    Attr |D, Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* Namespace             */ Assrt,     Assrt,         Ns,      Ns |D,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* Text                  */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* SignificantWhitespace */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* Whitespace            */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+            /* ProcessingInstruction */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   EndEm|E,
+            /* Comment               */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           EndEm|E, Assrt,
+            /* All                   */ Assrt,     Assrt,         Assrt,   Assrt,   Assrt,           Assrt,   Assrt,   Assrt,           Assrt,           Assrt,           Assrt,   Assrt,
+        ];
     }
 }

@@ -113,7 +113,7 @@ namespace System.Xml.Xsl.XPath
         public virtual QilNode Operator(XPathOperator op, QilNode? left, QilNode? right)
         {
             Debug.Assert(op != XPathOperator.Unknown);
-            XPathOperatorGroup opGroup = s_operatorGroup[(int)op];
+            XPathOperatorGroup opGroup = OperatorGroup[(int)op];
 
             Debug.Assert((opGroup != XPathOperatorGroup.Negate && right != null) || (opGroup == XPathOperatorGroup.Negate && right == null));
 
@@ -217,7 +217,7 @@ namespace System.Xml.Xsl.XPath
 
             if (XPathQilFactory.IsAnyType(left) || XPathQilFactory.IsAnyType(right))
             {
-                return _f.InvokeEqualityOperator(s_qilOperator[(int)op], left, right);
+                return _f.InvokeEqualityOperator(QilOperator[(int)op], left, right);
             }
             else if (leftType.IsNode && rightType.IsNode)
             {
@@ -250,7 +250,7 @@ namespace System.Xml.Xsl.XPath
 
             if (XPathQilFactory.IsAnyType(left) || XPathQilFactory.IsAnyType(right))
             {
-                return _f.InvokeRelationalOperator(s_qilOperator[(int)op], left, right);
+                return _f.InvokeRelationalOperator(QilOperator[(int)op], left, right);
             }
             else if (leftType.IsNode && rightType.IsNode)
             {
@@ -321,7 +321,7 @@ namespace System.Xml.Xsl.XPath
         {
             return (XmlNodeKindFlags)(
                 (int)inputTypeMask &
-                (int)s_XPathNodeType2QilXmlNodeKind[(int)nodeType] & (int)s_XPathAxisMask[(int)xpathAxis]
+                (int)XPathNodeType2QilXmlNodeKind[(int)nodeType] & (int)XPathAxisMask[(int)xpathAxis]
             );
         }
 
@@ -374,7 +374,8 @@ namespace System.Xml.Xsl.XPath
         }
 
         // XmlNodeKindFlags from XPathNodeType
-        private static readonly XmlNodeKindFlags[] s_XPathNodeType2QilXmlNodeKind = {
+        private static ReadOnlySpan<XmlNodeKindFlags> XPathNodeType2QilXmlNodeKind =>
+        [
                 /*Root                 */ XmlNodeKindFlags.Document,
                 /*Element              */ XmlNodeKindFlags.Element,
                 /*Attribute            */ XmlNodeKindFlags.Attribute,
@@ -385,7 +386,7 @@ namespace System.Xml.Xsl.XPath
                 /*ProcessingInstruction*/ XmlNodeKindFlags.PI,
                 /*Comment              */ XmlNodeKindFlags.Comment,
                 /*All                  */ XmlNodeKindFlags.Any
-        };
+        ];
 
         private QilNode BuildAxis(XPathAxis xpathAxis, XPathNodeType nodeType, string? nsUri, string? name)
         {
@@ -686,7 +687,8 @@ namespace System.Xml.Xsl.XPath
             Union,
         }
 
-        private static readonly XPathOperatorGroup[] s_operatorGroup = {
+        private static ReadOnlySpan<XPathOperatorGroup> OperatorGroup =>
+        [
             /*Unknown   */ XPathOperatorGroup.Unknown,
             /*Or        */ XPathOperatorGroup.Logical,
             /*And       */ XPathOperatorGroup.Logical,
@@ -703,9 +705,10 @@ namespace System.Xml.Xsl.XPath
             /*Modulo    */ XPathOperatorGroup.Arithmetic,
             /*UnaryMinus*/ XPathOperatorGroup.Negate,
             /*Union     */ XPathOperatorGroup.Union,
-        };
+        ];
 
-        private static readonly QilNodeType[] s_qilOperator = {
+        private static ReadOnlySpan<QilNodeType> QilOperator =>
+        [
             /*Unknown    */ QilNodeType.Unknown,
             /*Or         */ QilNodeType.Or,
             /*And        */ QilNodeType.And,
@@ -722,10 +725,11 @@ namespace System.Xml.Xsl.XPath
             /*Modulo     */ QilNodeType.Modulo,
             /*UnaryMinus */ QilNodeType.Negate,
             /*Union      */ QilNodeType.Sequence,
-        };
+        ];
 
         // XmlNodeType(s) of nodes by XPathAxis
-        private static readonly XmlNodeKindFlags[] s_XPathAxisMask = {
+        private static ReadOnlySpan<XmlNodeKindFlags> XPathAxisMask =>
+        [
             /*Unknown         */ XmlNodeKindFlags.None,
             /*Ancestor        */ XmlNodeKindFlags.Element | XmlNodeKindFlags.Document,
             /*AncestorOrSelf  */ XmlNodeKindFlags.Any,
@@ -741,7 +745,7 @@ namespace System.Xml.Xsl.XPath
             /*PrecedingSibling*/ XmlNodeKindFlags.Content,
             /*Self            */ XmlNodeKindFlags.Any,
             /*Root            */ XmlNodeKindFlags.Document,
-        };
+        ];
 
         // ----------------------------------------------------------------
         internal enum FuncId

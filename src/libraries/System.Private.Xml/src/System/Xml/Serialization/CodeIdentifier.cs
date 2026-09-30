@@ -274,14 +274,14 @@ namespace System.Xml.Serialization
             }
         }
 
-        private static readonly char[] s_identifierSeparators = new char[] { '.', ',', '<', '>' };
+        private static ReadOnlySpan<char> IdentifierSeparators => ['.', ',', '<', '>'];
 
         [return: NotNullIfNotNull(nameof(identifier))]
         private static string? EscapeKeywords(string? identifier)
         {
             if (string.IsNullOrEmpty(identifier)) return identifier;
             string originalIdentifier = identifier;
-            string[] names = identifier.Split(s_identifierSeparators);
+            string[] names = identifier.Split(IdentifierSeparators);
             StringBuilder sb = new StringBuilder();
             int separator = -1;
             for (int i = 0; i < names.Length; i++)

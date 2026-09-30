@@ -54,8 +54,6 @@ namespace System.Xml.Xsl.IlGen
     /// </summary>
     internal sealed class OptimizerPatterns : IQilAnnotation
     {
-        private static readonly int s_patternCount = Enum.GetValues<OptimizerPatternName>().Length;
-
         private int _patterns;               // Set of patterns that the annotated Qil node and its subtree matches
         private bool _isReadOnly;            // True if setters are disabled in the case of singleton OptimizerPatterns
         private object? _arg0, _arg1, _arg2;    // Arguments to the matching patterns
@@ -271,8 +269,9 @@ namespace System.Xml.Xsl.IlGen
         public override string ToString()
         {
             string s = "";
+            int patternCount = Enum.GetValues<OptimizerPatternName>().Length;
 
-            for (int pattNum = 0; pattNum < s_patternCount; pattNum++)
+            for (int pattNum = 0; pattNum < patternCount; pattNum++)
             {
                 if (MatchesPattern((OptimizerPatternName)pattNum))
                 {

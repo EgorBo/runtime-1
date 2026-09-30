@@ -10,8 +10,8 @@ namespace System.Xml.XPath
 {
     internal sealed class XNodeNavigator : XPathNavigator, IXmlLineInfo
     {
-        internal static readonly string xmlPrefixNamespace = XNamespace.Xml.NamespaceName;
-        internal static readonly string xmlnsPrefixNamespace = XNamespace.Xmlns.NamespaceName;
+        internal const string xmlPrefixNamespace = XNamespace.xmlPrefixNamespace;
+        internal const string xmlnsPrefixNamespace = XNamespace.xmlnsPrefixNamespace;
         private const int DocumentContentMask =
             (1 << (int)XmlNodeType.Element) |
             (1 << (int)XmlNodeType.ProcessingInstruction) |

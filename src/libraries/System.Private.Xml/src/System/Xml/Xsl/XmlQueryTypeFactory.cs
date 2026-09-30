@@ -299,7 +299,8 @@ namespace System.Xml.Xsl
         /// <summary>
         /// Map XPathNodeType to XmlTypeCode.
         /// </summary>
-        private static readonly XmlTypeCode[] s_nodeKindToTypeCode = {
+        private static ReadOnlySpan<XmlTypeCode> NodeKindToTypeCode =>
+        [
             /* XPathNodeType.Root */                    XmlTypeCode.Document,
             /* XPathNodeType.Element */                 XmlTypeCode.Element,
             /* XPathNodeType.Attribute */               XmlTypeCode.Attribute,
@@ -310,7 +311,7 @@ namespace System.Xml.Xsl
             /* XPathNodeType.ProcessingInstruction */   XmlTypeCode.ProcessingInstruction,
             /* XPathNodeType.Comment */                 XmlTypeCode.Comment,
             /* XPathNodeType.All */                     XmlTypeCode.Node,
-        };
+        ];
         #endregion
 
         //-----------------------------------------------
@@ -705,13 +706,13 @@ namespace System.Xml.Xsl
                 // If exactly one kind is set, then create singleton ItemType
                 if (BitOperations.IsPow2(kinds))
                 {
-                    return ItemType.Create(s_nodeKindToTypeCode[BitOperations.TrailingZeroCount(kinds) + 1], false);
+                    return ItemType.Create(NodeKindFlagsToTypeCode[BitOperations.TrailingZeroCount(kinds) + 1], false);
                 }
 
                 members = new List<XmlQueryType>();
                 while (kinds != 0)
                 {
-                    members.Add(ItemType.Create(s_nodeKindToTypeCode[BitOperations.TrailingZeroCount(kinds) + 1], false));
+                    members.Add(ItemType.Create(NodeKindFlagsToTypeCode[BitOperations.TrailingZeroCount(kinds) + 1], false));
 
                     kinds &= kinds - 1;
                 }
@@ -790,7 +791,8 @@ namespace System.Xml.Xsl
                 }
             }
 
-            private static readonly XmlTypeCode[] s_nodeKindToTypeCode = {
+            private static ReadOnlySpan<XmlTypeCode> NodeKindFlagsToTypeCode =>
+            [
                 /* None */          XmlTypeCode.None,
                 /* Document */      XmlTypeCode.Document,
                 /* Element */       XmlTypeCode.Element,
@@ -799,7 +801,7 @@ namespace System.Xml.Xsl
                 /* Comment */       XmlTypeCode.Comment,
                 /* PI */            XmlTypeCode.ProcessingInstruction,
                 /* Namespace */     XmlTypeCode.Namespace,
-            };
+            ];
 
             //-----------------------------------------------
             // Serialization
@@ -1151,7 +1153,7 @@ namespace System.Xml.Xsl
         /// <returns>the node type</returns>
         public static XmlQueryType Type(XPathNodeType kind, XmlQualifiedNameTest nameTest, XmlSchemaType contentType, bool isNillable)
         {
-            return ItemType.Create(s_nodeKindToTypeCode[(int)kind], nameTest, contentType, isNillable);
+            return ItemType.Create(NodeKindToTypeCode[(int)kind], nameTest, contentType, isNillable);
         }
 
         #region Serialization

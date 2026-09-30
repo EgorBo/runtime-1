@@ -16,7 +16,7 @@ namespace System.Xml
 {
     internal sealed partial class XmlSqlBinaryReader : XmlReader, IXmlNamespaceResolver
     {
-        private static Type?[] s_tokenTypeMap = null!;
+        private static Type?[]? s_tokenTypeMap;
 
         private static ReadOnlySpan<byte> XsdKatmaiTimeScaleToValueLengthMap => // 8
         [
@@ -44,7 +44,8 @@ namespace System.Xml
             Closed = 8
         }
 
-        private static readonly ReadState[] s_scanState2ReadState = {
+        private static ReadOnlySpan<ReadState> ScanState2ReadState =>
+        [
             ReadState.Interactive,
             ReadState.Interactive,
             ReadState.Interactive,
@@ -54,7 +55,7 @@ namespace System.Xml
             ReadState.Error,
             ReadState.EndOfFile,
             ReadState.Closed
-        };
+        ];
 
         // Note: also used by XmlBinaryWriter
         internal struct QName : IEquatable<QName>
@@ -923,7 +924,7 @@ namespace System.Xml
         {
             get
             {
-                return s_scanState2ReadState[(int)_state];
+                return ScanState2ReadState[(int)_state];
             }
         }
 
@@ -3316,7 +3317,7 @@ namespace System.Xml
 
         private System.Type GetValueType(BinXmlToken token)
         {
-            Type? t = s_tokenTypeMap[(int)token];
+            Type? t = s_tokenTypeMap![(int)token];
 
             if (t == null)
                 throw CreateUnexpectedTokenException(token);

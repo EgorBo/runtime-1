@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System;
 using System.Diagnostics;
 using System.Xml.XPath;
 
@@ -32,7 +33,8 @@ namespace MS.Internal.Xml.XPath
             UNION,
         };
 
-        private static readonly Op[] s_invertOp = {
+        private static ReadOnlySpan<Op> InvertOp =>
+        [
             /*INVALID*/ Op.INVALID,
             /*OR     */ Op.INVALID,
             /*END    */ Op.INVALID,
@@ -42,12 +44,12 @@ namespace MS.Internal.Xml.XPath
             /*LE     */ Op.GE,
             /*GT     */ Op.LT,
             /*GE     */ Op.LE,
-        };
+        ];
 
         public static Operator.Op InvertOperator(Operator.Op op)
         {
             Debug.Assert(Op.EQ <= op && op <= Op.GE);
-            return s_invertOp[(int)op];
+            return InvertOp[(int)op];
         }
 
         private readonly Op _opType;

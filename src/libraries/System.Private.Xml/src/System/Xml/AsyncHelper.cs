@@ -7,11 +7,11 @@ namespace System.Xml
 {
     internal static class AsyncHelper
     {
-        public static readonly Task<bool> DoneTaskTrue = Task.FromResult(true);
+        public static Task<bool> DoneTaskTrue => Task.FromResult(true);
 
-        public static readonly Task<bool> DoneTaskFalse = Task.FromResult(false);
+        public static Task<bool> DoneTaskFalse => Task.FromResult(false);
 
-        public static readonly Task<int> DoneTaskZero = Task.FromResult(0);
+        public static Task<int> DoneTaskZero => Task.FromResult(0);
 
         public static bool IsSuccess(this Task task)
         {

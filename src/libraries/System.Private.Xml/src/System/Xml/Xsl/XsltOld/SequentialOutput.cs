@@ -47,10 +47,10 @@ namespace System.Xml.Xsl.XsltOld
 
         private const string s_EndOfLine = "\r\n";
 
-        private static readonly char[] s_TextValueFind = new char[] { s_Ampersand, s_GreaterThan, s_LessThan };
+        private static ReadOnlySpan<char> TextValueFind => [s_Ampersand, s_GreaterThan, s_LessThan];
         private static readonly string[] s_TextValueReplace = new string[] { s_EnAmpersand, s_EnGreaterThan, s_EnLessThan };
 
-        private static readonly char[] s_XmlAttributeValueFind = new char[] { s_Ampersand, s_GreaterThan, s_LessThan, s_Quote, s_NewLine, s_Return };
+        private static ReadOnlySpan<char> XmlAttributeValueFind => [s_Ampersand, s_GreaterThan, s_LessThan, s_Quote, s_NewLine, s_Return];
         private static readonly string[] s_XmlAttributeValueReplace = new string[] { s_EnAmpersand, s_EnGreaterThan, s_EnLessThan, s_EnQuote, s_EnNewLine, s_EnReturn };
 
         // Instance members
@@ -215,7 +215,7 @@ namespace System.Xml.Xsl.XsltOld
                 }
                 else
                 {
-                    WriteWithReplace(text, s_TextValueFind, s_TextValueReplace);
+                    WriteWithReplace(text, TextValueFind, s_TextValueReplace);
                 }
             }
         }
@@ -534,7 +534,7 @@ namespace System.Xml.Xsl.XsltOld
         private void WriteXmlAttributeValue(string value)
         {
             Debug.Assert(value != null);
-            WriteWithReplace(value, s_XmlAttributeValueFind, s_XmlAttributeValueReplace);
+            WriteWithReplace(value, XmlAttributeValueFind, s_XmlAttributeValueReplace);
         }
 
         private void WriteHtmlAttributeValue(string value)
@@ -625,7 +625,7 @@ namespace System.Xml.Xsl.XsltOld
             }
         }
 
-        private void WriteWithReplace(string value, char[] find, string[] replace)
+        private void WriteWithReplace(string value, ReadOnlySpan<char> find, string[] replace)
         {
             Debug.Assert(value != null);
             Debug.Assert(find.Length == replace.Length);
@@ -635,11 +635,12 @@ namespace System.Xml.Xsl.XsltOld
 
             while (pos < length)
             {
-                int newPos = value.IndexOfAny(find, pos);
+                int newPos = value.AsSpan(pos).IndexOfAny(find);
                 if (newPos == -1)
                 {
                     break; // not found;
                 }
+                newPos += pos;
                 // output clean leading part of the string
                 while (pos < newPos)
                 {

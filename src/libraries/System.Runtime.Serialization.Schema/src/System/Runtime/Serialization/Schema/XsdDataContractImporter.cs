@@ -32,7 +32,6 @@ namespace System.Runtime.Serialization
         private CodeCompileUnit _codeCompileUnit = null!;   // Not directly referenced. Always lazy initialized by property getter.
         private DataContractSet? _dataContractSet;
 
-        private static readonly XmlQualifiedName[] s_emptyTypeNameArray = Array.Empty<XmlQualifiedName>();
         private XmlQualifiedName[] _singleTypeNameArray = null!;   // Not directly referenced. Always lazy initialized by property getter.
         private XmlSchemaElement[] _singleElementArray = null!;   // Not directly referenced. Always lazy initialized by property getter.
 
@@ -136,7 +135,7 @@ namespace System.Runtime.Serialization
                 throw ExceptionUtil.ThrowHelperError(new ArgumentNullException(nameof(element)));
 
             SingleElementArray[0] = element;
-            IList<XmlQualifiedName>? elementNames = InternalImport(schemas, s_emptyTypeNameArray, SingleElementArray);
+            IList<XmlQualifiedName>? elementNames = InternalImport(schemas, Array.Empty<XmlQualifiedName>(), SingleElementArray);
             Debug.Assert(elementNames != null && elementNames.Count > 0);
             return elementNames[0];
         }
@@ -207,7 +206,7 @@ namespace System.Runtime.Serialization
                 throw ExceptionUtil.ThrowHelperError(new ArgumentNullException(nameof(element)));
 
             SingleElementArray[0] = element;
-            return InternalCanImport(schemas, s_emptyTypeNameArray, SingleElementArray);
+            return InternalCanImport(schemas, Array.Empty<XmlQualifiedName>(), SingleElementArray);
         }
 
         /// <summary>

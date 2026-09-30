@@ -989,7 +989,8 @@ namespace System.Xml.Xsl.Xslt
                 return XslFlags.Number;
             }
 
-            private static readonly XslFlags[] s_operatorType = {
+            private static ReadOnlySpan<XslFlags> OperatorType =>
+            [
                 /*Unknown   */ XslFlags.AnyType,
                 /*Or        */ XslFlags.Boolean,
                 /*And       */ XslFlags.Boolean,
@@ -1006,14 +1007,14 @@ namespace System.Xml.Xsl.Xslt
                 /*Modulo    */ XslFlags.Number,
                 /*UnaryMinus*/ XslFlags.Number,
                 /*Union     */ XslFlags.Nodeset,
-            };
+            ];
 
             public XslFlags Operator(XPathOperator op, XslFlags left, XslFlags right)
             {
                 _typeDonor = null;
                 Debug.Assert(op != XPathOperator.Unknown);
                 XslFlags result = (left | right) & ~XslFlags.TypeFilter;
-                return result | s_operatorType[(int)op];
+                return result | OperatorType[(int)op];
             }
 
             public XslFlags Axis(XPathAxis xpathAxis, XPathNodeType nodeType, string? prefix, string? name)
@@ -1076,7 +1077,7 @@ namespace System.Xml.Xsl.Xslt
                     if (XPathBuilder.FunctionTable.TryGetValue(name, out xpathFunc))
                     {
                         XPathBuilder.FuncId funcId = xpathFunc.id;
-                        funcFlags = s_XPathFunctionFlags[(int)funcId];
+                        funcFlags = XPathFunctionFlags[(int)funcId];
                         if (args.Count == 0 && (
                             funcId == XPathBuilder.FuncId.LocalName ||
                             funcId == XPathBuilder.FuncId.NamespaceUri ||
@@ -1093,7 +1094,7 @@ namespace System.Xml.Xsl.Xslt
                     else if (QilGenerator.FunctionTable.TryGetValue(name, out xsltFunc))
                     {
                         QilGenerator.FuncId funcId = xsltFunc.id;
-                        funcFlags = s_xsltFunctionFlags[(int)funcId];
+                        funcFlags = XsltFunctionFlags[(int)funcId];
                         if (funcId == QilGenerator.FuncId.Current)
                         {
                             _xsltCurrentNeeded = true;
@@ -1184,7 +1185,8 @@ namespace System.Xml.Xsl.Xslt
             }
 
             #region XPath Function Flags
-            private static readonly XslFlags[] s_XPathFunctionFlags = {
+            private static ReadOnlySpan<XslFlags> XPathFunctionFlags =>
+            [
             /*Last              */ XslFlags.Number | XslFlags.Last,
             /*Position          */ XslFlags.Number | XslFlags.Position,
             /*Count             */ XslFlags.Number,
@@ -1212,11 +1214,12 @@ namespace System.Xml.Xsl.Xslt
             /*Floor             */ XslFlags.Number,
             /*Ceiling           */ XslFlags.Number,
             /*Round             */ XslFlags.Number,
-        };
+            ];
             #endregion
 
             #region Xslt Function Flags
-            private static readonly XslFlags[] s_xsltFunctionFlags = {
+            private static ReadOnlySpan<XslFlags> XsltFunctionFlags =>
+            [
             /*Current           */ XslFlags.Node,   // xsltCurrentNeeded = true
             /*Document          */ XslFlags.Nodeset,
             /*Key               */ XslFlags.Nodeset | XslFlags.Current,
@@ -1226,7 +1229,7 @@ namespace System.Xml.Xsl.Xslt
             /*SystemProperty    */ XslFlags.String | XslFlags.Number,
             /*ElementAvailable  */ XslFlags.Boolean,
             /*FunctionAvailable */ XslFlags.Boolean,
-        };
+            ];
             #endregion
         }
     }

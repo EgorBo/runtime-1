@@ -578,7 +578,8 @@ namespace System.Xml
             return State.Content;
         }
 
-        private static readonly State[] s_changeState = {
+        private static ReadOnlySpan<State> ChangeState =>
+        [
 //          State.Error,    State.Attribute,State.Prolog,   State.Fragment, State.Content,
 
 // Method.XmlDeclaration:
@@ -615,11 +616,11 @@ namespace System.Xml
             State.Error,    State.Error,    State.Prolog,   State.Content,  State.Content,
 // Method.String:
             State.Error,    State.Error,    State.Error,    State.Content,  State.Content,
-        };
+        ];
 
         private void VerifyState(Method method)
         {
-            _state = s_changeState[(int)method * (int)State.Last + (int)_state];
+            _state = ChangeState[(int)method * (int)State.Last + (int)_state];
             if (_state == State.Error)
             {
                 throw new InvalidOperationException(SR.Xml_ClosedOrError);
