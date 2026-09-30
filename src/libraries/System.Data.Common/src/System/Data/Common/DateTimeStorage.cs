@@ -9,12 +9,12 @@ namespace System.Data.Common
 {
     internal sealed class DateTimeStorage : DataStorage
     {
-        private static readonly DateTime s_defaultValue = DateTime.MinValue;
+        private static DateTime DefaultValue => DateTime.MinValue;
 
         private DateTime[] _values = default!; // Late-initialized
 
         internal DateTimeStorage(DataColumn column)
-        : base(column, typeof(DateTime), s_defaultValue, StorageType.DateTime)
+        : base(column, typeof(DateTime), DefaultValue, StorageType.DateTime)
         {
         }
 
@@ -90,7 +90,7 @@ namespace System.Data.Common
             DateTime valueNo1 = _values[recordNo1];
             DateTime valueNo2 = _values[recordNo2];
 
-            if (valueNo1 == s_defaultValue || valueNo2 == s_defaultValue)
+            if (valueNo1 == DefaultValue || valueNo2 == DefaultValue)
             {
                 int bitCheck = CompareBits(recordNo1, recordNo2);
                 if (0 != bitCheck)
@@ -112,7 +112,7 @@ namespace System.Data.Common
             }
 
             DateTime valueNo1 = _values[recordNo];
-            if ((s_defaultValue == valueNo1) && !HasValue(recordNo))
+            if ((DefaultValue == valueNo1) && !HasValue(recordNo))
             {
                 return -1;
             }
@@ -144,7 +144,7 @@ namespace System.Data.Common
         public override object Get(int record)
         {
             DateTime value = _values[record];
-            if ((value != s_defaultValue) || HasValue(record))
+            if ((value != DefaultValue) || HasValue(record))
             {
                 return value;
             }
@@ -156,7 +156,7 @@ namespace System.Data.Common
             System.Diagnostics.Debug.Assert(null != value, "null value");
             if (_nullValue == value)
             {
-                _values[record] = s_defaultValue;
+                _values[record] = DefaultValue;
                 SetNullBit(record, true);
             }
             else

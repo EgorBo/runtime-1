@@ -634,7 +634,7 @@ namespace System.Data.OleDb
                         if (svalue.Contains(','))
                         {
                             int convertedValue = 0;
-                            string[] values = svalue.Split(OleDbConnectionInternal.s_comma);
+                            string[] values = svalue.Split(',');
                             foreach (string v in values)
                             {
                                 convertedValue |= (int)Enum.Parse<OleDbServiceValues>(v, true);

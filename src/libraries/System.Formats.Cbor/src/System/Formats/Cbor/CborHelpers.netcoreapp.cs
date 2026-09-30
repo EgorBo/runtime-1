@@ -10,7 +10,7 @@ namespace System.Formats.Cbor
 {
     internal static partial class CborHelpers
     {
-        public static readonly DateTimeOffset UnixEpoch = DateTimeOffset.UnixEpoch;
+        public static DateTimeOffset UnixEpoch => DateTimeOffset.UnixEpoch;
 
         public static BigInteger CreateBigIntegerFromUnsignedBigEndianBytes(byte[] bytes)
             => new BigInteger(bytes, isUnsigned: true, isBigEndian: true);

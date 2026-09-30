@@ -28,9 +28,6 @@ namespace System.Data.Odbc
 
         private readonly SchemaFunctionName[] _schemaMapping;
 
-        internal static readonly char[] KeywordSeparatorChar = new char[1] { ',' };
-
-
         internal OdbcMetaDataFactory(Stream XMLStream,
                                    string serverVersion,
                                    string serverVersionNormalized,
@@ -986,7 +983,7 @@ namespace System.Data.Odbc
 
             if (null != keywords)
             {
-                string[] values = keywords.Split(KeywordSeparatorChar);
+                string[] values = keywords.Split(',');
                 for (int i = 0; i < values.Length; ++i)
                 {
                     DataRow row = reservedWordsTable.NewRow();

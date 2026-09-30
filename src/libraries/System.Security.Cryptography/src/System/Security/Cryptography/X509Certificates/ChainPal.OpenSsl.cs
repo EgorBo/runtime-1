@@ -9,9 +9,9 @@ namespace System.Security.Cryptography.X509Certificates
     internal sealed partial class ChainPal
     {
         // An input value of 0 on the timeout is treated as 15 seconds, to match Windows.
-        internal static readonly TimeSpan DefaultRetrievalTimeout = TimeSpan.FromSeconds(15);
+        internal static TimeSpan DefaultRetrievalTimeout => TimeSpan.FromSeconds(15);
 
-        private static readonly TimeSpan s_maxUrlRetrievalTimeout = TimeSpan.FromMinutes(1);
+        private static TimeSpan MaxUrlRetrievalTimeout => TimeSpan.FromMinutes(1);
 
 #pragma warning disable IDE0060
         internal static partial IChainPal FromHandle(IntPtr chainContext)
@@ -92,12 +92,12 @@ namespace System.Security.Cryptography.X509Certificates
             {
                 timeout = DefaultRetrievalTimeout;
             }
-            else if (timeout > s_maxUrlRetrievalTimeout || timeout < TimeSpan.Zero)
+            else if (timeout > MaxUrlRetrievalTimeout || timeout < TimeSpan.Zero)
             {
                 // Windows has a max timeout of 1 minute, so we'll match. Windows also treats
                 // the timeout as unsigned, so a negative value gets treated as a large positive
                 // value that is also clamped.
-                timeout = s_maxUrlRetrievalTimeout;
+                timeout = MaxUrlRetrievalTimeout;
             }
 
             DateTimeOffset verificationInstant = new DateTimeOffset(verificationTime);

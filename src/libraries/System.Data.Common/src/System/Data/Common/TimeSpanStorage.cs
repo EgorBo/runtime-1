@@ -9,12 +9,12 @@ namespace System.Data.Common
 {
     internal sealed class TimeSpanStorage : DataStorage
     {
-        private static readonly TimeSpan s_defaultValue = TimeSpan.Zero;
+        private static TimeSpan DefaultValue => TimeSpan.Zero;
 
         private TimeSpan[] _values = default!; // Late-initialized
 
         public TimeSpanStorage(DataColumn column)
-        : base(column, typeof(TimeSpan), s_defaultValue, StorageType.TimeSpan)
+        : base(column, typeof(TimeSpan), DefaultValue, StorageType.TimeSpan)
         {
         }
 
@@ -149,7 +149,7 @@ namespace System.Data.Common
             TimeSpan valueNo1 = _values[recordNo1];
             TimeSpan valueNo2 = _values[recordNo2];
 
-            if (valueNo1 == s_defaultValue || valueNo2 == s_defaultValue)
+            if (valueNo1 == DefaultValue || valueNo2 == DefaultValue)
             {
                 int bitCheck = CompareBits(recordNo1, recordNo2);
                 if (0 != bitCheck)
@@ -173,7 +173,7 @@ namespace System.Data.Common
             }
 
             TimeSpan valueNo1 = _values[recordNo];
-            if ((s_defaultValue == valueNo1) && IsNull(recordNo))
+            if ((DefaultValue == valueNo1) && IsNull(recordNo))
             {
                 return -1;
             }
@@ -229,7 +229,7 @@ namespace System.Data.Common
         public override object Get(int record)
         {
             TimeSpan value = _values[record];
-            if (value != s_defaultValue)
+            if (value != DefaultValue)
             {
                 return value;
             }
@@ -241,7 +241,7 @@ namespace System.Data.Common
             System.Diagnostics.Debug.Assert(null != value, "null value");
             if (_nullValue == value)
             {
-                _values[record] = s_defaultValue;
+                _values[record] = DefaultValue;
                 SetNullBit(record, true);
             }
             else

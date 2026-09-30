@@ -386,7 +386,7 @@ namespace System.Data.OleDb
         internal const int CacheIncrement = 10;
 
         // constants used by OleDbDataReader
-        internal static readonly IntPtr DBRESULTFLAG_DEFAULT = IntPtr.Zero;
+        internal const nint DBRESULTFLAG_DEFAULT = 0;
 
         internal const short VARIANT_TRUE = -1;
         internal const short VARIANT_FALSE = 0;
@@ -555,9 +555,9 @@ namespace System.Data.OleDb
         internal const uint DB_ALL_EXCEPT_LIKE = 3;
         internal const uint DB_SEARCHABLE = 4;
 
-        internal static readonly IntPtr DB_INVALID_HACCESSOR = IntPtr.Zero;
-        internal static readonly IntPtr DB_NULL_HCHAPTER = IntPtr.Zero;
-        internal static readonly IntPtr DB_NULL_HROW = IntPtr.Zero;
+        internal const nint DB_INVALID_HACCESSOR = 0;
+        internal const nint DB_NULL_HCHAPTER = 0;
+        internal const nint DB_NULL_HROW = 0;
 
         internal static readonly bool IsRunningOnX86 = RuntimeInformation.ProcessArchitecture == Architecture.X86;
 

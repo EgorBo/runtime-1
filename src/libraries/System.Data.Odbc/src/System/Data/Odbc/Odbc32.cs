@@ -272,8 +272,8 @@ namespace System.Data.Odbc
         internal const short SQL_COMMIT = 0;      //Commit
         internal const short SQL_ROLLBACK = 1;      //Abort
 
-        internal static readonly IntPtr SQL_AUTOCOMMIT_OFF = ADP.PtrZero;
-        internal static readonly IntPtr SQL_AUTOCOMMIT_ON = new IntPtr(1);
+        internal const nint SQL_AUTOCOMMIT_OFF = 0;
+        internal const nint SQL_AUTOCOMMIT_ON = 1;
 
         internal enum SQL_TRANSACTION
         {
@@ -577,7 +577,7 @@ namespace System.Data.Odbc
         }
 
         internal const short SQL_ALL_TYPES = 0;
-        internal static readonly IntPtr SQL_HANDLE_NULL = ADP.PtrZero;
+        internal const nint SQL_HANDLE_NULL = 0;
         internal const int SQL_NULL_DATA = -1;   // sql.h
         internal const int SQL_NO_TOTAL = -4;   // sqlext.h
 
@@ -640,13 +640,13 @@ namespace System.Data.Odbc
             SQL_SQL92_RELATIONAL_JOIN_OPERATORS = 161, //SQL_SQL92_RELATIONAL_JOIN_OPERATORS from sqlext.h
         }
 
-        internal static readonly IntPtr SQL_OV_ODBC3 = new IntPtr(3);
+        internal const nint SQL_OV_ODBC3 = 3;
         internal const int SQL_NTS = -3;       //flags for null-terminated string
 
         //Pooling
-        internal static readonly IntPtr SQL_CP_OFF = new IntPtr(0);       //Connection Pooling disabled
-        internal static readonly IntPtr SQL_CP_ONE_PER_DRIVER = new IntPtr(1);       //One pool per driver
-        internal static readonly IntPtr SQL_CP_ONE_PER_HENV = new IntPtr(2);       //One pool per environment
+        internal const nint SQL_CP_OFF = 0;       //Connection Pooling disabled
+        internal const nint SQL_CP_ONE_PER_DRIVER = 1;       //One pool per driver
+        internal const nint SQL_CP_ONE_PER_HENV = 2;       //One pool per environment
 
         /* values for SQL_ATTR_CONNECTION_DEAD */
         internal const int SQL_CD_TRUE = 1;

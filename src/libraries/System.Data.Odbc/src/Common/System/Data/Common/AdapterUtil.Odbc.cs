@@ -569,8 +569,8 @@ namespace System.Data.Common
         internal const int DecimalMaxPrecision28 = 28;  // there are some cases in Odbc where we need that ...
         internal const int DefaultCommandTimeout = 30;
 
-        internal static readonly IntPtr PtrZero = new IntPtr(0); // IntPtr.Zero
-        internal static readonly int PtrSize = IntPtr.Size;
+        internal const nint PtrZero = 0; // IntPtr.Zero
+        internal static int PtrSize => IntPtr.Size;
 
         internal static Delegate? FindBuilder(MulticastDelegate mcd)
         { // V1.2.3300

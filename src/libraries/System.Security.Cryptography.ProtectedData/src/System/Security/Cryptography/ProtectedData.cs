@@ -11,7 +11,7 @@ namespace System.Security.Cryptography
 {
     public static partial class ProtectedData
     {
-        private static readonly byte[] s_nonEmpty = new byte[1];
+        private static ReadOnlySpan<byte> NonEmpty => [0];
 
         public static byte[] Protect(byte[] userData, byte[]? optionalEntropy, DataProtectionScope scope)
         {
@@ -331,8 +331,8 @@ namespace System.Security.Cryptography
             {
                 // The Win32 API will reject pbData == nullptr, and the fixed statement
                 // maps empty arrays to nullptr... so when the input is empty use the address of a
-                // different array, but still assign cbData to 0.
-                ReadOnlySpan<byte> relevantData = inputData.IsEmpty ? s_nonEmpty : inputData;
+                // different buffer, but still assign cbData to 0.
+                ReadOnlySpan<byte> relevantData = inputData.IsEmpty ? NonEmpty : inputData;
 
                 fixed (byte* pInputData = relevantData, pOptionalEntropy = optionalEntropy)
                 {

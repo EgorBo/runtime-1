@@ -20,8 +20,9 @@ namespace System.Security.Cryptography.Cose
     {
         private const string SigStructureContextSign = "Signature";
         private const string SigStructureContextSign1 = "Signature1";
-        internal static readonly int SizeOfSigStructureCtxSign = CoseHelpers.GetTextStringEncodedSize(SigStructureContextSign);
-        internal static readonly int SizeOfSigStructureCtxSign1 = CoseHelpers.GetTextStringEncodedSize(SigStructureContextSign1);
+        // CBOR text string header (1 byte for length < 24) + UTF-8 payload.
+        internal const int SizeOfSigStructureCtxSign = 1 + 9;
+        internal const int SizeOfSigStructureCtxSign1 = 1 + 10;
 
         // COSE tags https://datatracker.ietf.org/doc/html/rfc8152#page-8 Table 1.
         internal const CborTag Sign1Tag = (CborTag)18;
@@ -543,6 +544,7 @@ namespace System.Security.Cryptography.Cose
 
             if (context == SigStructureContext.Signature)
             {
+                Debug.Assert(SizeOfSigStructureCtxSign == CoseHelpers.GetTextStringEncodedSize(SigStructureContextSign));
                 encodedSize += SizeOfSigStructureCtxSign +
                     CoseHelpers.GetByteStringEncodedSize(signProtectedLength);
             }
@@ -550,6 +552,7 @@ namespace System.Security.Cryptography.Cose
             {
                 Debug.Assert(context == SigStructureContext.Signature1);
                 Debug.Assert(signProtectedLength == 0);
+                Debug.Assert(SizeOfSigStructureCtxSign1 == CoseHelpers.GetTextStringEncodedSize(SigStructureContextSign1));
                 encodedSize += SizeOfSigStructureCtxSign1;
             }
 

@@ -9,8 +9,8 @@ namespace System.Data.OleDb
 {
     internal sealed class PropertyIDSet : DbBuffer
     {
-        private static readonly int PropertyIDSetAndValueSize = ODB.SizeOf_tagDBPROPIDSET + IntPtr.Size; // sizeof(tagDBPROPIDSET) + sizeof(int)
-        private static readonly int PropertyIDSetSize = ODB.SizeOf_tagDBPROPIDSET;
+        private static int PropertyIDSetAndValueSize => ODB.SizeOf_tagDBPROPIDSET + IntPtr.Size; // sizeof(tagDBPROPIDSET) + sizeof(int)
+        private static int PropertyIDSetSize => ODB.SizeOf_tagDBPROPIDSET;
 
         private readonly int _count;
 

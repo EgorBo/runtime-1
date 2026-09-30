@@ -13,8 +13,8 @@ namespace System.Security.Cryptography.X509Certificates
         // Prior to this caching these stores were always read "hot" from disk, and 30 seconds
         // seems like "long enough" for performance gains with "short enough" that if the filesystem
         // has LastWrite updating disabled that the process will be mostly responsive.
-        private static readonly TimeSpan s_lastWriteRecheckInterval = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan s_assumeInvalidInterval = TimeSpan.FromSeconds(30);
+        private static TimeSpan LastWriteRecheckInterval => TimeSpan.FromSeconds(1);
+        private static TimeSpan AssumeInvalidInterval => TimeSpan.FromSeconds(30);
 
         private readonly Stopwatch _recheckStopwatch = new Stopwatch();
         private readonly DirectoryInfo _storeDirectoryInfo;
@@ -40,7 +40,7 @@ namespace System.Security.Cryptography.X509Certificates
 
             TimeSpan elapsed = _recheckStopwatch.Elapsed;
 
-            if (ret == null || elapsed >= s_lastWriteRecheckInterval || _forceRefresh)
+            if (ret == null || elapsed >= LastWriteRecheckInterval || _forceRefresh)
             {
                 lock (_recheckStopwatch)
                 {
@@ -51,7 +51,7 @@ namespace System.Security.Cryptography.X509Certificates
 
                     if (ret == null ||
                         _forceRefresh ||
-                        elapsed >= s_assumeInvalidInterval ||
+                        elapsed >= AssumeInvalidInterval ||
                         (info.Exists && info.LastWriteTimeUtc != _loadLastWrite))
                     {
                         SafeX509StackHandle newColl = Interop.Crypto.NewX509Stack();

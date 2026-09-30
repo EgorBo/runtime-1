@@ -146,7 +146,7 @@ namespace System.Security.Cryptography.X509Certificates
 
         private sealed class RequestCache : X509MruCache<CachedRequest>
         {
-            private static readonly TimeSpan s_refreshInterval = TimeSpan.FromMinutes(6);
+            private static TimeSpan RefreshInterval => TimeSpan.FromMinutes(6);
 
             internal static RequestCache Instance { get; } = new();
 
@@ -189,7 +189,7 @@ namespace System.Security.Cryptography.X509Certificates
                                 {
                                     entryAge = DateTimeOffset.UtcNow - req.CacheTime;
 
-                                    if (entryAge > s_refreshInterval)
+                                    if (entryAge > RefreshInterval)
                                     {
                                         req.RefreshInProgress = true;
                                         toRefresh = cached;

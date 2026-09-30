@@ -179,8 +179,6 @@ namespace System.Data.OleDb
             }
         }
 
-        internal static readonly char[] s_comma = new char[] { ',' };
-
         // grouping the native OLE DB casts togther by required interfaces and optional interfaces, connection then session
         // want these to be methods, not properties otherwise they appear in VS7 managed debugger which attempts to evaluate them
 
@@ -485,7 +483,7 @@ namespace System.Data.OleDb
 
                 if (null != keywords)
                 {
-                    string[] values = keywords.Split(s_comma);
+                    string[] values = keywords.Split(',');
                     for (int i = 0; i < values.Length; ++i)
                     {
                         DataRow row = table.NewRow();

@@ -18,8 +18,8 @@ namespace System.Security.Cryptography.X509Certificates
         // followed by a reboot for a kernel update, etc).
         // Customers requested something more often than "never" and 5 minutes seems like a reasonable
         // balance.
-        private static readonly TimeSpan s_lastWriteRecheckInterval = TimeSpan.FromSeconds(5);
-        private static readonly TimeSpan s_assumeInvalidInterval = TimeSpan.FromMinutes(5);
+        private static TimeSpan LastWriteRecheckInterval => TimeSpan.FromSeconds(5);
+        private static TimeSpan AssumeInvalidInterval => TimeSpan.FromMinutes(5);
         private static readonly Stopwatch s_recheckStopwatch = new Stopwatch();
         private static string[]? s_rootStoreDirectories;
         private static bool s_defaultRootDir;
@@ -89,7 +89,7 @@ namespace System.Security.Cryptography.X509Certificates
             TimeSpan elapsed = s_recheckStopwatch.Elapsed;
             Tuple<SafeX509StackHandle, SafeX509StackHandle>? ret = s_nativeCollections;
 
-            if (ret == null || elapsed > s_lastWriteRecheckInterval)
+            if (ret == null || elapsed > LastWriteRecheckInterval)
             {
                 lock (s_recheckStopwatch)
                 {
@@ -97,7 +97,7 @@ namespace System.Security.Cryptography.X509Certificates
                     elapsed = s_recheckStopwatch.Elapsed;
 
                     if (ret == null ||
-                        elapsed > s_assumeInvalidInterval ||
+                        elapsed > AssumeInvalidInterval ||
                         LastWriteTimesHaveChanged())
                     {
                         ret = LoadMachineStores();
