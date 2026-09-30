@@ -5037,8 +5037,13 @@ void Compiler::optHoistCandidate(
     Metrics.HoistedExpressions++;
 }
 
-bool Compiler::optVNIsLoopInvariant(ValueNum vn, FlowGraphNaturalLoop* loop, VNSet* loopVnInvariantCache)
+bool Compiler::optVNIsLoopInvariant(ValueNum vn, FlowGraphNaturalLoop* loop, VNSet* loopVnInvariantCache, int budget)
 {
+    if (budget <= 0)
+    {
+        return false;
+    }
+
     // If it is not a VN, is not loop-invariant.
     if (vn == ValueNumStore::NoVN)
     {
@@ -5116,7 +5121,7 @@ bool Compiler::optVNIsLoopInvariant(ValueNum vn, FlowGraphNaturalLoop* loop, VNS
                 // TODO-CQ: We need to either make sure that *all* VN functions
                 // always take VN args, or else have a list of arg positions to exempt, as implicitly
                 // constant.
-                if (!optVNIsLoopInvariant(funcApp.GetArg(i), loop, loopVnInvariantCache))
+                if (!optVNIsLoopInvariant(funcApp.GetArg(i), loop, loopVnInvariantCache, budget - 1))
                 {
                     res = false;
                     break;
