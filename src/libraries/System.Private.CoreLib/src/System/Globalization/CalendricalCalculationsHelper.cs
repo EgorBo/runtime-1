@@ -17,8 +17,8 @@ namespace System.Globalization
         private const double TwoDegreesAfterSpring = 2.0;
         private const int DaysInUniformLengthCentury = 36525;
 
-        private static readonly long s_startOf1810 = GetNumberOfDays(new DateTime(1810, 1, 1));
-        private static readonly long s_startOf1900Century = GetNumberOfDays(new DateTime(1900, 1, 1));
+        private const long StartOf1810 = 660723; // GetNumberOfDays(new DateTime(1810, 1, 1))
+        private const long StartOf1900Century = 693595; // GetNumberOfDays(new DateTime(1900, 1, 1))
 
         private static ReadOnlySpan<double> Coefficients1900to1987 => [-0.00002, 0.000297, 0.025184, -0.181133, 0.553040, -0.861938, 0.677066, -0.212591];
         private static ReadOnlySpan<double> Coefficients1800to1899 => [-0.000009, 0.003844, 0.083563, 0.865736, 4.867575, 15.845535, 31.332267, 38.291999, 28.316289, 11.636204, 2.043794];
@@ -66,40 +66,6 @@ namespace System.Globalization
             return new DateTime(Math.Min((long)(Math.Floor(numberOfDays) * TimeSpan.TicksPerDay), DateTime.MaxValue.Ticks)).Year;
         }
 
-        private enum CorrectionAlgorithm
-        {
-            Default,
-            Year1988to2019,
-            Year1900to1987,
-            Year1800to1899,
-            Year1700to1799,
-            Year1620to1699
-        }
-
-        private readonly struct EphemerisCorrectionAlgorithmMap
-        {
-            public EphemerisCorrectionAlgorithmMap(int year, CorrectionAlgorithm algorithm)
-            {
-                _lowestYear = year;
-                _algorithm = algorithm;
-            }
-
-            internal readonly int _lowestYear;
-            internal readonly CorrectionAlgorithm _algorithm;
-        }
-
-        private static readonly EphemerisCorrectionAlgorithmMap[] s_ephemerisCorrectionTable =
-        [
-            // lowest year that starts algorithm, algorithm to use
-            new EphemerisCorrectionAlgorithmMap(2020, CorrectionAlgorithm.Default),
-            new EphemerisCorrectionAlgorithmMap(1988, CorrectionAlgorithm.Year1988to2019),
-            new EphemerisCorrectionAlgorithmMap(1900, CorrectionAlgorithm.Year1900to1987),
-            new EphemerisCorrectionAlgorithmMap(1800, CorrectionAlgorithm.Year1800to1899),
-            new EphemerisCorrectionAlgorithmMap(1700, CorrectionAlgorithm.Year1700to1799),
-            new EphemerisCorrectionAlgorithmMap(1620, CorrectionAlgorithm.Year1620to1699),
-            new EphemerisCorrectionAlgorithmMap(int.MinValue, CorrectionAlgorithm.Default) // default must be last
-        ];
-
         private static double Reminder(double divisor, double dividend)
         {
             double whole = Math.Floor(divisor / dividend);
@@ -137,7 +103,7 @@ namespace System.Globalization
         private static double CenturiesFrom1900(int gregorianYear)
         {
             long july1stOfYear = GetNumberOfDays(new DateTime(gregorianYear, 7, 1));
-            return (double)(july1stOfYear - s_startOf1900Century) / DaysInUniformLengthCentury;
+            return (double)(july1stOfYear - StartOf1900Century) / DaysInUniformLengthCentury;
         }
 
         // the following formulas defines a polynomial function which gives us the amount that the earth is slowing down for specific year ranges
@@ -145,7 +111,7 @@ namespace System.Globalization
         {
             Debug.Assert(gregorianYear < 1620 || 2020 <= gregorianYear);
             long january1stOfYear = GetNumberOfDays(new DateTime(gregorianYear, 1, 1));
-            double daysSinceStartOf1810 = january1stOfYear - s_startOf1810;
+            double daysSinceStartOf1810 = january1stOfYear - StartOf1810;
             double x = TwelveHours + daysSinceStartOf1810;
             return ((Math.Pow(x, 2) / 41048480) - 15) / TimeSpan.SecondsPerDay;
         }
@@ -188,26 +154,16 @@ namespace System.Globalization
         private static double EphemerisCorrection(double time)
         {
             int year = GetGregorianYear(time);
-            foreach (EphemerisCorrectionAlgorithmMap map in s_ephemerisCorrectionTable)
+            return year switch
             {
-                if (map._lowestYear <= year)
-                {
-                    switch (map._algorithm)
-                    {
-                        case CorrectionAlgorithm.Default: return DefaultEphemerisCorrection(year);
-                        case CorrectionAlgorithm.Year1988to2019: return EphemerisCorrection1988to2019(year);
-                        case CorrectionAlgorithm.Year1900to1987: return EphemerisCorrection1900to1987(year);
-                        case CorrectionAlgorithm.Year1800to1899: return EphemerisCorrection1800to1899(year);
-                        case CorrectionAlgorithm.Year1700to1799: return EphemerisCorrection1700to1799(year);
-                        case CorrectionAlgorithm.Year1620to1699: return EphemerisCorrection1620to1699(year);
-                    }
-
-                    break; // break the loop and assert eventually
-                }
-            }
-
-            Debug.Fail("Not expected to come here");
-            return DefaultEphemerisCorrection(year);
+                >= 2020 => DefaultEphemerisCorrection(year),
+                >= 1988 => EphemerisCorrection1988to2019(year),
+                >= 1900 => EphemerisCorrection1900to1987(year),
+                >= 1800 => EphemerisCorrection1800to1899(year),
+                >= 1700 => EphemerisCorrection1700to1799(year),
+                >= 1620 => EphemerisCorrection1620to1699(year),
+                _ => DefaultEphemerisCorrection(year),
+            };
         }
 
         public static double JulianCenturies(double moment)

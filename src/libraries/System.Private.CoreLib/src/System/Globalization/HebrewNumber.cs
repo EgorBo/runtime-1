@@ -245,60 +245,51 @@ namespace System.Globalization
             DoubleQuote = 9,
         }
 
-        ////////////////////////////////////////////////////////////////////////////
         //
-        // This class is used to map a token into its Hebrew digit value.
+        // Map a Hebrew character from U+05D0 ~ U+05EA to its token and digit value.
+        // The value is -1 (and the token is Invalid) if the Hebrew character does not have an associated value.
         //
-        ////////////////////////////////////////////////////////////////////////////
+        private static ReadOnlySpan<HebrewToken> HebrewDigitTokens =>
+        [
+            HebrewToken.Digit1,         // '\x05d0
+            HebrewToken.Digit1,         // '\x05d1
+            HebrewToken.Digit1,         // '\x05d2
+            HebrewToken.Digit1,         // '\x05d3
+            HebrewToken.Digit1,         // '\x05d4
+            HebrewToken.Digit6_7,       // '\x05d5
+            HebrewToken.Digit6_7,       // '\x05d6
+            HebrewToken.Digit1,         // '\x05d7
+            HebrewToken.Digit9,         // '\x05d8
+            HebrewToken.Digit10,        // '\x05d9; // Hebrew Letter Yod
+            HebrewToken.Invalid,        // '\x05da;
+            HebrewToken.Digit10,        // '\x05db; // Hebrew Letter Kaf
+            HebrewToken.Digit10,        // '\x05dc; // Hebrew Letter Lamed
+            HebrewToken.Invalid,        // '\x05dd;
+            HebrewToken.Digit10,        // '\x05de; // Hebrew Letter Mem
+            HebrewToken.Invalid,        // '\x05df;
+            HebrewToken.Digit10,        // '\x05e0; // Hebrew Letter Nun
+            HebrewToken.Digit10,        // '\x05e1; // Hebrew Letter Samekh
+            HebrewToken.Digit10,        // '\x05e2; // Hebrew Letter Ayin
+            HebrewToken.Invalid,        // '\x05e3;
+            HebrewToken.Digit10,        // '\x05e4; // Hebrew Letter Pe
+            HebrewToken.Invalid,        // '\x05e5;
+            HebrewToken.Digit10,        // '\x05e6; // Hebrew Letter Tsadi
+            HebrewToken.Digit100,       // '\x05e7;
+            HebrewToken.Digit200_300,   // '\x05e8;
+            HebrewToken.Digit200_300,   // '\x05e9;
+            HebrewToken.Digit400,       // '\x05ea;
+        ];
 
-        private readonly struct HebrewValue
-        {
-            internal readonly HebrewToken token;
-            internal readonly short value;
-
-            internal HebrewValue(HebrewToken token, short value)
-            {
-                this.token = token;
-                this.value = value;
-            }
-        }
-
-        //
-        // Map a Hebrew character from U+05D0 ~ U+05EA to its digit value.
-        // The value is -1 if the Hebrew character does not have a associated value.
-        //
-        private static readonly HebrewValue[] s_hebrewValues = [
-            new HebrewValue(HebrewToken.Digit1, 1), // '\x05d0
-            new HebrewValue(HebrewToken.Digit1, 2), // '\x05d1
-            new HebrewValue(HebrewToken.Digit1, 3), // '\x05d2
-            new HebrewValue(HebrewToken.Digit1, 4), // '\x05d3
-            new HebrewValue(HebrewToken.Digit1, 5), // '\x05d4
-            new HebrewValue(HebrewToken.Digit6_7, 6), // '\x05d5
-            new HebrewValue(HebrewToken.Digit6_7, 7), // '\x05d6
-            new HebrewValue(HebrewToken.Digit1, 8), // '\x05d7
-            new HebrewValue(HebrewToken.Digit9, 9), // '\x05d8
-            new HebrewValue(HebrewToken.Digit10, 10), // '\x05d9; // Hebrew Letter Yod
-            new HebrewValue(HebrewToken.Invalid, -1), // '\x05da;
-            new HebrewValue(HebrewToken.Digit10, 20), // '\x05db; // Hebrew Letter Kaf
-            new HebrewValue(HebrewToken.Digit10, 30), // '\x05dc; // Hebrew Letter Lamed
-            new HebrewValue(HebrewToken.Invalid, -1), // '\x05dd;
-            new HebrewValue(HebrewToken.Digit10, 40), // '\x05de; // Hebrew Letter Mem
-            new HebrewValue(HebrewToken.Invalid, -1), // '\x05df;
-            new HebrewValue(HebrewToken.Digit10, 50), // '\x05e0; // Hebrew Letter Nun
-            new HebrewValue(HebrewToken.Digit10, 60), // '\x05e1; // Hebrew Letter Samekh
-            new HebrewValue(HebrewToken.Digit10, 70), // '\x05e2; // Hebrew Letter Ayin
-            new HebrewValue(HebrewToken.Invalid, -1), // '\x05e3;
-            new HebrewValue(HebrewToken.Digit10, 80), // '\x05e4; // Hebrew Letter Pe
-            new HebrewValue(HebrewToken.Invalid, -1), // '\x05e5;
-            new HebrewValue(HebrewToken.Digit10, 90), // '\x05e6; // Hebrew Letter Tsadi
-            new HebrewValue(HebrewToken.Digit100, 100), // '\x05e7;
-            new HebrewValue(HebrewToken.Digit200_300, 200), // '\x05e8;
-            new HebrewValue(HebrewToken.Digit200_300, 300), // '\x05e9;
-            new HebrewValue(HebrewToken.Digit400, 400), // '\x05ea;
+        private static ReadOnlySpan<short> HebrewDigitValues =>
+        [
+            1, 2, 3, 4, 5, 6, 7, 8, 9,          // '\x05d0 - '\x05d8
+            10, -1, 20, 30, -1, 40, -1, 50,     // '\x05d9 - '\x05e0
+            60, 70, -1, 80, -1, 90,             // '\x05e1 - '\x05e6
+            100, 200, 300, 400,                 // '\x05e7 - '\x05ea
         ];
 
         private const int minHebrewNumberCh = 0x05d0;
-        private static readonly char s_maxHebrewNumberCh = (char)(minHebrewNumberCh + s_hebrewValues.Length - 1);
+        private const int maxHebrewNumberCh = 0x05ea;
 
         ////////////////////////////////////////////////////////////////////////////
         //
@@ -334,7 +325,7 @@ namespace System.Globalization
         //
         // The state machine for Hebrew number passing.
         //
-        private static readonly HS[] s_numberPassingState =
+        private static ReadOnlySpan<HS> NumberPassingState =>
         [
             // 400            300/200         100             90~10           8~1      6,       7,       9,          '           "
             /* 0 */
@@ -396,7 +387,7 @@ namespace System.Globalization
 
         internal static HebrewNumberParsingState ParseByChar(char ch, ref HebrewNumberParsingContext context)
         {
-            Debug.Assert(s_numberPassingState.Length == HebrewTokenCount * ((int)HS.S9_DQ + 1));
+            Debug.Assert(NumberPassingState.Length == HebrewTokenCount * ((int)HS.S9_DQ + 1));
 
             HebrewToken token;
             if (ch == '\'')
@@ -410,14 +401,14 @@ namespace System.Globalization
             else
             {
                 int index = (int)ch - minHebrewNumberCh;
-                if (index >= 0 && index < s_hebrewValues.Length)
+                if (index >= 0 && index < HebrewDigitValues.Length)
                 {
-                    token = s_hebrewValues[index].token;
+                    token = HebrewDigitTokens[index];
                     if (token == HebrewToken.Invalid)
                     {
                         return HebrewNumberParsingState.NotHebrewDigit;
                     }
-                    context.result += s_hebrewValues[index].value;
+                    context.result += HebrewDigitValues[index];
                 }
                 else
                 {
@@ -425,7 +416,7 @@ namespace System.Globalization
                     return HebrewNumberParsingState.NotHebrewDigit;
                 }
             }
-            context.state = s_numberPassingState[(int)context.state * (int)HebrewTokenCount + (int)token];
+            context.state = NumberPassingState[(int)context.state * (int)HebrewTokenCount + (int)token];
             if (context.state == HS._err)
             {
                 // Invalid Hebrew state.  This indicates an incorrect Hebrew number.
@@ -453,9 +444,9 @@ namespace System.Globalization
 
         internal static bool IsDigit(char ch)
         {
-            if (ch >= minHebrewNumberCh && ch <= s_maxHebrewNumberCh)
+            if (ch >= minHebrewNumberCh && ch <= maxHebrewNumberCh)
             {
-                return s_hebrewValues[ch - minHebrewNumberCh].value >= 0;
+                return HebrewDigitValues[ch - minHebrewNumberCh] >= 0;
             }
             return ch == '\'' || ch == '\"';
         }
