@@ -4831,11 +4831,14 @@ void Compiler::optHoistLoopBlocks(FlowGraphNaturalLoop* loop,
                 }
                 else if (tree->OperRequiresAsgFlag())
                 {
-                    // Assume all stores except "STORE_LCL_VAR<non-addr-exposed lcl>(...)" are globally visible.
+                    // Local stores are globally visible when address-exposed or observable by a handler.
                     bool isGloballyVisibleStore;
                     if (tree->OperIsLocalStore())
                     {
-                        isGloballyVisibleStore = m_compiler->lvaGetDesc(tree->AsLclVarCommon())->IsAddressExposed();
+                        LclVarDsc* const varDsc = m_compiler->lvaGetDesc(tree->AsLclVarCommon());
+                        isGloballyVisibleStore =
+                            varDsc->IsAddressExposed() ||
+                            (varDsc->lvTracked ? varDsc->IsLiveInOutOfHandler() : (m_compiler->compHndBBtabCount > 0));
                     }
                     else
                     {
