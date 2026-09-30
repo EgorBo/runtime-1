@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -16,26 +17,27 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         // Use all the simple types plus 1 more for Object
         // See CLR section 7.4.1.3
 
-        private static readonly byte[][] s_betterConversionTable =
-        {
-            //          BYTE    SHORT   INT     LONG    FLOAT   DOUBLE  DECIMAL CHAR    BOOL    SBYTE   USHORT  UINT    ULONG   IPTR     UIPTR    OBJECT
-            new byte[] /* BYTE*/   {3,     3,      3,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3},
-            new byte[] /* SHORT*/  {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      1,      3,       3,       3},
-            new byte[] /* INT*/    {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      3,       3,       3},
-            new byte[] /* LONG*/   {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      3,       3,       3},
-            new byte[] /* FLOAT*/  {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* DOUBLE*/ {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* DECIMAL*/{3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* CHAR*/   {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* BOOL*/   {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* SBYTE*/  {1,     3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      1,      3,       3,       3},
-            new byte[] /* USHORT*/ {3,     2,      3,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3},
-            new byte[] /* UINT*/   {3,     2,      2,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3},
-            new byte[] /* ULONG*/  {3,     2,      2,      2,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3},
-            new byte[] /* IPTR*/   {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* UIPTR*/  {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3},
-            new byte[] /* OBJECT*/ {3,     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3}
-        };
+        // Indexed as [pt1 * NUM_EXT_TYPES + pt2]
+        private static ReadOnlySpan<byte> BetterConversionTable =>
+        [
+            //            BYTE    SHORT   INT     LONG    FLOAT   DOUBLE  DECIMAL CHAR    BOOL    SBYTE   USHORT  UINT    ULONG   IPTR     UIPTR    OBJECT
+            /* BYTE*/     3,      3,      3,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3,
+            /* SHORT*/    3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      1,      3,       3,       3,
+            /* INT*/      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      3,       3,       3,
+            /* LONG*/     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      3,       3,       3,
+            /* FLOAT*/    3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* DOUBLE*/   3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* DECIMAL*/  3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* CHAR*/     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* BOOL*/     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* SBYTE*/    1,      3,      3,      3,      3,      3,      3,      3,      3,      3,      1,      1,      1,      3,       3,       3,
+            /* USHORT*/   3,      2,      3,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3,
+            /* UINT*/     3,      2,      2,      3,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3,
+            /* ULONG*/    3,      2,      2,      2,      3,      3,      3,      3,      3,      2,      3,      3,      3,      3,       3,       3,
+            /* IPTR*/     3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* UIPTR*/    3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3,
+            /* OBJECT*/   3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,      3,       3,       3
+        ];
 
         [RequiresDynamicCode(Binder.DynamicCodeWarning)]
         private static BetterType WhichMethodIsBetterTieBreaker(
@@ -471,7 +473,7 @@ LAgain:
                     PredefinedType pt2 = p2.PredefinedType;
                     if (pt2 <= PredefinedType.PT_OBJECT)
                     {
-                        return (BetterType)s_betterConversionTable[(int)pt1][(int)pt2];
+                        return (BetterType)BetterConversionTable[(int)pt1 * NUM_EXT_TYPES + (int)pt2];
                     }
                 }
             }

@@ -71,7 +71,7 @@ namespace System.Reflection.TypeLoading
         protected override bool IsPrimitiveImpl()
         {
             CoreTypes coreTypes = Loader.GetAllFoundCoreTypes();
-            foreach (CoreType primitiveType in s_primitiveTypes)
+            foreach (CoreType primitiveType in PrimitiveTypes)
             {
                 if (this == coreTypes[primitiveType])
                 {
@@ -82,8 +82,8 @@ namespace System.Reflection.TypeLoading
         }
 
         // The exact set of types for which IsPrimitive is supposed to return true.
-        private static readonly CoreType[] s_primitiveTypes = new CoreType[]
-        {
+        private static ReadOnlySpan<CoreType> PrimitiveTypes =>
+        [
             CoreType.Boolean,
             CoreType.Char,
             CoreType.SByte,
@@ -98,6 +98,6 @@ namespace System.Reflection.TypeLoading
             CoreType.Double,
             CoreType.IntPtr,
             CoreType.UIntPtr,
-        };
+        ];
     }
 }

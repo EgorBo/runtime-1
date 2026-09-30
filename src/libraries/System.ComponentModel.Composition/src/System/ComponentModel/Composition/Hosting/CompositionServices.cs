@@ -13,10 +13,10 @@ namespace System.ComponentModel.Composition.Hosting
 {
     internal static class CompositionServices
     {
-        internal static readonly Type InheritedExportAttributeType = typeof(InheritedExportAttribute);
-        internal static readonly Type ExportAttributeType = typeof(ExportAttribute);
-        internal static readonly Type AttributeType = typeof(Attribute);
-        internal static readonly Type ObjectType = typeof(object);
+        internal static Type InheritedExportAttributeType => typeof(InheritedExportAttribute);
+        internal static Type ExportAttributeType => typeof(ExportAttribute);
+        internal static Type AttributeType => typeof(Attribute);
+        internal static Type ObjectType => typeof(object);
 
         private static readonly string[] reservedMetadataNames = new string[]
         {
@@ -365,8 +365,8 @@ namespace System.ComponentModel.Composition.Hosting
         {
             private Type? _arrayType;
             private bool _containsNulls;
-            private static readonly Type ObjectType = typeof(object);
-            private static readonly Type TypeType = typeof(Type);
+            private static Type ObjectType => typeof(object);
+            private static Type TypeType => typeof(Type);
             private readonly Collection<object?> _innerList = new Collection<object?>();
 
             public void Add(object? item, Type? itemType)

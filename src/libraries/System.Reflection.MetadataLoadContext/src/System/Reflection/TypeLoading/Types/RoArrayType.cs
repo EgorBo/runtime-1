@@ -42,9 +42,9 @@ namespace System.Reflection.TypeLoading
                 yield break;
 
             RoType[] typeArguments = { GetRoElementType() };
-            foreach (CoreType coreType in s_typesImplementedByArray)
+            for (int i = 0; i < TypesImplementedByArray.Length; i++)
             {
-                RoType? ifc = Loader.TryGetCoreType(coreType);
+                RoType? ifc = Loader.TryGetCoreType(TypesImplementedByArray[i]);
                 if (ifc != null)
                 {
                     // All of our types are from a fixed list so we know they're supposed be generic interfaces taking one type parameter.
@@ -58,13 +58,13 @@ namespace System.Reflection.TypeLoading
             }
         }
 
-        private static readonly CoreType[] s_typesImplementedByArray =
-        {
+        private static ReadOnlySpan<CoreType> TypesImplementedByArray =>
+        [
             CoreType.IEnumerableT,
             CoreType.ICollectionT,
             CoreType.IListT,
             CoreType.IReadOnlyListT,
-        };
+        ];
 
 #pragma warning disable SYSLIB0050 // TypeAttributes.Serialized flag is obsolete
         protected sealed override TypeAttributes ComputeAttributeFlags() => TypeAttributes.AutoLayout | TypeAttributes.AnsiClass | TypeAttributes.Class | TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Serializable;

@@ -31,10 +31,10 @@ namespace System.Xml
 
         // UTF-8 is fastpath, so that's how these are stored
         // Compare methods adapt to Unicode.
-        private static readonly byte[] s_encodingUTF8 = "utf-8"u8.ToArray();
-        private static readonly byte[] s_encodingUnicode = "utf-16"u8.ToArray();
-        private static readonly byte[] s_encodingUnicodeLE = "utf-16le"u8.ToArray();
-        private static readonly byte[] s_encodingUnicodeBE = "utf-16be"u8.ToArray();
+        private static ReadOnlySpan<byte> EncodingUTF8 => "utf-8"u8;
+        private static ReadOnlySpan<byte> EncodingUnicode => "utf-16"u8;
+        private static ReadOnlySpan<byte> EncodingUnicodeLE => "utf-16le"u8;
+        private static ReadOnlySpan<byte> EncodingUnicodeBE => "utf-16be"u8;
 
         private SupportedEncoding _encodingCode;
         private Encoding? _encoding;
@@ -385,22 +385,22 @@ namespace System.Xml
 
             // lookup the encoding
             SupportedEncoding declEnc = e;
-            if (encCount == s_encodingUTF8.Length && CompareCaseInsensitive(s_encodingUTF8, buffer, encStart))
+            if (encCount == EncodingUTF8.Length && CompareCaseInsensitive(EncodingUTF8, buffer, encStart))
             {
                 declEnc = SupportedEncoding.UTF8;
             }
-            else if (encCount == s_encodingUnicodeLE.Length && CompareCaseInsensitive(s_encodingUnicodeLE, buffer, encStart))
+            else if (encCount == EncodingUnicodeLE.Length && CompareCaseInsensitive(EncodingUnicodeLE, buffer, encStart))
             {
                 declEnc = SupportedEncoding.UTF16LE;
             }
-            else if (encCount == s_encodingUnicodeBE.Length && CompareCaseInsensitive(s_encodingUnicodeBE, buffer, encStart))
+            else if (encCount == EncodingUnicodeBE.Length && CompareCaseInsensitive(EncodingUnicodeBE, buffer, encStart))
             {
                 declEnc = SupportedEncoding.UTF16BE;
             }
-            else if (encCount == s_encodingUnicode.Length && CompareCaseInsensitive(s_encodingUnicode, buffer, encStart))
+            else if (encCount == EncodingUnicode.Length && CompareCaseInsensitive(EncodingUnicode, buffer, encStart))
             {
                 if (e == SupportedEncoding.UTF8)
-                    ThrowEncodingMismatch(DataContractSerializer.UTF8NoBom.GetString(buffer, encStart, encCount), DataContractSerializer.UTF8NoBom.GetString(s_encodingUTF8, 0, s_encodingUTF8.Length));
+                    ThrowEncodingMismatch(DataContractSerializer.UTF8NoBom.GetString(buffer, encStart, encCount), DataContractSerializer.UTF8NoBom.GetString(EncodingUTF8));
             }
             else
             {
@@ -411,7 +411,7 @@ namespace System.Xml
                 ThrowEncodingMismatch(DataContractSerializer.UTF8NoBom.GetString(buffer, encStart, encCount), e);
         }
 
-        private static bool CompareCaseInsensitive(byte[] key, byte[] buffer, int offset)
+        private static bool CompareCaseInsensitive(ReadOnlySpan<byte> key, byte[] buffer, int offset)
         {
             for (int i = 0; i < key.Length; i++)
             {

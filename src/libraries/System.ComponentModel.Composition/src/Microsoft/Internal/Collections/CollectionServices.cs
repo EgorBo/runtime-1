@@ -12,10 +12,10 @@ namespace Microsoft.Internal.Collections
 {
     internal static partial class CollectionServices
     {
-        private static readonly Type StringType = typeof(string);
-        private static readonly Type IEnumerableType = typeof(IEnumerable);
-        private static readonly Type IEnumerableOfTType = typeof(IEnumerable<>);
-        private static readonly Type ICollectionOfTType = typeof(ICollection<>);
+        private static Type StringType => typeof(string);
+        private static Type IEnumerableType => typeof(IEnumerable);
+        private static Type IEnumerableOfTType => typeof(IEnumerable<>);
+        private static Type ICollectionOfTType => typeof(ICollection<>);
 
         public static bool IsEnumerableOfT(Type type)
         {

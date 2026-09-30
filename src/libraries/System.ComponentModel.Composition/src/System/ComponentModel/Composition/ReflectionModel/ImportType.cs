@@ -11,9 +11,9 @@ namespace System.ComponentModel.Composition.ReflectionModel
     // Describes the import type of a Reflection-based import definition
     internal sealed class ImportType
     {
-        private static readonly Type LazyOfTType = typeof(Lazy<>);
-        private static readonly Type LazyOfTMType = typeof(Lazy<,>);
-        private static readonly Type ExportFactoryOfTType = typeof(ExportFactory<>);
+        private static Type LazyOfTType => typeof(Lazy<>);
+        private static Type LazyOfTMType => typeof(Lazy<,>);
+        private static Type ExportFactoryOfTType => typeof(ExportFactory<>);
 
         private readonly Type _type;
         private readonly bool _isAssignableCollectionType;

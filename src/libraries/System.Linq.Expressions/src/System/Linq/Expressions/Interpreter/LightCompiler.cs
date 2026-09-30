@@ -291,8 +291,6 @@ namespace System.Linq.Expressions.Interpreter
 
         private readonly StackGuard _guard = new StackGuard();
 
-        private static readonly LocalDefinition[] s_emptyLocals = Array.Empty<LocalDefinition>();
-
         public LightCompiler()
         {
             _instructions = new InstructionList();
@@ -549,7 +547,7 @@ namespace System.Linq.Expressions.Interpreter
             }
             else
             {
-                locals = s_emptyLocals;
+                locals = Array.Empty<LocalDefinition>();
             }
 
             for (int i = 0; i < node.Expressions.Count - 1; i++)

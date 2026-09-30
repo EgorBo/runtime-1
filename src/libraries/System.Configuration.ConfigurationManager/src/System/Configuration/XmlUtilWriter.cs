@@ -24,9 +24,9 @@ namespace System.Configuration
         private const char Space = ' ';
         private const string NewLine = "\r\n";
 
-        private static readonly string s_spaces8 = new string(Space, 8);
-        private static readonly string s_spaces4 = new string(Space, 4);
-        private static readonly string s_spaces2 = new string(Space, 2);
+        private const string Spaces8 = "        ";
+        private const string Spaces4 = "    ";
+        private const string Spaces2 = "  ";
         private readonly Stream _baseStream; // stream under TextWriter when tracking position
         private object _lineStartCheckpoint; // checkpoint taken at the start of each line
 
@@ -294,21 +294,21 @@ namespace System.Configuration
             while (c > 0)
                 if (c >= 8)
                 {
-                    Write(s_spaces8);
+                    Write(Spaces8);
                     c -= 8;
                 }
                 else
                 {
                     if (c >= 4)
                     {
-                        Write(s_spaces4);
+                        Write(Spaces4);
                         c -= 4;
                     }
                     else
                     {
                         if (c >= 2)
                         {
-                            Write(s_spaces2);
+                            Write(Spaces2);
                             c -= 2;
                         }
                         else

@@ -20,8 +20,8 @@ namespace System.ComponentModel.Composition
         private static readonly MethodInfo _createStronglyTypedLazyOfT = typeof(ExportServices).GetMethod("CreateStronglyTypedLazyOfT", BindingFlags.NonPublic | BindingFlags.Static)!;
         private static readonly MethodInfo _createSemiStronglyTypedLazy = typeof(ExportServices).GetMethod("CreateSemiStronglyTypedLazy", BindingFlags.NonPublic | BindingFlags.Static)!;
 
-        internal static readonly Type DefaultMetadataViewType = typeof(IDictionary<string, object>);
-        internal static readonly Type DefaultExportedValueType = typeof(object);
+        internal static Type DefaultMetadataViewType => typeof(IDictionary<string, object>);
+        internal static Type DefaultExportedValueType => typeof(object);
 
         internal static bool IsDefaultMetadataViewType(Type metadataViewType)
         {

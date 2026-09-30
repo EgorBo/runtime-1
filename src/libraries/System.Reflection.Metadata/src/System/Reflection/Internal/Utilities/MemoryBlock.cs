@@ -286,13 +286,13 @@ namespace System.Reflection.Internal
         /// Read UTF-8 at the given offset up to the given terminator, null terminator, or end-of-block.
         /// </summary>
         /// <param name="offset">Offset in to the block where the UTF-8 bytes start.</param>
-        /// <param name="prefix">UTF-8 encoded prefix to prepend to the bytes at the offset before decoding.</param>
+        /// <param name="prefix">UTF-8 encoded prefix to prepend to the bytes at the offset before decoding (empty for no prefix).</param>
         /// <param name="utf8Decoder">The UTF-8 decoder to use that allows user to adjust fallback and/or reuse existing strings without allocating a new one.</param>
         /// <param name="numberOfBytesRead">The number of bytes read, which includes the terminator if we did not hit the end of the block.</param>
         /// <param name="terminator">A character in the ASCII range that marks the end of the string.
         /// If a value other than '\0' is passed we still stop at the null terminator if encountered first.</param>
         /// <returns>The decoded string.</returns>
-        internal string PeekUtf8NullTerminated(int offset, byte[]? prefix, MetadataStringDecoder utf8Decoder, out int numberOfBytesRead, char terminator = '\0')
+        internal string PeekUtf8NullTerminated(int offset, ReadOnlySpan<byte> prefix, MetadataStringDecoder utf8Decoder, out int numberOfBytesRead, char terminator = '\0')
         {
             Debug.Assert(terminator <= 0x7F);
             CheckBounds(offset, 0);

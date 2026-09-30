@@ -50,16 +50,16 @@ namespace System.ComponentModel
 
         private static readonly object s_noValue = new object();
 
-        private static readonly int s_bitDefaultValueQueried = InterlockedBitVector32.CreateMask();
-        private static readonly int s_bitGetQueried = InterlockedBitVector32.CreateMask(s_bitDefaultValueQueried);
-        private static readonly int s_bitSetQueried = InterlockedBitVector32.CreateMask(s_bitGetQueried);
-        private static readonly int s_bitShouldSerializeQueried = InterlockedBitVector32.CreateMask(s_bitSetQueried);
-        private static readonly int s_bitResetQueried = InterlockedBitVector32.CreateMask(s_bitShouldSerializeQueried);
-        private static readonly int s_bitChangedQueried = InterlockedBitVector32.CreateMask(s_bitResetQueried);
-        private static readonly int s_bitIPropChangedQueried = InterlockedBitVector32.CreateMask(s_bitChangedQueried);
-        private static readonly int s_bitReadOnlyChecked = InterlockedBitVector32.CreateMask(s_bitIPropChangedQueried);
-        private static readonly int s_bitAmbientValueQueried = InterlockedBitVector32.CreateMask(s_bitReadOnlyChecked);
-        private static readonly int s_bitSetOnDemand = InterlockedBitVector32.CreateMask(s_bitAmbientValueQueried);
+        private const int BitDefaultValueQueried = 0x001;
+        private const int BitGetQueried = 0x002;
+        private const int BitSetQueried = 0x004;
+        private const int BitShouldSerializeQueried = 0x008;
+        private const int BitResetQueried = 0x010;
+        private const int BitChangedQueried = 0x020;
+        private const int BitIPropChangedQueried = 0x040;
+        private const int BitReadOnlyChecked = 0x080;
+        private const int BitAmbientValueQueried = 0x100;
+        private const int BitSetOnDemand = 0x200;
 
         private InterlockedBitVector32 _state;             // Contains the state bits for this property descriptor.
         private readonly Type _componentClass;             // used to determine if we should all on us or on the designer
@@ -127,9 +127,9 @@ namespace System.ComponentModel
             _getMethod = getMethod;
             _setMethod = setMethod;
             if (getMethod != null && propInfo != null && setMethod == null)
-                _state.DangerousSet(s_bitGetQueried | s_bitSetOnDemand, true);
+                _state.DangerousSet(BitGetQueried | BitSetOnDemand, true);
             else
-                _state.DangerousSet(s_bitGetQueried | s_bitSetQueried, true);
+                _state.DangerousSet(BitGetQueried | BitSetQueried, true);
         }
 
         /// <summary>
@@ -149,7 +149,7 @@ namespace System.ComponentModel
             _receiverType = receiverType;
             _getMethod = getMethod;
             _setMethod = setMethod;
-            _state.DangerousSet(s_bitGetQueried | s_bitSetQueried, true);
+            _state.DangerousSet(BitGetQueried | BitSetQueried, true);
         }
 
         /// <summary>
@@ -204,12 +204,12 @@ namespace System.ComponentModel
                                 _defaultValue = Enum.ToObject(PropertyType, _defaultValue);
                             }
 
-                            _state.DangerousSet(s_bitDefaultValueQueried, true);
+                            _state.DangerousSet(BitDefaultValueQueried, true);
                         }
                         else if (a is AmbientValueAttribute ava)
                         {
                             _ambientValue = ava.Value;
-                            _state.DangerousSet(s_bitAmbientValueQueried, true);
+                            _state.DangerousSet(BitAmbientValueQueried, true);
                         }
                     }
                 }
@@ -223,7 +223,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitAmbientValueQueried])
+                if (!_state[BitAmbientValueQueried])
                 {
                     Attribute? a = Attributes[typeof(AmbientValueAttribute)];
                     if (a != null)
@@ -234,7 +234,7 @@ namespace System.ComponentModel
                     {
                         _ambientValue = s_noValue;
                     }
-                    _state[s_bitAmbientValueQueried] = true;
+                    _state[BitAmbientValueQueried] = true;
                 }
                 return _ambientValue!;
             }
@@ -249,10 +249,10 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitChangedQueried])
+                if (!_state[BitChangedQueried])
                 {
                     _realChangedEvent = TypeDescriptor.GetEvents(_componentClass)[Name + "Changed"];
-                    _state[s_bitChangedQueried] = true;
+                    _state[BitChangedQueried] = true;
                 }
 
                 return _realChangedEvent!;
@@ -266,14 +266,14 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitIPropChangedQueried])
+                if (!_state[BitIPropChangedQueried])
                 {
                     if (typeof(INotifyPropertyChanged).IsAssignableFrom(ComponentType))
                     {
                         _realIPropChangedEvent = TypeDescriptor.GetEvents(typeof(INotifyPropertyChanged))["PropertyChanged"];
                     }
 
-                    _state[s_bitIPropChangedQueried] = true;
+                    _state[BitIPropChangedQueried] = true;
                 }
 
                 return _realIPropChangedEvent!;
@@ -292,7 +292,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitDefaultValueQueried])
+                if (!_state[BitDefaultValueQueried])
                 {
                     Attribute? a = Attributes[typeof(DefaultValueAttribute)];
                     if (a != null)
@@ -308,7 +308,7 @@ namespace System.ComponentModel
                     {
                         _defaultValue = s_noValue;
                     }
-                    _state[s_bitDefaultValueQueried] = true;
+                    _state[BitDefaultValueQueried] = true;
                 }
                 return _defaultValue!;
             }
@@ -325,7 +325,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitGetQueried])
+                if (!_state[BitGetQueried])
                 {
                     if (_receiverType == null)
                     {
@@ -351,7 +351,7 @@ namespace System.ComponentModel
                             throw new ArgumentException(SR.Format(SR.ErrorMissingPropertyAccessors, Name));
                         }
                     }
-                    _state[s_bitGetQueried] = true;
+                    _state[BitGetQueried] = true;
                 }
                 return _getMethod!;
             }
@@ -381,7 +381,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitResetQueried])
+                if (!_state[BitResetQueried])
                 {
                     Type[] args;
 
@@ -396,7 +396,7 @@ namespace System.ComponentModel
 
                     _resetMethod = FindMethod(_componentClass, "Reset" + Name, args, typeof(void), /* publicOnly= */ false);
 
-                    _state[s_bitResetQueried] = true;
+                    _state[BitResetQueried] = true;
                 }
                 return _resetMethod;
             }
@@ -415,7 +415,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitSetQueried] && _state[s_bitSetOnDemand])
+                if (!_state[BitSetQueried] && _state[BitSetOnDemand])
                 {
                     string name = _propInfo!.Name;
 
@@ -436,9 +436,9 @@ namespace System.ComponentModel
                         }
                     }
 
-                    _state[s_bitSetQueried] = true;
+                    _state[BitSetQueried] = true;
                 }
-                if (!_state[s_bitSetQueried])
+                if (!_state[BitSetQueried])
                 {
                     if (_receiverType == null)
                     {
@@ -458,7 +458,7 @@ namespace System.ComponentModel
                                                new Type[] { _receiverType, _type }, typeof(void));
                     }
 
-                    _state[s_bitSetQueried] = true;
+                    _state[BitSetQueried] = true;
                 }
                 return _setMethod;
             }
@@ -473,7 +473,7 @@ namespace System.ComponentModel
         {
             get
             {
-                if (!_state[s_bitShouldSerializeQueried])
+                if (!_state[BitShouldSerializeQueried])
                 {
                     Type[] args;
 
@@ -487,7 +487,7 @@ namespace System.ComponentModel
                     }
 
                     _shouldSerializeMethod = FindMethod(_componentClass, "ShouldSerialize" + Name, args, typeof(bool), publicOnly: false);
-                    _state[s_bitShouldSerializeQueried] = true;
+                    _state[BitShouldSerializeQueried] = true;
                 }
                 return _shouldSerializeMethod;
             }
@@ -963,7 +963,7 @@ namespace System.ComponentModel
         /// </summary>
         protected override void OnValueChanged(object? component, EventArgs e)
         {
-            if (_state[s_bitChangedQueried] && _realChangedEvent == null)
+            if (_state[BitChangedQueried] && _realChangedEvent == null)
             {
                 base.OnValueChanged(component, e);
             }

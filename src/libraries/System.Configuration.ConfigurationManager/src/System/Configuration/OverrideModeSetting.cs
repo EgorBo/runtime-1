@@ -25,10 +25,10 @@ namespace System.Configuration
         private byte _mode;
 
         // Default for section is ALLOW
-        internal static readonly OverrideModeSetting s_sectionDefault = new OverrideModeSetting { _mode = (byte)OverrideMode.Allow };
+        internal static OverrideModeSetting SectionDefault => new OverrideModeSetting { _mode = (byte)OverrideMode.Allow };
 
         // Default for location tags is INHERIT. Note that we do not make the value as existent in the XML or specified by the API
-        internal static readonly OverrideModeSetting s_locationDefault = new OverrideModeSetting { _mode = (byte)OverrideMode.Inherit };
+        internal static OverrideModeSetting LocationDefault => new OverrideModeSetting { _mode = (byte)OverrideMode.Inherit };
 
         internal static OverrideModeSetting CreateFromXmlReadValue(bool allowOverride)
         {
@@ -161,7 +161,7 @@ namespace System.Configuration
                 // Note that if the setting was an API modified or XmlDefined  it is not a default since it
                 // cannot go to the default <location> tag which does not explicitlly specify a mode
 
-                OverrideModeSetting defaultSetting = s_locationDefault;
+                OverrideModeSetting defaultSetting = LocationDefault;
 
                 return (defaultSetting.OverrideMode == OverrideMode) &&
                     ((_mode & ApiDefinedAny) == 0) &&

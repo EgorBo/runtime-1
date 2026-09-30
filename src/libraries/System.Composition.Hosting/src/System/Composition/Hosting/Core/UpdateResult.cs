@@ -11,8 +11,6 @@ namespace System.Composition.Hosting.Core
     // providers, with providers being removed from the list before querying.
     internal sealed class UpdateResult
     {
-        private static readonly ExportDescriptorPromise[] s_noPromises = Array.Empty<ExportDescriptorPromise>();
-
         private readonly Queue<ExportDescriptorProvider> _remainingProviders;
         private readonly List<ExportDescriptorPromise> _providedDescriptors = new List<ExportDescriptorPromise>();
         private ExportDescriptorPromise[] _results;
@@ -50,7 +48,7 @@ namespace System.Composition.Hosting.Core
                 }
 
                 if (_providedDescriptors.Count == 0)
-                    _results = s_noPromises;
+                    _results = Array.Empty<ExportDescriptorPromise>();
 
                 _results = _providedDescriptors.ToArray();
             }

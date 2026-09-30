@@ -15,7 +15,7 @@ namespace System.Composition.TypedParts.ActivationFeatures
         /// <summary>
         /// A constant shared for subclass use.
         /// </summary>
-        protected static readonly CompositionDependency[] NoDependencies = Array.Empty<CompositionDependency>();
+        protected static CompositionDependency[] NoDependencies => Array.Empty<CompositionDependency>();
 
         /// <summary>
         /// Participate in the activator creation process.

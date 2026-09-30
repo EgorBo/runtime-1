@@ -146,7 +146,7 @@ namespace System.Reflection.Metadata.Ecma335
 
         internal string GetString(StringHandle handle, MetadataStringDecoder utf8Decoder)
         {
-            return handle.IsVirtual ? GetVirtualHandleString(handle, utf8Decoder) : GetNonVirtualString(handle, utf8Decoder, prefixOpt: null);
+            return handle.IsVirtual ? GetVirtualHandleString(handle, utf8Decoder) : GetNonVirtualString(handle, utf8Decoder, prefix: default);
         }
 
         internal MemoryBlock GetMemoryBlock(StringHandle handle)
@@ -159,12 +159,12 @@ namespace System.Reflection.Metadata.Ecma335
             return s_virtualValues![(int)index];
         }
 
-        private string GetNonVirtualString(StringHandle handle, MetadataStringDecoder utf8Decoder, byte[]? prefixOpt)
+        private string GetNonVirtualString(StringHandle handle, MetadataStringDecoder utf8Decoder, ReadOnlySpan<byte> prefix)
         {
             Debug.Assert(handle.StringKind != StringKind.Virtual);
 
             char otherTerminator = handle.StringKind == StringKind.DotTerminated ? '.' : '\0';
-            return Block.PeekUtf8NullTerminated(handle.GetHeapOffset(), prefixOpt, utf8Decoder, out _, otherTerminator);
+            return Block.PeekUtf8NullTerminated(handle.GetHeapOffset(), prefix, utf8Decoder, out _, otherTerminator);
         }
 
         private unsafe MemoryBlock GetNonVirtualStringMemoryBlock(StringHandle handle)
@@ -178,13 +178,13 @@ namespace System.Reflection.Metadata.Ecma335
             return new MemoryBlock(Block.Pointer + offset, length);
         }
 
-        private unsafe byte[] GetNonVirtualStringBytes(StringHandle handle, byte[] prefix)
+        private unsafe byte[] GetNonVirtualStringBytes(StringHandle handle, ReadOnlySpan<byte> prefix)
         {
             Debug.Assert(handle.StringKind != StringKind.Virtual);
 
             var block = GetNonVirtualStringMemoryBlock(handle);
             var bytes = new byte[prefix.Length + block.Length];
-            Buffer.BlockCopy(prefix, 0, bytes, 0, prefix.Length);
+            prefix.CopyTo(bytes);
             Marshal.Copy((IntPtr)block.Pointer, bytes, prefix.Length, block.Length);
             return bytes;
         }

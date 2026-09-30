@@ -109,13 +109,13 @@ namespace System.ComponentModel
         private const bool BACKWARD = false;
 
         // Bit masks for bool properties.
-        private static readonly int s_ASCII_ONLY = BitVector32.CreateMask();
-        private static readonly int s_ALLOW_PROMPT_AS_INPUT = BitVector32.CreateMask(s_ASCII_ONLY);
-        private static readonly int s_INCLUDE_PROMPT = BitVector32.CreateMask(s_ALLOW_PROMPT_AS_INPUT);
-        private static readonly int s_INCLUDE_LITERALS = BitVector32.CreateMask(s_INCLUDE_PROMPT);
-        private static readonly int s_RESET_ON_PROMPT = BitVector32.CreateMask(s_INCLUDE_LITERALS);
-        private static readonly int s_RESET_ON_LITERALS = BitVector32.CreateMask(s_RESET_ON_PROMPT);
-        private static readonly int s_SKIP_SPACE = BitVector32.CreateMask(s_RESET_ON_LITERALS);
+        private const int ASCII_ONLY = 0x01;
+        private const int ALLOW_PROMPT_AS_INPUT = 0x02;
+        private const int INCLUDE_PROMPT = 0x04;
+        private const int INCLUDE_LITERALS = 0x08;
+        private const int RESET_ON_PROMPT = 0x10;
+        private const int RESET_ON_LITERALS = 0x20;
+        private const int SKIP_SPACE = 0x40;
 
         //// Instance data.
 
@@ -264,16 +264,16 @@ namespace System.ComponentModel
                 Culture = CultureInfo.ReadOnly(Culture);
             }
 
-            _flagState[s_ALLOW_PROMPT_AS_INPUT] = allowPromptAsInput;
-            _flagState[s_ASCII_ONLY] = restrictToAscii;
+            _flagState[ALLOW_PROMPT_AS_INPUT] = allowPromptAsInput;
+            _flagState[ASCII_ONLY] = restrictToAscii;
 
             // set default values for read/write properties.
 
-            _flagState[s_INCLUDE_PROMPT] = false;
-            _flagState[s_INCLUDE_LITERALS] = true;
-            _flagState[s_RESET_ON_PROMPT] = true;
-            _flagState[s_SKIP_SPACE] = true;
-            _flagState[s_RESET_ON_LITERALS] = true;
+            _flagState[INCLUDE_PROMPT] = false;
+            _flagState[INCLUDE_LITERALS] = true;
+            _flagState[RESET_ON_PROMPT] = true;
+            _flagState[SKIP_SPACE] = true;
+            _flagState[RESET_ON_LITERALS] = true;
 
             Initialize();
         }
@@ -435,7 +435,7 @@ namespace System.ComponentModel
         /// <summary>
         /// Specifies whether the prompt character should be treated as a valid input character or not.
         /// </summary>
-        public bool AllowPromptAsInput => _flagState[s_ALLOW_PROMPT_AS_INPUT];
+        public bool AllowPromptAsInput => _flagState[ALLOW_PROMPT_AS_INPUT];
 
         /// <summary>
         /// Retrieves the number of editable characters that have been set.
@@ -556,11 +556,11 @@ namespace System.ComponentModel
         {
             get
             {
-                return _flagState[s_INCLUDE_LITERALS];
+                return _flagState[INCLUDE_LITERALS];
             }
             set
             {
-                _flagState[s_INCLUDE_LITERALS] = value;
+                _flagState[INCLUDE_LITERALS] = value;
             }
         }
 
@@ -572,18 +572,18 @@ namespace System.ComponentModel
         {
             get
             {
-                return _flagState[s_INCLUDE_PROMPT];
+                return _flagState[INCLUDE_PROMPT];
             }
             set
             {
-                _flagState[s_INCLUDE_PROMPT] = value;
+                _flagState[INCLUDE_PROMPT] = value;
             }
         }
 
         /// <summary>
         /// Specifies whether only ASCII characters are accepted as valid input.
         /// </summary>
-        public bool AsciiOnly => _flagState[s_ASCII_ONLY];
+        public bool AsciiOnly => _flagState[ASCII_ONLY];
 
         /// <summary>
         /// Specifies whether the user text is to be rendered as password characters.
@@ -735,11 +735,11 @@ namespace System.ComponentModel
         {
             get
             {
-                return _flagState[s_RESET_ON_PROMPT];
+                return _flagState[RESET_ON_PROMPT];
             }
             set
             {
-                _flagState[s_RESET_ON_PROMPT] = value;
+                _flagState[RESET_ON_PROMPT] = value;
             }
         }
 
@@ -754,11 +754,11 @@ namespace System.ComponentModel
         {
             get
             {
-                return _flagState[s_SKIP_SPACE];
+                return _flagState[SKIP_SPACE];
             }
             set
             {
-                _flagState[s_SKIP_SPACE] = value;
+                _flagState[SKIP_SPACE] = value;
             }
         }
 
@@ -774,11 +774,11 @@ namespace System.ComponentModel
         {
             get
             {
-                return _flagState[s_RESET_ON_LITERALS];
+                return _flagState[RESET_ON_LITERALS];
             }
             set
             {
-                _flagState[s_RESET_ON_LITERALS] = value;
+                _flagState[RESET_ON_LITERALS] = value;
             }
         }
 

@@ -107,24 +107,25 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         private const byte XUD = EXP | UDC;
         private const byte IUD = IMP | UDC;
 
-        private static readonly byte[][] s_simpleTypeConversions =
-        {
-            // to:                   BYTE I2   I4   I8   FLT  DBL  DEC  CHAR BOOL SBYTE U2   U4   U8
+        // NUM_SIMPLE_TYPES x NUM_SIMPLE_TYPES table, indexed as [from * NUM_SIMPLE_TYPES + to]
+        private static ReadOnlySpan<byte> SimpleTypeConversions =>
+        [
+            // to:         BYTE I2   I4   I8   FLT  DBL  DEC  CHAR BOOL SBYTE U2   U4   U8
             /* from */
-             new byte[] /* BYTE */ { ID,  IMP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  IMP, IMP, IMP },
-             new byte[] /*   I2 */ { EXP, ID,  IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP },
-             new byte[] /*   I4 */ { EXP, EXP, ID,  IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP },
-             new byte[] /*   I8 */ { EXP, EXP, EXP, ID,  IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP },
-             new byte[] /*  FLT */ { EXP, EXP, EXP, EXP, ID,  IMP, XUD, EXP, NO,  EXP,  EXP, EXP, EXP },
-             new byte[] /*  DBL */ { EXP, EXP, EXP, EXP, EXP, ID,  XUD, EXP, NO,  EXP,  EXP, EXP, EXP },
-             new byte[] /*  DEC */ { XUD, XUD, XUD, XUD, XUD, XUD, ID,  XUD, NO,  XUD,  XUD, XUD, XUD },
-             new byte[] /* CHAR */ { EXP, EXP, IMP, IMP, IMP, IMP, IUD, ID,  NO,  EXP,  IMP, IMP, IMP },
-             new byte[] /* BOOL */ { NO,  NO,  NO,  NO,  NO,  NO,  NO,  NO,  ID,  NO,   NO,  NO,  NO  },
-             new byte[] /*SBYTE */ { EXP, IMP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  ID,   EXP, EXP, EXP },
-             new byte[] /*   U2 */ { EXP, EXP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  ID,  IMP, IMP },
-             new byte[] /*   U4 */ { EXP, EXP, EXP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, ID,  IMP },
-             new byte[] /*   U8 */ { EXP, EXP, EXP, EXP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, ID  },
-        };
+            /* BYTE */     ID,  IMP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  IMP, IMP, IMP,
+            /*   I2 */     EXP, ID,  IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP,
+            /*   I4 */     EXP, EXP, ID,  IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP,
+            /*   I8 */     EXP, EXP, EXP, ID,  IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, EXP,
+            /*  FLT */     EXP, EXP, EXP, EXP, ID,  IMP, XUD, EXP, NO,  EXP,  EXP, EXP, EXP,
+            /*  DBL */     EXP, EXP, EXP, EXP, EXP, ID,  XUD, EXP, NO,  EXP,  EXP, EXP, EXP,
+            /*  DEC */     XUD, XUD, XUD, XUD, XUD, XUD, ID,  XUD, NO,  XUD,  XUD, XUD, XUD,
+            /* CHAR */     EXP, EXP, IMP, IMP, IMP, IMP, IUD, ID,  NO,  EXP,  IMP, IMP, IMP,
+            /* BOOL */     NO,  NO,  NO,  NO,  NO,  NO,  NO,  NO,  ID,  NO,   NO,  NO,  NO,
+            /*SBYTE */     EXP, IMP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  ID,   EXP, EXP, EXP,
+            /*   U2 */     EXP, EXP, IMP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  ID,  IMP, IMP,
+            /*   U4 */     EXP, EXP, EXP, IMP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, ID,  IMP,
+            /*   U8 */     EXP, EXP, EXP, EXP, IMP, IMP, IUD, EXP, NO,  EXP,  EXP, EXP, ID,
+        ];
 
         private const int NUM_SIMPLE_TYPES = (int)PredefinedType.PT_ULONG + 1;
         private const int NUM_EXT_TYPES = (int)PredefinedType.PT_OBJECT + 1;
@@ -133,7 +134,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         {
             if ((int)ptSrc < NUM_SIMPLE_TYPES && (int)ptDst < NUM_SIMPLE_TYPES)
             {
-                return (ConvKind)(s_simpleTypeConversions[(int)ptSrc][(int)ptDst] & CONV_KIND_MASK);
+                return (ConvKind)(SimpleTypeConversions[(int)ptSrc * NUM_SIMPLE_TYPES + (int)ptDst] & CONV_KIND_MASK);
             }
             if (ptSrc == ptDst || ptDst == PredefinedType.PT_OBJECT && ptSrc < PredefinedType.PT_COUNT)
             {
@@ -150,7 +151,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         {
             if ((int)ptSrc < NUM_SIMPLE_TYPES && (int)ptDst < NUM_SIMPLE_TYPES)
             {
-                return 0 != (s_simpleTypeConversions[(int)ptSrc][(int)ptDst] & UDC);
+                return 0 != (SimpleTypeConversions[(int)ptSrc * NUM_SIMPLE_TYPES + (int)ptDst] & UDC);
             }
             return false;
         }
@@ -187,26 +188,27 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
         private const byte neither = (byte)BetterType.Neither;
 
 
-        private static readonly byte[][] s_simpleTypeBetter =
-        {
-            //                        BYTE     SHORT    INT      LONG     FLOAT    DOUBLE   DECIMAL  CHAR     BOOL     SBYTE    USHORT   UINT     ULONG    IPTR     UIPTR    OBJECT
-            new byte[] /* BYTE   */ { same,    left,    left,    left,    left,    left,    left,    neither, neither, right,   left,    left,    left,    neither, neither, left },
-            new byte[] /* SHORT  */ { right,   same,    left,    left,    left,    left,    left,    neither, neither, right,   left,    left,    left,    neither, neither, left },
-            new byte[] /* INT    */ { right,   right,   same,    left,    left,    left,    left,    right,   neither, right,   right,   left,    left,    neither, neither, left },
-            new byte[] /* LONG   */ { right,   right,   right,   same,    left,    left,    left,    right,   neither, right,   right,   right,   left,    neither, neither, left },
-            new byte[] /* FLOAT  */ { right,   right,   right,   right,   same,    left,    neither, right,   neither, right,   right,   right,   right,   neither, neither, left },
-            new byte[] /* DOUBLE */ { right,   right,   right,   right,   right,   same,    neither, right,   neither, right,   right,   right,   right,   neither, neither, left },
-            new byte[] /* DECIMAL*/ { right,   right,   right,   right,   neither, neither, same,    right,   neither, right,   right,   right,   right,   neither, neither, left },
-            new byte[] /* CHAR   */ { neither, neither, left,    left,    left,    left,    left,    same,    neither, neither, left,    left,    left,    neither, neither, left },
-            new byte[] /* BOOL   */ { neither, neither, neither, neither, neither, neither, neither, neither, same,    neither, neither, neither, neither, neither, neither, left },
-            new byte[] /* SBYTE  */ { left,    left,    left,    left,    left,    left,    left,    neither, neither, same,    left,    left,    left,    neither, neither, left },
-            new byte[] /* USHORT */ { right,   right,   left,    left,    left,    left,    left,    right,   neither, right,   same,    left,    left,    neither, neither, left },
-            new byte[] /* UINT   */ { right,   right,   right,   left,    left,    left,    left,    right,   neither, right,   right,   same,    left,    neither, neither, left },
-            new byte[] /* ULONG  */ { right,   right,   right,   right,   left,    left,    left,    right,   neither, right,   right,   right,   same,    neither, neither, left },
-            new byte[] /* IPTR   */ { neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, same,    neither, left },
-            new byte[] /* UIPTR  */ { neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, same,    left },
-            new byte[] /* OBJECT */ { right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   same }
-        };
+        // NUM_EXT_TYPES x NUM_EXT_TYPES table, indexed as [pt1 * NUM_EXT_TYPES + pt2]
+        private static ReadOnlySpan<byte> SimpleTypeBetter =>
+        [
+            //            BYTE     SHORT    INT      LONG     FLOAT    DOUBLE   DECIMAL  CHAR     BOOL     SBYTE    USHORT   UINT     ULONG    IPTR     UIPTR    OBJECT
+            /* BYTE   */  same,    left,    left,    left,    left,    left,    left,    neither, neither, right,   left,    left,    left,    neither, neither, left,
+            /* SHORT  */  right,   same,    left,    left,    left,    left,    left,    neither, neither, right,   left,    left,    left,    neither, neither, left,
+            /* INT    */  right,   right,   same,    left,    left,    left,    left,    right,   neither, right,   right,   left,    left,    neither, neither, left,
+            /* LONG   */  right,   right,   right,   same,    left,    left,    left,    right,   neither, right,   right,   right,   left,    neither, neither, left,
+            /* FLOAT  */  right,   right,   right,   right,   same,    left,    neither, right,   neither, right,   right,   right,   right,   neither, neither, left,
+            /* DOUBLE */  right,   right,   right,   right,   right,   same,    neither, right,   neither, right,   right,   right,   right,   neither, neither, left,
+            /* DECIMAL*/  right,   right,   right,   right,   neither, neither, same,    right,   neither, right,   right,   right,   right,   neither, neither, left,
+            /* CHAR   */  neither, neither, left,    left,    left,    left,    left,    same,    neither, neither, left,    left,    left,    neither, neither, left,
+            /* BOOL   */  neither, neither, neither, neither, neither, neither, neither, neither, same,    neither, neither, neither, neither, neither, neither, left,
+            /* SBYTE  */  left,    left,    left,    left,    left,    left,    left,    neither, neither, same,    left,    left,    left,    neither, neither, left,
+            /* USHORT */  right,   right,   left,    left,    left,    left,    left,    right,   neither, right,   same,    left,    left,    neither, neither, left,
+            /* UINT   */  right,   right,   right,   left,    left,    left,    left,    right,   neither, right,   right,   same,    left,    neither, neither, left,
+            /* ULONG  */  right,   right,   right,   right,   left,    left,    left,    right,   neither, right,   right,   right,   same,    neither, neither, left,
+            /* IPTR   */  neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, same,    neither, left,
+            /* UIPTR  */  neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, neither, same,    left,
+            /* OBJECT */  right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   right,   same
+        ];
 #if DEBUG
         private static volatile bool s_fCheckedBetter;
 
@@ -220,19 +222,21 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
             }
             for (int i = 0; i < NUM_EXT_TYPES; i++)
             {
-                Debug.Assert(s_simpleTypeBetter[i][i] == same);
+                Debug.Assert(SimpleTypeBetter[i * NUM_EXT_TYPES + i] == same);
                 for (int j = 0; j < i; j++)
                 {
-                    Debug.Assert(s_simpleTypeBetter[i][j] != same && s_simpleTypeBetter[j][i] != same);
+                    byte ij = SimpleTypeBetter[i * NUM_EXT_TYPES + j];
+                    byte ji = SimpleTypeBetter[j * NUM_EXT_TYPES + i];
+                    Debug.Assert(ij != same && ji != same);
                     Debug.Assert(
-                        (s_simpleTypeBetter[i][j] == left && s_simpleTypeBetter[j][i] == right) ||
-                        (s_simpleTypeBetter[i][j] == right && s_simpleTypeBetter[j][i] == left) ||
-                        (s_simpleTypeBetter[i][j] == neither && s_simpleTypeBetter[j][i] == neither));
+                        (ij == left && ji == right) ||
+                        (ij == right && ji == left) ||
+                        (ij == neither && ji == neither));
                     Debug.Assert(
                         GetPredefindType((PredefinedType)i) == null ||
                         GetPredefindType((PredefinedType)j) == null ||
-                        (!canConvert(GetPredefindType((PredefinedType)i), GetPredefindType((PredefinedType)j), CONVERTTYPE.NOUDC) || s_simpleTypeBetter[i][j] == left) &&
-                        (!canConvert(GetPredefindType((PredefinedType)j), GetPredefindType((PredefinedType)i), CONVERTTYPE.NOUDC) || s_simpleTypeBetter[j][i] == left));
+                        (!canConvert(GetPredefindType((PredefinedType)i), GetPredefindType((PredefinedType)j), CONVERTTYPE.NOUDC) || ij == left) &&
+                        (!canConvert(GetPredefindType((PredefinedType)j), GetPredefindType((PredefinedType)i), CONVERTTYPE.NOUDC) || ji == left));
                 }
             }
             s_fCheckedBetter = true;
@@ -249,7 +253,7 @@ namespace Microsoft.CSharp.RuntimeBinder.Semantics
 #endif // DEBUG
             Debug.Assert((int)pt1 < NUM_EXT_TYPES);
             Debug.Assert((int)pt2 < NUM_EXT_TYPES);
-            return (BetterType)s_simpleTypeBetter[(int)pt1][(int)pt2];
+            return (BetterType)SimpleTypeBetter[(int)pt1 * NUM_EXT_TYPES + (int)pt2];
         }
 #pragma warning restore CA1822
 

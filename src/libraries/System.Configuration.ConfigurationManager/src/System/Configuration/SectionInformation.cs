@@ -52,8 +52,8 @@ namespace System.Configuration
             _configurationSection = associatedConfigurationSection;
             _allowDefinition = ConfigurationAllowDefinition.Everywhere;
             _allowExeDefinition = ConfigurationAllowExeDefinition.MachineToApplication;
-            _overrideModeDefault = OverrideModeSetting.s_sectionDefault;
-            _overrideMode = OverrideModeSetting.s_locationDefault;
+            _overrideModeDefault = OverrideModeSetting.SectionDefault;
+            _overrideMode = OverrideModeSetting.LocationDefault;
 
             _flags[FlagAllowLocation] = true;
             _flags[FlagRestartOnExternalChanges] = true;

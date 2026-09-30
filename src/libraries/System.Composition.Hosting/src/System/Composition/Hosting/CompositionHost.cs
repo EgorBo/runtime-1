@@ -18,8 +18,6 @@ namespace System.Composition.Hosting
     /// </summary>
     public sealed class CompositionHost : CompositionContext, IDisposable
     {
-        private static readonly string[] s_noBoundaries = Array.Empty<string>();
-
         private readonly LifetimeContext _rootLifetimeContext;
 
         private CompositionHost(LifetimeContext rootLifetimeContext)
@@ -56,7 +54,7 @@ namespace System.Composition.Hosting
             .Concat(providers)
             .ToArray();
 
-            var container = new LifetimeContext(new ExportDescriptorRegistry(allProviders), s_noBoundaries);
+            var container = new LifetimeContext(new ExportDescriptorRegistry(allProviders), Array.Empty<string>());
             return new CompositionHost(container);
         }
 

@@ -14,11 +14,11 @@ namespace System.Reflection.Internal
     /// </summary>
     internal static unsafe class EncodingHelper
     {
-        public static string DecodeUtf8(byte* bytes, int byteCount, byte[]? prefix, MetadataStringDecoder utf8Decoder)
+        public static string DecodeUtf8(byte* bytes, int byteCount, ReadOnlySpan<byte> prefix, MetadataStringDecoder utf8Decoder)
         {
             Debug.Assert(utf8Decoder != null);
 
-            if (prefix != null)
+            if (!prefix.IsEmpty)
             {
                 return DecodeUtf8Prefixed(bytes, byteCount, prefix, utf8Decoder);
             }
@@ -31,7 +31,7 @@ namespace System.Reflection.Internal
             return utf8Decoder.GetString(bytes, byteCount);
         }
 
-        private static string DecodeUtf8Prefixed(byte* bytes, int byteCount, byte[] prefix, MetadataStringDecoder utf8Decoder)
+        private static string DecodeUtf8Prefixed(byte* bytes, int byteCount, ReadOnlySpan<byte> prefix, MetadataStringDecoder utf8Decoder)
         {
             Debug.Assert(utf8Decoder != null);
 
@@ -44,7 +44,7 @@ namespace System.Reflection.Internal
 
             byte[] buffer = ArrayPool<byte>.Shared.Rent(prefixedByteCount);
 
-            prefix.CopyTo(buffer, 0);
+            prefix.CopyTo(buffer);
             Marshal.Copy((IntPtr)bytes, buffer, prefix.Length, byteCount);
 
             string result;

@@ -9,16 +9,14 @@ namespace System.Configuration
 {
     internal sealed class RuntimeConfigurationRecord : BaseConfigurationRecord
     {
-        private static readonly SimpleBitVector32 s_runtimeClassFlags = new SimpleBitVector32(
+        private RuntimeConfigurationRecord() { }
+
+        protected override SimpleBitVector32 ClassFlags => new SimpleBitVector32(
             ClassSupportsChangeNotifications
             | ClassSupportsRefresh
             | ClassSupportsImpersonation
             | ClassSupportsRestrictedPermissions
             | ClassSupportsDelayedInit);
-
-        private RuntimeConfigurationRecord() { }
-
-        protected override SimpleBitVector32 ClassFlags => s_runtimeClassFlags;
 
         internal static IInternalConfigRecord Create(
             InternalConfigRoot configRoot,

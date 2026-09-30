@@ -19,10 +19,6 @@ namespace System.Configuration
         private const int DefaultIndent = 4;
         private const int MaxIndent = 10;
 
-        private static readonly SimpleBitVector32 s_mgmtClassFlags = new SimpleBitVector32(
-            ClassSupportsKeepInputs
-            | ClassIgnoreLocalErrors);
-
         private Hashtable _locationTags;
         private Hashtable _removedSectionGroups;
         private Hashtable _removedSections;
@@ -40,7 +36,9 @@ namespace System.Configuration
         // The IInternalConfigHost cast to UpdateConfigHost.
         private UpdateConfigHost UpdateConfigHost => _configRoot.UpdateConfigHost;
 
-        protected override SimpleBitVector32 ClassFlags => s_mgmtClassFlags;
+        protected override SimpleBitVector32 ClassFlags => new SimpleBitVector32(
+            ClassSupportsKeepInputs
+            | ClassIgnoreLocalErrors);
 
         private Hashtable SectionGroups => _sectionGroups ??= new Hashtable();
 
@@ -1466,7 +1464,7 @@ namespace System.Configuration
 
         private static bool AreLocationAttributesModified(SectionRecord sectionRecord, ConfigurationSection configSection)
         {
-            OverrideModeSetting overrideMode = OverrideModeSetting.s_locationDefault;
+            OverrideModeSetting overrideMode = OverrideModeSetting.LocationDefault;
             bool inheritInChildApplications = true;
 
             if (sectionRecord.HasFileInput)
@@ -1540,7 +1538,7 @@ namespace System.Configuration
                     sectionRecord.AddUpdate = false;
                     bool addUpdate = sectionRecord.HasFileInput;
                     // If true, add this section to definitionUpdates, and optinally to configSourceUpdates
-                    OverrideModeSetting overrideMode = OverrideModeSetting.s_locationDefault;
+                    OverrideModeSetting overrideMode = OverrideModeSetting.LocationDefault;
                     bool inheritInChildApplications = true;
                     bool moved = false;
                     string updatedXml = null;
@@ -2085,7 +2083,7 @@ namespace System.Configuration
                 utilWriter.AppendSpacesToLinePosition(linePosition);
 
                 utilWriter.Write(string.Format(CultureInfo.InvariantCulture, FormatLocationPath,
-                    OverrideModeSetting.s_locationDefault.LocationTagXmlString, KeywordTrue, _locationSubPath));
+                    OverrideModeSetting.LocationDefault.LocationTagXmlString, KeywordTrue, _locationSubPath));
                 utilWriter.AppendSpacesToLinePosition(linePosition);
                 utilWriter.Write(FormatLocationEndElement);
                 utilWriter.AppendNewLine();
@@ -2329,7 +2327,7 @@ namespace System.Configuration
                         {
                             locationPathApplies = true;
                             locationUpdates = definitionUpdates.FindLocationUpdates(
-                                OverrideModeSetting.s_locationDefault, true);
+                                OverrideModeSetting.LocationDefault, true);
                             if (locationUpdates != null) sectionUpdates = locationUpdates.SectionUpdates;
                         }
 
@@ -2688,7 +2686,7 @@ namespace System.Configuration
                     {
                         string locationSubPathAttribute = reader.GetAttribute(LocationPathAttribute);
                         locationSubPathAttribute = NormalizeLocationSubPath(locationSubPathAttribute, xmlUtil);
-                        OverrideModeSetting overrideMode = OverrideModeSetting.s_locationDefault;
+                        OverrideModeSetting overrideMode = OverrideModeSetting.LocationDefault;
                         bool inheritInChildApps = true;
 
                         if (IsLocationConfig)

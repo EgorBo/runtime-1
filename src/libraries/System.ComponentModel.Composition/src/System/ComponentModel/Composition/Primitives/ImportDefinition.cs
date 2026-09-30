@@ -15,7 +15,7 @@ namespace System.ComponentModel.Composition.Primitives
     /// </summary>
     public class ImportDefinition
     {
-        internal static readonly string EmptyContractName = string.Empty;
+        internal const string EmptyContractName = "";
         private readonly Expression<Func<ExportDefinition, bool>>? _constraint;
         private readonly ImportCardinality _cardinality = ImportCardinality.ExactlyOne;
         private readonly string _contractName = EmptyContractName;

@@ -1903,7 +1903,7 @@ namespace System.Configuration
                             string typeName = null;
                             ConfigurationAllowDefinition allowDefinition = ConfigurationAllowDefinition.Everywhere;
                             ConfigurationAllowExeDefinition allowExeDefinition = ConfigurationAllowExeDefinition.MachineToApplication;
-                            OverrideModeSetting overrideModeDefault = OverrideModeSetting.s_sectionDefault;
+                            OverrideModeSetting overrideModeDefault = OverrideModeSetting.SectionDefault;
                             bool allowLocation = true;
                             bool restartOnExternalChanges = true;
                             bool requirePermission = true;
@@ -2310,7 +2310,7 @@ namespace System.Configuration
 
         private void ScanSections(XmlUtil xmlUtil)
         {
-            ScanSectionsRecursive(xmlUtil, string.Empty, false, null, OverrideModeSetting.s_locationDefault, false);
+            ScanSectionsRecursive(xmlUtil, string.Empty, false, null, OverrideModeSetting.LocationDefault, false);
         }
 
         private void ScanSectionsRecursive(
@@ -2404,7 +2404,7 @@ namespace System.Configuration
                         allowLocation: true,
                         allowDefinition: ConfigurationAllowDefinition.Everywhere,
                         allowExeDefinition: ConfigurationAllowExeDefinition.MachineToRoamingUser,
-                        overrideModeDefault: OverrideModeSetting.s_sectionDefault,
+                        overrideModeDefault: OverrideModeSetting.SectionDefault,
                         restartOnExternalChanges: true,
                         requirePermission: true,
                         isFromTrustedConfigRecord: _flags[IsTrusted],
@@ -2701,7 +2701,7 @@ namespace System.Configuration
             string locationSubPath = null;
             bool inheritInChildApp = true;
             int errorCountBeforeScan = xmlUtil.SchemaErrors.GlobalErrorCount;
-            OverrideModeSetting overrideMode = OverrideModeSetting.s_locationDefault;
+            OverrideModeSetting overrideMode = OverrideModeSetting.LocationDefault;
             bool overrideModeInit = false;
 
             // Get the location section attributes
@@ -3382,7 +3382,7 @@ namespace System.Configuration
                             configKey, _configPath, _configPath, null,
                             ConfigStreamInfo.StreamName, 0, null, null,
                             null, null,
-                            null, OverrideModeSetting.s_locationDefault, false);
+                            null, OverrideModeSetting.LocationDefault, false);
 
                         SectionInput fileInput = new SectionInput(sectionXmlInfo, null);
                         sectionRecord.AddFileInput(fileInput);
@@ -3676,7 +3676,7 @@ namespace System.Configuration
                     allowLocation: true,
                     allowDefinition: ConfigurationAllowDefinition.Everywhere,
                     allowExeDefinition: ConfigurationAllowExeDefinition.MachineToApplication,
-                    overrideModeDefault: OverrideModeSetting.s_sectionDefault,
+                    overrideModeDefault: OverrideModeSetting.SectionDefault,
                     restartOnExternalChanges: true,
                     requirePermission: true,
                     isFromTrustedConfigRecord: true,

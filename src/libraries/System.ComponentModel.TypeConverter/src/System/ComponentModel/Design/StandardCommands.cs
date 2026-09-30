@@ -1342,11 +1342,7 @@ namespace System.ComponentModel.Design
 
         private static class ShellGuids
         {
-            internal static readonly Guid VSStandardCommandSet97 = new Guid("{5efc7975-14bc-11cf-9b2b-00aa00573819}");
-            internal static readonly Guid guidDsdCmdId = new Guid("{1F0FD094-8e53-11d2-8f9c-0060089fc486}");
-            internal static readonly Guid SID_SOleComponentUIManager = new Guid("{5efc7974-14bc-11cf-9b2b-00aa00573819}");
-            internal static readonly Guid GUID_VSTASKCATEGORY_DATADESIGNER = new Guid("{6B32EAED-13BB-11d3-A64F-00C04F683820}");
-            internal static readonly Guid GUID_PropertyBrowserToolWindow = new Guid(0xeefa5220, 0xe298, 0x11d0, 0x8f, 0x78, 0x0, 0xa0, 0xc9, 0x11, 0x0, 0x57);
+            internal static Guid VSStandardCommandSet97 => new Guid(0x5efc7975, 0x14bc, 0x11cf, 0x9b, 0x2b, 0x00, 0xaa, 0x00, 0x57, 0x38, 0x19);
         }
     }
 }

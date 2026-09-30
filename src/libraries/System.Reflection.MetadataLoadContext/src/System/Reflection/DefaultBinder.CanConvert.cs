@@ -14,7 +14,7 @@ namespace System
 
         private static bool CanPrimitiveWiden(Type source, Type target)
         {
-            Primitives widerCodes = s_primitiveConversions[(int)(Type.GetTypeCode(source))];
+            Primitives widerCodes = PrimitiveConversions[(int)(Type.GetTypeCode(source))];
             Primitives targetCode = (Primitives)(1 << (int)(Type.GetTypeCode(target)));
 
             return 0 != (widerCodes & targetCode);
@@ -40,8 +40,8 @@ namespace System
             String = 1 << (int)TypeCode.String,
         }
 
-        private static readonly Primitives[] s_primitiveConversions = new Primitives[]
-        {
+        private static ReadOnlySpan<Primitives> PrimitiveConversions =>
+        [
                 /* Empty    */  0, // not primitive
                 /* Object   */  0, // not primitive
                 /* DBNull   */  0, // not exposed.
@@ -61,6 +61,6 @@ namespace System
                 /* DateTime */  Primitives.DateTime,
                 /* [Unused] */  0,
                 /* String   */  Primitives.String,
-        };
+        ];
     }
 }
