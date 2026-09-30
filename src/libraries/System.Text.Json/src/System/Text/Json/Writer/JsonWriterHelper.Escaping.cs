@@ -61,7 +61,7 @@ namespace System.Text.Json
         private const string HexFormatString = "X4";
 #endif
 
-        private static readonly StandardFormat s_hexStandardFormat = new StandardFormat('X', 4);
+        private static StandardFormat HexStandardFormat => new StandardFormat('X', 4);
 
         private static bool NeedsEscaping(byte value) => AllowList[value] == 0;
 
@@ -233,7 +233,7 @@ namespace System.Text.Json
                 default:
                     destination[written++] = (byte)'u';
 
-                    bool result = Utf8Formatter.TryFormat(value, destination.Slice(written), out int bytesWritten, format: s_hexStandardFormat);
+                    bool result = Utf8Formatter.TryFormat(value, destination.Slice(written), out int bytesWritten, format: HexStandardFormat);
                     Debug.Assert(result);
                     Debug.Assert(bytesWritten == 4);
                     written += bytesWritten;

@@ -547,7 +547,7 @@ namespace Microsoft.Interop
             writer.WriteLine("file sealed class InterfaceInformation : global::System.Runtime.InteropServices.Marshalling.IIUnknownInterfaceType");
             writer.WriteLine('{');
             writer.Indent++;
-            writer.WriteLine($"public static global::System.Guid Iid {{ get; }} = new({ComInterfaceGeneratorHelpers.CreateEmbeddedDataBlobExpression(interfaceInfo.InterfaceId.ToByteArray())});");
+            writer.WriteLine($"public static global::System.Guid Iid => new({ComInterfaceGeneratorHelpers.CreateEmbeddedDataBlobExpression(interfaceInfo.InterfaceId.ToByteArray())});");
             // The modifier makes the pointer type legal to name; the accessor still needs an unsafe context of
             // its own, since under the updated rules a member modifier opens none for the body.
             writer.WriteLine("public static unsafe void** ManagedVirtualMethodTable");

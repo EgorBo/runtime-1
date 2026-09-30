@@ -8,7 +8,7 @@ namespace System.Text.Json
 {
     public sealed partial class Utf8JsonWriter
     {
-        private static readonly char[] s_singleLineCommentDelimiter = new char[2] { '*', '/' };
+        private static ReadOnlySpan<char> SingleLineCommentDelimiter => "*/".AsSpan();
         private static ReadOnlySpan<byte> SingleLineCommentDelimiterUtf8 => "*/"u8;
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace System.Text.Json
         {
             JsonWriterHelper.ValidateValue(value);
 
-            if (value.Contains(s_singleLineCommentDelimiter, StringComparison.Ordinal))
+            if (value.Contains(SingleLineCommentDelimiter, StringComparison.Ordinal))
             {
                 ThrowHelper.ThrowArgumentException_InvalidCommentValue();
             }

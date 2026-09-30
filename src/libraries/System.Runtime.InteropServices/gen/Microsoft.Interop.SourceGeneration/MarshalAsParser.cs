@@ -120,8 +120,8 @@ namespace Microsoft.Interop
     /// </summary>
     public sealed class MarshalAsAttributeParser : IMarshallingInfoAttributeParser, IUseSiteAttributeParser
     {
-        private static readonly string IidParameterIndexConfigurationName
-            = $"{nameof(MarshalAsAttribute)}{Type.Delimiter}{nameof(MarshalAsAttribute.IidParameterIndex)}";
+        private const string IidParameterIndexConfigurationName
+            = nameof(MarshalAsAttribute) + "." + nameof(MarshalAsAttribute.IidParameterIndex);
         private static string IidParameterIndexConfigurationNameWithSupportedShape
             => SR.Format(SR.IidParameterIndexUnsupportedConfigurationName, IidParameterIndexConfigurationName);
 

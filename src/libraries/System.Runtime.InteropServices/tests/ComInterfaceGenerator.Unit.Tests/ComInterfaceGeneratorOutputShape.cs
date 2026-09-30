@@ -562,7 +562,7 @@ namespace ComInterfaceGenerator.Unit.Tests
                         Assert.True(generatedInfo.IsFileLocal);
                         IPropertySymbol iid = Assert.Single(generatedInfo.GetMembers("Iid").OfType<IPropertySymbol>());
                         PropertyDeclarationSyntax declaration = Assert.IsType<PropertyDeclarationSyntax>(iid.DeclaringSyntaxReferences.Single().GetSyntax());
-                        ImplicitObjectCreationExpressionSyntax initializer = Assert.IsType<ImplicitObjectCreationExpressionSyntax>(declaration.Initializer!.Value);
+                        ImplicitObjectCreationExpressionSyntax initializer = Assert.IsType<ImplicitObjectCreationExpressionSyntax>(declaration.ExpressionBody!.Expression);
                         CollectionExpressionSyntax bytes = Assert.IsType<CollectionExpressionSyntax>(Assert.Single(initializer.ArgumentList.Arguments).Expression);
                         SemanticModel model = comp.GetSemanticModel(declaration.SyntaxTree);
                         byte[] actualBytes = bytes.Elements.Select(element =>
