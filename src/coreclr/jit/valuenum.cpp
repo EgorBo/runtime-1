@@ -2099,9 +2099,10 @@ ValueNum ValueNumStore::VNIgnoreIntToLongCast(ValueNum vn)
             }
         }
 
-        // Also look through any long-typed integral constant that fits in an int.
+        // Also look through any long-typed integral constant that fits in an int. Handles are excluded
+        // as their values may be relocatable placeholders.
         int intCns;
-        if (IsVNIntegralConstant(vn, &intCns))
+        if (!IsVNHandle(vn) && IsVNIntegralConstant(vn, &intCns))
         {
             return VNForIntCon(intCns);
         }
@@ -4936,6 +4937,12 @@ bool ValueNumStore::VNEvalCanFoldBinaryFunc(var_types type, VNFunc func, ValueNu
             case GT_RSZ:
             case GT_ROL:
             case GT_ROR:
+
+            // Relocatable handle values are not known at compile time, so their relative order is unknown too.
+            case GT_GT:
+            case GT_GE:
+            case GT_LT:
+            case GT_LE:
                 if (m_compiler->opts.compReloc && (IsVNHandle(arg0VN) || IsVNHandle(arg1VN)))
                 {
                     return false;
@@ -4944,10 +4951,6 @@ bool ValueNumStore::VNEvalCanFoldBinaryFunc(var_types type, VNFunc func, ValueNu
 
             case GT_EQ:
             case GT_NE:
-            case GT_GT:
-            case GT_GE:
-            case GT_LT:
-            case GT_LE:
                 break;
 
             default:
