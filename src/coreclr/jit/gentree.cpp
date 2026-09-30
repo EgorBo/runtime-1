@@ -28837,6 +28837,11 @@ GenTree* Compiler::gtNewSimdShuffleVariableNode(
     GenTree* retNode = nullptr;
     GenTree* cnsNode = nullptr;
 
+#if defined(TARGET_XARCH)
+    // op1 may be re-read after op2 is evaluated, so it must be captured in a temp if op2 may modify it.
+    const bool op1NeedsTemp = !gtCanReorderWithoutTemp(op1, op2);
+#endif // TARGET_XARCH
+
     size_t elementSize  = genTypeSize(simdBaseType);
     size_t elementCount = simdSize / elementSize;
 
@@ -29124,7 +29129,7 @@ GenTree* Compiler::gtNewSimdShuffleVariableNode(
             GenTree* swap;
             if (!op1->IsCnsVec())
             {
-                GenTree* op1Dup1 = fgMakeMultiUse(&op1);
+                GenTree* op1Dup1 = op1NeedsTemp ? fgInsertCommaFormTemp(&op1) : fgMakeMultiUse(&op1);
                 GenTree* op1Dup2 = gtCloneExpr(op1Dup1);
 
                 uint8_t control = 1;
@@ -31271,8 +31276,9 @@ GenTree* Compiler::gtNewSimdWithElementNode(
 
     if (rangeCheckNeeded)
     {
-        // Evaluate op3's side effects before validating the index.
-        GenTree* index = fgMakeMultiUse(&op2);
+        // Evaluate op3's side effects before validating the index. op3 may modify the index, so
+        // capture it in a temp instead of re-reading it after op3.
+        GenTree* index = gtCanReorderWithoutTemp(op2, op3) ? fgMakeMultiUse(&op2) : fgInsertCommaFormTemp(&op2);
         GenTree* value = gtTreeHasSideEffects(op3, GTF_OBS_EFFECT) ? fgMakeMultiUse(&op3) : op3;
         index          = addRangeCheckForHWIntrinsic(index, 0, immUpperBound);
         value          = gtWrapWithSideEffects(value, index, GTF_OBS_EFFECT);
