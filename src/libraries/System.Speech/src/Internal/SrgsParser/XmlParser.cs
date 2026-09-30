@@ -48,7 +48,7 @@ namespace System.Speech.Internal.SrgsParser
                 _filename = !uri.IsAbsoluteUri || !uri.IsFile ? uri.OriginalString : uri.LocalPath;
 
                 // Saves the filename without the path
-                int iPosSlash = _filename.LastIndexOfAny(s_slashBackSlash);
+                int iPosSlash = _filename.AsSpan().LastIndexOfAny('\\', '/');
                 _shortFilename = iPosSlash >= 0 ? _filename.Substring(iPosSlash + 1) : _filename;
             }
         }
@@ -1829,7 +1829,7 @@ namespace System.Speech.Internal.SrgsParser
         {
             Helpers.ThrowIfEmptyOrNull(id, nameof(id));
 
-            if (!XmlReader.IsName(id) || (id == "NULL") || (id == "VOID") || (id == "GARBAGE") || (id.ContainsAny(s_invalidRuleIdChars)))
+            if (!XmlReader.IsName(id) || (id == "NULL") || (id == "VOID") || (id == "GARBAGE") || (id.ContainsAny(InvalidRuleIdChars)))
             {
                 XmlParser.ThrowSrgsException(SRID.InvalidRuleId, id);
             }
@@ -1902,9 +1902,7 @@ namespace System.Speech.Internal.SrgsParser
 
         private List<ForwardReference> _scripts = new();
 
-        private static readonly char[] s_invalidRuleIdChars = new char[] { '.', ':', '-', '#' };
-
-        private static readonly char[] s_slashBackSlash = new char[] { '\\', '/' };
+        private static ReadOnlySpan<char> InvalidRuleIdChars => ".:-#";
 
         #endregion
     }

@@ -57,7 +57,7 @@ namespace System.Management
     //CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC//
     public class ManagementObjectCollection : ICollection, IEnumerable, IDisposable
     {
-        private static readonly string name = typeof(ManagementObjectCollection).FullName;
+        private static string Name => typeof(ManagementObjectCollection).FullName;
 
         //fields
         internal ManagementScope scope;
@@ -135,7 +135,7 @@ namespace System.Management
             get
             {
                 if (isDisposed)
-                    throw new ObjectDisposedException(name);
+                    throw new ObjectDisposedException(Name);
 
                 //
                 // We can not use foreach since it _always_ calls Dispose on the collection
@@ -165,7 +165,7 @@ namespace System.Management
             get
             {
                 if (isDisposed)
-                    throw new ObjectDisposedException(name);
+                    throw new ObjectDisposedException(Name);
 
                 return false;
             }
@@ -182,7 +182,7 @@ namespace System.Management
             get
             {
                 if (isDisposed)
-                    throw new ObjectDisposedException(name);
+                    throw new ObjectDisposedException(Name);
 
                 return this;
             }
@@ -199,7 +199,7 @@ namespace System.Management
         public void CopyTo(Array array, int index)
         {
             if (isDisposed)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
 
             if (null == array)
                 throw new ArgumentNullException(nameof(array));
@@ -267,7 +267,7 @@ namespace System.Management
         public ManagementObjectEnumerator GetEnumerator()
         {
             if (isDisposed)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
 
 
             //
@@ -399,7 +399,7 @@ namespace System.Management
         //CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         public class ManagementObjectEnumerator : IEnumerator, IDisposable
         {
-            private static readonly string name = typeof(ManagementObjectEnumerator).FullName;
+            private static string Name => typeof(ManagementObjectEnumerator).FullName;
             private IEnumWbemClassObject enumWbem;
             private ManagementObjectCollection collectionObject;
             private uint cachedCount; //says how many objects are in the enumeration cache (when using BlockSize option)
@@ -473,7 +473,7 @@ namespace System.Management
                 get
                 {
                     if (isDisposed)
-                        throw new ObjectDisposedException(name);
+                        throw new ObjectDisposedException(Name);
 
                     if (cacheIndex < 0)
                         throw new InvalidOperationException();
@@ -513,7 +513,7 @@ namespace System.Management
             public bool MoveNext()
             {
                 if (isDisposed)
-                    throw new ObjectDisposedException(name);
+                    throw new ObjectDisposedException(Name);
 
                 //If there are no more objects in the collection return false
                 if (atEndOfCollection)
@@ -598,7 +598,7 @@ namespace System.Management
             public void Reset()
             {
                 if (isDisposed)
-                    throw new ObjectDisposedException(name);
+                    throw new ObjectDisposedException(Name);
 
                 //If the collection is not rewindable you can't do this
                 if (!collectionObject.options.Rewindable)

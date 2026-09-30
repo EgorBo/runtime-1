@@ -223,9 +223,9 @@ namespace System.IO.Packaging
                 {
                     foreach (string parameterKey in _parameterDictionary.Keys)
                     {
-                        stringBuilder.Append(s_linearWhiteSpaceChars[0]);
+                        stringBuilder.Append(LinearWhiteSpaceChars[0]);
                         stringBuilder.Append(';');
-                        stringBuilder.Append(s_linearWhiteSpaceChars[0]);
+                        stringBuilder.Append(LinearWhiteSpaceChars[0]);
                         stringBuilder.Append(parameterKey);
                         stringBuilder.Append('=');
                         stringBuilder.Append(_parameterDictionary[parameterKey]);
@@ -257,13 +257,13 @@ namespace System.IO.Packaging
             //character of the content type are not Linear White Spaces. So its safe to
             //assume that the index will be greater than 0 and less that length-2.
 
-            int index = contentType.IndexOf(s_linearWhiteSpaceChars[2]);
+            int index = contentType.IndexOf(LinearWhiteSpaceChars[2]);
 
             while (index != -1)
             {
-                if (contentType[index - 1] == s_linearWhiteSpaceChars[1] || contentType[index + 1] == s_linearWhiteSpaceChars[1])
+                if (contentType[index - 1] == LinearWhiteSpaceChars[1] || contentType[index + 1] == LinearWhiteSpaceChars[1])
                 {
-                    index = contentType.IndexOf(s_linearWhiteSpaceChars[2], ++index);
+                    index = contentType.IndexOf(LinearWhiteSpaceChars[2], ++index);
                 }
                 else
                 {
@@ -281,7 +281,7 @@ namespace System.IO.Packaging
         private void ParseTypeAndSubType(ReadOnlySpan<char> typeAndSubType)
         {
             //okay to trim at this point the end of the string as Linear White Spaces(LWS) chars are allowed here.
-            typeAndSubType = typeAndSubType.TrimEnd(s_linearWhiteSpaceChars);
+            typeAndSubType = typeAndSubType.TrimEnd(LinearWhiteSpaceChars);
 
             int forwardSlashPos = typeAndSubType.IndexOf('/');
             if (forwardSlashPos < 0 || // no slashes
@@ -320,7 +320,7 @@ namespace System.IO.Packaging
 
                 //okay to trim start as there can be spaces before the beginning
                 //of the parameter name.
-                parameterAndValue = parameterAndValue.TrimStart(s_linearWhiteSpaceChars);
+                parameterAndValue = parameterAndValue.TrimStart(LinearWhiteSpaceChars);
 
                 int equalSignIndex = parameterAndValue.IndexOf('=');
 
@@ -336,7 +336,7 @@ namespace System.IO.Packaging
                     ValidateToken(parameterAndValue.Slice(0, equalSignIndex).ToString()),
                     ValidateQuotedStringOrToken(parameterAndValue.Slice(parameterStartIndex, parameterValueLength).ToString()));
 
-                parameterAndValue = parameterAndValue.Slice(parameterStartIndex + parameterValueLength).TrimStart(s_linearWhiteSpaceChars);
+                parameterAndValue = parameterAndValue.Slice(parameterStartIndex + parameterValueLength).TrimStart(LinearWhiteSpaceChars);
             }
         }
 
@@ -359,7 +359,7 @@ namespace System.IO.Packaging
 
                 if (semicolonIndex != -1)
                 {
-                    int lwsIndex = s.Slice(startIndex).IndexOfAny(s_linearWhiteSpaceChars);
+                    int lwsIndex = s.Slice(startIndex).IndexOfAny(LinearWhiteSpaceChars);
                     length = lwsIndex != -1 && lwsIndex < semicolonIndex ? lwsIndex : semicolonIndex;
                     length += startIndex; // the indexes from IndexOf{Any} are based on slicing from startIndex
                 }
@@ -477,7 +477,7 @@ namespace System.IO.Packaging
         /// <param name="character">input character</param>
         /// <returns></returns>
         private static bool IsAllowedCharacter(char character) =>
-            Array.IndexOf(s_allowedCharacters, character) >= 0;
+            AllowedCharacters.IndexOf(character) >= 0;
 
         /// <summary>
         /// Returns true if the input character is an ASCII digit or letter
@@ -497,7 +497,7 @@ namespace System.IO.Packaging
         /// <param name="ch">input character</param>
         /// <returns></returns>
         private static bool IsLinearWhiteSpaceChar(char ch) =>
-            ch <= ' ' && Array.IndexOf(s_linearWhiteSpaceChars, ch) >= 0;
+            ch <= ' ' && LinearWhiteSpaceChars.IndexOf(ch) >= 0;
 
         #endregion Private Methods
 
@@ -508,23 +508,11 @@ namespace System.IO.Packaging
         private string _subType = string.Empty;
         private Dictionary<string, string>? _parameterDictionary;
 
-        //This array is sorted by the ascii value of these characters.
-        private static readonly char[] s_allowedCharacters =
-        {
-            '!' /*33*/, '#'  /*35*/, '$'  /*36*/,
-            '%' /*37*/, '&'  /*38*/, '\'' /*39*/,
-            '*' /*42*/, '+'  /*43*/, '-'  /*45*/,
-            '.' /*46*/, '^'  /*94*/, '_'  /*95*/,
-            '`' /*96*/, '|' /*124*/, '~' /*126*/,
-        };
+        //These characters are sorted by their ascii value.
+        private static ReadOnlySpan<char> AllowedCharacters => "!#$%&'*+-.^_`|~";
 
-        //Linear White Space characters
-        private static readonly char[] s_linearWhiteSpaceChars =
-         { ' ',  // space           - \x20
-           '\n', // new line        - \x0A
-           '\r', // carriage return - \x0D
-           '\t'  // horizontal tab  - \x09
-         };
+        //Linear White Space characters: space (\x20), new line (\x0A), carriage return (\x0D), horizontal tab (\x09)
+        private static ReadOnlySpan<char> LinearWhiteSpaceChars => " \n\r\t";
 
         #endregion Private Members
     }

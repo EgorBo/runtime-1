@@ -539,7 +539,8 @@ namespace System.IO.Packaging
                     PackageXmlEnum xmlStringIndex = PackageXmlStringTable.GetEnumOf(localName);
                     string? valueType = PackageXmlStringTable.GetValueType(xmlStringIndex);
 
-                    if (Array.IndexOf(s_validProperties, xmlStringIndex) < 0)  // An unexpected element is an error.
+                    // Valid core properties are the contiguous PackageXmlEnum range Creator..LastPrinted.
+                    if (xmlStringIndex is < PackageXmlEnum.Creator or > PackageXmlEnum.LastPrinted)  // An unexpected element is an error.
                     {
                         throw new XmlException(
                             SR.Format(SR.InvalidPropertyNameInCorePropertiesPart, reader.LocalName),
@@ -854,25 +855,6 @@ namespace System.IO.Packaging
         private const string W3cdtf = "W3CDTF";
         private const string DefaultPropertyPartNameExtension = ".psmdcp";
         private const string GuidStorageFormatString = @"N";     // N - simple format without adornments
-
-        private static readonly PackageXmlEnum[] s_validProperties = new PackageXmlEnum[] {
-                                                                                PackageXmlEnum.Creator,
-                                                                                PackageXmlEnum.Identifier,
-                                                                                PackageXmlEnum.Title,
-                                                                                PackageXmlEnum.Subject,
-                                                                                PackageXmlEnum.Description,
-                                                                                PackageXmlEnum.Language,
-                                                                                PackageXmlEnum.Created,
-                                                                                PackageXmlEnum.Modified,
-                                                                                PackageXmlEnum.ContentType,
-                                                                                PackageXmlEnum.Keywords,
-                                                                                PackageXmlEnum.Category,
-                                                                                PackageXmlEnum.Version,
-                                                                                PackageXmlEnum.LastModifiedBy,
-                                                                                PackageXmlEnum.ContentStatus,
-                                                                                PackageXmlEnum.Revision,
-                                                                                PackageXmlEnum.LastPrinted
-                                                                                };
 
         // Array of formats to supply to XmlConvert.ToDateTime or DateTime.ParseExact.
         // xsd:DateTime requires full date time in sortable (ISO 8601) format.

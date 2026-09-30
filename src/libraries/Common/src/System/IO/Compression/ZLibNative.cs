@@ -19,7 +19,7 @@ namespace System.IO.Compression
     {
         // This is the NULL pointer for using with ZLib pointers;
         // we prefer it to IntPtr.Zero to mimic the definition of Z_NULL in zlib.h:
-        internal static readonly IntPtr ZNullPtr = IntPtr.Zero;
+        internal const nint ZNullPtr = 0;
 
         public enum FlushCode : int
         {

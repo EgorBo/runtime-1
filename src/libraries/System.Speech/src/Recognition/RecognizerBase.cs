@@ -1411,7 +1411,7 @@ namespace System.Speech.Recognition
             {
                 // If the base Uri has not been set any other way, then set the base Uri for this file
                 string uri = grammar.Uri.OriginalString;
-                int posSlash = uri.LastIndexOfAny(s_slashes);
+                int posSlash = uri.AsSpan().LastIndexOfAny('\\', '/');
                 if (posSlash >= 0)
                 {
                     baseUri = new Uri(uri.Substring(0, posSlash + 1), UriKind.RelativeOrAbsolute);
@@ -3045,7 +3045,6 @@ namespace System.Speech.Recognition
         private TimeSpan _defaultTimeout = TimeSpan.FromSeconds(30);
 
         private RecognizerBaseThunk _recoThunk;
-        private static readonly char[] s_slashes = new char[] { '\\', '/' };
         #endregion
 
         private sealed class RecognizerBaseThunk : ISpGrammarResourceLoader

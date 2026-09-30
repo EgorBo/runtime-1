@@ -400,7 +400,7 @@ namespace System.Speech.Internal.Synthesis
                                     // SSML Spec if both strength and time are supplied, ignore strength
                                     if (ssmlAttributes._fragmentState.Emphasis != (int)EmphasisBreak.None)
                                     {
-                                        ssmlAttributes._fragmentState.Emphasis = (int)s_breakEmphasis[pos];
+                                        ssmlAttributes._fragmentState.Emphasis = (int)BreakEmphasis[pos];
                                     }
                                 }
                             }
@@ -517,7 +517,7 @@ namespace System.Speech.Internal.Synthesis
                             }
                             else
                             {
-                                ssmlAttributes._fragmentState.Emphasis = (int)s_emphasisWord[pos];
+                                ssmlAttributes._fragmentState.Emphasis = (int)EmphasisWords[pos];
                             }
                             break;
 
@@ -858,19 +858,19 @@ namespace System.Speech.Internal.Synthesis
                     switch (reader.LocalName)
                     {
                         case "pitch":
-                            isInvalidAttribute = ParseNumberHz(reader, ref sPitch, s_pitchNames, s_pitchWords, ref prosody._pitch);
+                            isInvalidAttribute = ParseNumberHz(reader, ref sPitch, s_pitchNames, PitchWords, ref prosody._pitch);
                             break;
 
                         case "range":
-                            isInvalidAttribute = ParseNumberHz(reader, ref sRange, s_rangeNames, s_rangeWords, ref prosody._range);
+                            isInvalidAttribute = ParseNumberHz(reader, ref sRange, s_rangeNames, RangeWords, ref prosody._range);
                             break;
 
                         case "rate":
-                            isInvalidAttribute = ParseNumberRelative(reader, ref sRate, s_rateNames, s_rateWords, ref prosody._rate);
+                            isInvalidAttribute = ParseNumberRelative(reader, ref sRate, s_rateNames, RateWords, ref prosody._rate);
                             break;
 
                         case "volume":
-                            isInvalidAttribute = ParseNumberRelative(reader, ref sVolume, s_volumeNames, s_volumeWords, ref prosody._volume);
+                            isInvalidAttribute = ParseNumberRelative(reader, ref sVolume, s_volumeNames, VolumeWords, ref prosody._volume);
                             break;
 
                         case "duration":
@@ -1634,7 +1634,7 @@ namespace System.Speech.Internal.Synthesis
             return start + 1;
         }
 
-        private static bool ParseNumberHz(XmlReader reader, ref string? attribute, string[] attributeValues, int[] attributeConst, ref ProsodyNumber number)
+        private static bool ParseNumberHz(XmlReader reader, ref string? attribute, string[] attributeValues, ReadOnlySpan<int> attributeConst, ref ProsodyNumber number)
         {
             bool isInvalidAttribute = false;
             bool isHz;
@@ -1655,7 +1655,7 @@ namespace System.Speech.Internal.Synthesis
             return isInvalidAttribute;
         }
 
-        private static bool ParseNumberRelative(XmlReader reader, ref string? attribute, string[] attributeValues, int[] attributeConst, ref ProsodyNumber number)
+        private static bool ParseNumberRelative(XmlReader reader, ref string? attribute, string[] attributeValues, ReadOnlySpan<int> attributeConst, ref ProsodyNumber number)
         {
             bool isInvalidAttribute = false;
 
@@ -1948,10 +1948,10 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _breakStrength enumeration
         /// </summary>
-        private static readonly EmphasisBreak[] s_breakEmphasis = new EmphasisBreak[]
-        {
+        private static ReadOnlySpan<EmphasisBreak> BreakEmphasis =>
+        [
             EmphasisBreak.Medium, EmphasisBreak.None, EmphasisBreak.Strong, EmphasisBreak.Weak, EmphasisBreak.ExtraStrong, EmphasisBreak.ExtraWeak
-        };
+        ];
 
         private static readonly string[] s_emphasisNames = new string[]
         {
@@ -1961,18 +1961,18 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _emphasisNames enumeration
         /// </summary>
-        private static readonly EmphasisWord[] s_emphasisWord = new EmphasisWord[]
-        {
+        private static ReadOnlySpan<EmphasisWord> EmphasisWords =>
+        [
             EmphasisWord.Moderate, EmphasisWord.None, EmphasisWord.Reduced, EmphasisWord.Strong
-        };
+        ];
 
         /// <summary>
         /// Must be in the same order as the _emphasisNames enumeration
         /// </summary>
-        private static readonly int[] s_pitchWords = new int[]
-        {
+        private static ReadOnlySpan<int> PitchWords =>
+        [
             (int) ProsodyPitch.Default, (int) ProsodyPitch.High, (int) ProsodyPitch.Low, (int) ProsodyPitch.Medium, (int) ProsodyPitch.ExtraHigh, (int) ProsodyPitch.ExtraLow
-        };
+        ];
 
         private static readonly string[] s_pitchNames = new string[]
         {
@@ -1982,10 +1982,10 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _emphasisNames enumeration
         /// </summary>
-        private static readonly int[] s_rangeWords = new int[]
-        {
+        private static ReadOnlySpan<int> RangeWords =>
+        [
             (int) ProsodyRange.Default, (int) ProsodyRange.High, (int) ProsodyRange.Low, (int) ProsodyRange.Medium, (int) ProsodyRange.ExtraHigh, (int) ProsodyRange.ExtraLow
-        };
+        ];
 
         private static readonly string[] s_rangeNames = new string[]
         {
@@ -1995,10 +1995,10 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _emphasisNames enumeration
         /// </summary>
-        private static readonly int[] s_rateWords = new int[]
-        {
+        private static ReadOnlySpan<int> RateWords =>
+        [
             (int) ProsodyRate.Default, (int) ProsodyRate.Fast, (int) ProsodyRate.Medium, (int) ProsodyRate.Slow, (int) ProsodyRate.ExtraFast, (int) ProsodyRate.ExtraSlow
-        };
+        ];
 
         private static readonly string[] s_rateNames = new string[]
         {
@@ -2008,10 +2008,10 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _emphasisNames enumeration
         /// </summary>
-        private static readonly int[] s_volumeWords = new int[]
-        {
+        private static ReadOnlySpan<int> VolumeWords =>
+        [
             (int) ProsodyVolume.Default, (int) ProsodyVolume.Loud, (int) ProsodyVolume.Medium, (int) ProsodyVolume.Silent, (int) ProsodyVolume.Soft, (int) ProsodyVolume.ExtraLoud, (int) ProsodyVolume.ExtraSoft
-        };
+        ];
 
         private static readonly string[] s_volumeNames = new string[]
         {
@@ -2089,7 +2089,7 @@ namespace System.Speech.Internal.Synthesis
             int pos = Array.BinarySearch<string>(s_genderNames, sGender);
             if (pos >= 0)
             {
-                gender = s_genders[pos];
+                gender = Genders[pos];
                 fResult = true;
             }
             return fResult;
@@ -2103,10 +2103,10 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Must be in the same order as the _genderNames enumeration
         /// </summary>
-        private static readonly VoiceGender[] s_genders = new VoiceGender[]
-        {
+        private static ReadOnlySpan<VoiceGender> Genders =>
+        [
             VoiceGender.Female, VoiceGender.Male, VoiceGender.Neutral
-        };
+        ];
     }
 
     #region Internal Types

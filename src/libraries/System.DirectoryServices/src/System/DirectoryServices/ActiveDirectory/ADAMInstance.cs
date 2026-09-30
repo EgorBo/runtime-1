@@ -27,7 +27,6 @@ namespace System.DirectoryServices.ActiveDirectory
         private IntPtr _authIdentity = IntPtr.Zero;
         private SyncUpdateCallback? _userDelegate;
         private readonly SyncReplicaFromAllServersCallback _syncAllFunctionPointer;
-        private static readonly char[] s_comma = new char[] { ',' };
 
         #region constructors
         internal AdamInstance(DirectoryContext context, string adamInstanceName)
@@ -693,7 +692,7 @@ namespace System.DirectoryServices.ActiveDirectory
                     // get the site object name from the server object name
                     // CN=server1,CN=Servers,CN=Site1,CN=Sites
                     // the site object name is the third component onwards
-                    string[] components = ServerObjectName.Split(s_comma);
+                    string[] components = ServerObjectName.Split(',');
                     if (components.GetLength(0) < 3)
                     {
                         // should not happen

@@ -20,16 +20,16 @@ namespace System.DirectoryServices
         private StringCollection? _propertiesToLoad;
         private bool _disposed;
 
-        private static readonly TimeSpan s_minusOneSecond = new TimeSpan(0, 0, -1);
+        private static TimeSpan MinusOneSecond => new TimeSpan(-TimeSpan.TicksPerSecond);
 
         // search preference variables
         private SearchScope _scope = System.DirectoryServices.SearchScope.Subtree;
         private bool _scopeSpecified;
         private int _sizeLimit;
-        private TimeSpan _serverTimeLimit = s_minusOneSecond;
-        private TimeSpan _clientTimeout = s_minusOneSecond;
+        private TimeSpan _serverTimeLimit = MinusOneSecond;
+        private TimeSpan _clientTimeout = MinusOneSecond;
         private int _pageSize;
-        private TimeSpan _serverPageTimeLimit = s_minusOneSecond;
+        private TimeSpan _serverPageTimeLimit = MinusOneSecond;
         private ReferralChasingOption _referralChasing = ReferralChasingOption.External;
         private SortOption _sort = new SortOption();
         private bool _cacheResults = true;

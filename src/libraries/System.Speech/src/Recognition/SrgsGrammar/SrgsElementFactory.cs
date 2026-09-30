@@ -49,10 +49,14 @@ namespace System.Speech.Recognition.SrgsGrammar
                 for (int iCurPron = 0, iDeliminator = 0; iCurPron < sPron.Length; iCurPron = iDeliminator + 1)
                 {
                     // Find semi-colon delimiter and replace with null
-                    iDeliminator = pronunciation.IndexOfAny(s_pronSeparator, iCurPron);
+                    iDeliminator = sPron.AsSpan(iCurPron).IndexOfAny(PronSeparator);
                     if (iDeliminator == -1)
                     {
                         iDeliminator = sPron.Length;
+                    }
+                    else
+                    {
+                        iDeliminator += iCurPron;
                     }
 
                     string sSubPron = sPron.Substring(iCurPron, iDeliminator - iCurPron);
@@ -216,6 +220,6 @@ namespace System.Speech.Recognition.SrgsGrammar
         }
         private SrgsGrammar _grammar;
 
-        private static readonly char[] s_pronSeparator = new char[] { ' ', '\t', '\n', '\r', ';' };
+        private static ReadOnlySpan<char> PronSeparator => " \t\n\r;";
     }
 }

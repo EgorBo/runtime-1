@@ -780,7 +780,7 @@ namespace System.DirectoryServices.AccountManagement
         internal static string ConstructDnsDomainNameFromDn(string dn)
         {
             // Split the DN into its RDNs
-            string[] ncComponents = dn.Split(ADStoreCtx.s_comma);
+            string[] ncComponents = dn.Split(',');
 
             StringBuilder sb = new StringBuilder();
 

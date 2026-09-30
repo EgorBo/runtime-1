@@ -29,9 +29,8 @@ namespace System.Threading.Tasks.Dataflow.Internal
         /// <summary>A well-known message ID for code that will send exactly one message or
         /// where the exact message ID is not important.</summary>
         internal const int SINGLE_MESSAGE_ID = 1;
-        /// <summary>A perf optimization for caching a well-known message header instead of
-        /// constructing one every time it is needed.</summary>
-        internal static readonly DataflowMessageHeader SingleMessageHeader = new DataflowMessageHeader(SINGLE_MESSAGE_ID);
+        /// <summary>A well-known message header with the <see cref="SINGLE_MESSAGE_ID"/> ID.</summary>
+        internal static DataflowMessageHeader SingleMessageHeader => new DataflowMessageHeader(SINGLE_MESSAGE_ID);
         /// <summary>The cached completed Task{bool} with a result of true.</summary>
         internal static readonly Task<bool> CompletedTaskWithTrueResult = CreateCachedBooleanTask(true);
         /// <summary>The cached completed Task{bool} with a result of false.</summary>
@@ -412,7 +411,7 @@ namespace System.Threading.Tasks.Dataflow.Internal
         }
 
         /// <summary>An infinite TimeSpan.</summary>
-        internal static readonly TimeSpan InfiniteTimeSpan = Timeout.InfiniteTimeSpan;
+        internal static TimeSpan InfiniteTimeSpan => Timeout.InfiniteTimeSpan;
 
         /// <summary>Validates that a timeout either is -1 or is non-negative and within the range of an Int32.</summary>
         /// <param name="timeout">The timeout to validate.</param>

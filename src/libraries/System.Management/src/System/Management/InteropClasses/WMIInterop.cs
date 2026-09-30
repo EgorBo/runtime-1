@@ -368,8 +368,7 @@ namespace System.Management
 
     internal sealed class IWbemQualifierSetFreeThreaded : IDisposable
     {
-        private static readonly string name = typeof(IWbemQualifierSetFreeThreaded).FullName;
-        public static readonly Guid IID_IWbemClassObject = new Guid("DC12A681-737F-11CF-884D-00AA004B2E24");
+        private static string Name => typeof(IWbemQualifierSetFreeThreaded).FullName;
 
         private IntPtr pWbemQualifierSet = IntPtr.Zero;
         public IWbemQualifierSetFreeThreaded(IntPtr pWbemQualifierSet)
@@ -406,7 +405,7 @@ namespace System.Management
         public int Get_(string wszName, int lFlags, ref object pVal, ref int plFlavor)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierGet_f(3, pWbemQualifierSet, wszName, lFlags, ref pVal, ref plFlavor);
             GC.KeepAlive(this);
             return res;
@@ -415,7 +414,7 @@ namespace System.Management
         public int Put_(string wszName, ref object pVal, int lFlavor)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierPut_f(4, pWbemQualifierSet, wszName, ref pVal, lFlavor);
             GC.KeepAlive(this);
             return res;
@@ -423,7 +422,7 @@ namespace System.Management
         public int Delete_(string wszName)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierDelete_f(5, pWbemQualifierSet, wszName);
             GC.KeepAlive(this);
             return res;
@@ -431,7 +430,7 @@ namespace System.Management
         public int GetNames_(int lFlags, out string[] pNames)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierGetNames_f(6, pWbemQualifierSet, lFlags, out pNames);
             GC.KeepAlive(this);
             return res;
@@ -439,7 +438,7 @@ namespace System.Management
         public int BeginEnumeration_(int lFlags)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierBeginEnumeration_f(7, pWbemQualifierSet, lFlags);
             GC.KeepAlive(this);
             return res;
@@ -447,7 +446,7 @@ namespace System.Management
         public int Next_(int lFlags, out string pstrName, out object pVal, out int plFlavor)
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierNext_f(8, pWbemQualifierSet, lFlags, out pstrName, out pVal, out plFlavor);
             GC.KeepAlive(this);
             return res;
@@ -455,7 +454,7 @@ namespace System.Management
         public int EndEnumeration_()
         {
             if (pWbemQualifierSet == IntPtr.Zero)
-                throw new ObjectDisposedException(name);
+                throw new ObjectDisposedException(Name);
             int res = WmiNetUtilsHelper.QualifierEndEnumeration_f(9, pWbemQualifierSet);
             GC.KeepAlive(this);
             return res;

@@ -13,7 +13,7 @@ namespace System.Threading.RateLimiting
     internal sealed class DefaultPartitionedRateLimiter<TResource, TKey> : PartitionedRateLimiter<TResource> where TKey : notnull
     {
         private readonly Func<TResource, RateLimitPartition<TKey>> _partitioner;
-        private static readonly TimeSpan s_idleTimeLimit = TimeSpan.FromSeconds(10);
+        private static TimeSpan IdleTimeLimit => new TimeSpan(10 * TimeSpan.TicksPerSecond);
 
         // TODO: Look at ConcurrentDictionary to try and avoid a global lock
         private readonly Dictionary<TKey, Lazy<LimiterEntry>> _limiters;
@@ -248,13 +248,13 @@ namespace System.Threading.RateLimiting
                     continue;
                 }
                 LimiterEntry limiterEntry = rateLimiter.Value.Value;
-                if (GetIdleDuration(limiterEntry) is TimeSpan idleDuration && idleDuration > s_idleTimeLimit)
+                if (GetIdleDuration(limiterEntry) is TimeSpan idleDuration && idleDuration > IdleTimeLimit)
                 {
                     lock (Lock)
                     {
                         // Check time again under lock to make sure no one calls Acquire or WaitAsync after checking the time and removing the limiter
                         idleDuration = GetIdleDuration(limiterEntry) ?? TimeSpan.Zero;
-                        if (idleDuration > s_idleTimeLimit)
+                        if (idleDuration > IdleTimeLimit)
                         {
                             // Remove limiter from the lookup table and mark cache as invalid
                             // If a request for this partition comes in it will have to create a new limiter now

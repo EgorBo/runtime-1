@@ -794,8 +794,8 @@ namespace System.DirectoryServices.Protocols
 
     public class SortRequestControl : DirectoryControl
     {
-        private static readonly Asn1Tag s_orderingRuleTag = new(TagClass.ContextSpecific, 0);
-        private static readonly Asn1Tag s_reverseOrderTag = new(TagClass.ContextSpecific, 1);
+        private static Asn1Tag OrderingRuleTag => new(TagClass.ContextSpecific, 0);
+        private static Asn1Tag ReverseOrderTag => new(TagClass.ContextSpecific, 1);
 
         private SortKey[] _keys = Array.Empty<SortKey>();
         public SortRequestControl(params SortKey[] sortKeys) : base("1.2.840.113556.1.4.473", null, true, true)
@@ -884,12 +884,12 @@ namespace System.DirectoryServices.Protocols
                         writer.WriteStringAsOctetString(key.AttributeName, s_utf8Encoding);
                         if (!string.IsNullOrEmpty(key.MatchingRule))
                         {
-                            writer.WriteStringAsOctetString(key.MatchingRule, s_utf8Encoding, tag: s_orderingRuleTag);
+                            writer.WriteStringAsOctetString(key.MatchingRule, s_utf8Encoding, tag: OrderingRuleTag);
                         }
 
                         if (key.ReverseOrder)
                         {
-                            writer.WriteBoolean(key.ReverseOrder, s_reverseOrderTag);
+                            writer.WriteBoolean(key.ReverseOrder, ReverseOrderTag);
                         }
                     }
                 }
@@ -903,7 +903,7 @@ namespace System.DirectoryServices.Protocols
 
     public class SortResponseControl : DirectoryControl
     {
-        internal static readonly Asn1Tag AttributeNameTag = new(TagClass.ContextSpecific, 0);
+        internal static Asn1Tag AttributeNameTag => new(TagClass.ContextSpecific, 0);
 
         internal SortResponseControl(ResultCode result, string attributeName, bool critical, byte[] value) : base("1.2.840.113556.1.4.474", value, critical, true)
         {
@@ -918,8 +918,8 @@ namespace System.DirectoryServices.Protocols
 
     public class VlvRequestControl : DirectoryControl
     {
-        private static readonly Asn1Tag s_byOffsetChoiceTag = new(TagClass.ContextSpecific, 0, true);
-        private static readonly Asn1Tag s_greaterThanOrEqualChoiceTag = new(TagClass.ContextSpecific, 1, false);
+        private static Asn1Tag ByOffsetChoiceTag => new(TagClass.ContextSpecific, 0, true);
+        private static Asn1Tag GreaterThanOrEqualChoiceTag => new(TagClass.ContextSpecific, 1, false);
 
         private int _before;
         private int _after;
@@ -1062,11 +1062,11 @@ namespace System.DirectoryServices.Protocols
                 // encode Target if it is not null
                 if (_target != null && _target.Length > 0)
                 {
-                    writer.WriteOctetString(_target, s_greaterThanOrEqualChoiceTag);
+                    writer.WriteOctetString(_target, GreaterThanOrEqualChoiceTag);
                 }
                 else
                 {
-                    using (writer.PushSequence(s_byOffsetChoiceTag))
+                    using (writer.PushSequence(ByOffsetChoiceTag))
                     {
                         writer.WriteInteger(Offset);
                         writer.WriteInteger(EstimateCount);

@@ -323,12 +323,12 @@ namespace System.Speech.Internal.Synthesis
             while (iDiv != 0)
             {
                 iDiv = 0;
-                for (i = 0; i < s_piPrimes.Length; i++)
+                for (i = 0; i < PiPrimes.Length; i++)
                 {
-                    if ((inHz % s_piPrimes[i]) == 0 && (outHz % s_piPrimes[i]) == 0)
+                    if ((inHz % PiPrimes[i]) == 0 && (outHz % PiPrimes[i]) == 0)
                     {
-                        inHz /= s_piPrimes[i];
-                        outHz /= s_piPrimes[i];
+                        inHz /= PiPrimes[i];
+                        outHz /= PiPrimes[i];
                         iDiv = 1;
                         break;
                     }
@@ -475,7 +475,7 @@ namespace System.Speech.Internal.Synthesis
 
         private const float _dHalfFilterLen = 0.0005f;
 
-        private static readonly int[] s_piPrimes = new int[] { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37 };
+        private static ReadOnlySpan<byte> PiPrimes => [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
 
         #endregion
     }

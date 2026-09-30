@@ -594,7 +594,7 @@ namespace System.IO.Compression
         // Only allow opening ZipArchives with large ZipArchiveEntries in update mode when running in a 64-bit process.
         // This is for compatibility with old behavior that threw an exception for all process bitnesses, because this
         // will not work in a 32-bit process.
-        private static readonly bool s_allowLargeZipArchiveEntriesInUpdateMode = IntPtr.Size > 4;
+        private static bool AllowLargeZipArchiveEntriesInUpdateMode => IntPtr.Size > 4;
 
         internal bool EverOpenedForWrite => _everOpenedForWrite;
 
@@ -1507,7 +1507,7 @@ namespace System.IO.Compression
             {
                 if (_compressedSize > int.MaxValue)
                 {
-                    if (!s_allowLargeZipArchiveEntriesInUpdateMode)
+                    if (!AllowLargeZipArchiveEntriesInUpdateMode)
                     {
                         message = SR.EntryTooLarge;
                         return false;

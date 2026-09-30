@@ -18,6 +18,7 @@ namespace System.IO.Packaging
         DublincCoreTermsNamespacePrefix,
         CoreProperties,
         Type,
+        // Core properties: PartBasedPackageProperties relies on Creator..LastPrinted being contiguous.
         Creator,
         Identifier,
         Title,

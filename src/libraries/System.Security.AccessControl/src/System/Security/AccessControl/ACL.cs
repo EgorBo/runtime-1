@@ -435,67 +435,59 @@ namespace System.Security.AccessControl
             Invalid = GO, // not a valid combination of flags
         }
 
-        private static readonly PM[] s_AFtoPM = CreateAFtoPMConversionMatrix();    // AceFlags-to-Propagation conversion matrix
-        private static readonly AF[] s_PMtoAF = CreatePMtoAFConversionMatrix();    // Propagation-to-AceFlags conversion matrix
+        // AceFlags-to-Propagation conversion matrix, indexed by AF bits (CI|OI|IO|NP).
+        // This table specifies what effect various combinations of inheritance bits
+        // have on how ACEs are inherited onto child objects
+        // Important: Not all combinations of inheritance bits are valid
+        private static ReadOnlySpan<PM> AFtoPM =>
+        [
+            PM.F,                                   // 0
+            PM.Invalid, PM.Invalid, PM.Invalid,     // NP, IO, IO|NP
+            PM.F | PM.CO | PM.GO,                   // OI
+            PM.F | PM.CO,                           // OI|NP
+            PM.CO | PM.GO,                          // OI|IO
+            PM.CO,                                  // OI|IO|NP
+            PM.F | PM.CF | PM.GF,                   // CI
+            PM.F | PM.CF,                           // CI|NP
+            PM.CF | PM.GF,                          // CI|IO
+            PM.CF,                                  // CI|IO|NP
+            PM.F | PM.CF | PM.CO | PM.GF | PM.GO,   // CI|OI
+            PM.F | PM.CF | PM.CO,                   // CI|OI|NP
+            PM.CF | PM.CO | PM.GF | PM.GO,          // CI|OI|IO
+            PM.CF | PM.CO,                          // CI|OI|IO|NP
+        ];
 
-        private static PM[] CreateAFtoPMConversionMatrix()
-        {
-            var afToPm = new PM[16];
-
-            for (int i = 0; i < afToPm.Length; i++)
-            {
-                afToPm[i] = PM.Invalid;
-            }
-
-            // This table specifies what effect various combinations of inheritance bits
-            // have on how ACEs are inherited onto child objects
-            // Important: Not all combinations of inheritance bits are valid
-            afToPm[(int)(   0   |   0   |   0   |   0   )] = PM.F |   0   |   0   |   0   |     0;
-            afToPm[(int)(   0   | AF.OI |   0   |   0   )] = PM.F |   0   | PM.CO |   0   | PM.GO;
-            afToPm[(int)(   0   | AF.OI |   0   | AF.NP )] = PM.F |   0   | PM.CO |   0   |     0;
-            afToPm[(int)(   0   | AF.OI | AF.IO |   0   )] =   0  |   0   | PM.CO |   0   | PM.GO;
-            afToPm[(int)(   0   | AF.OI | AF.IO | AF.NP )] =   0  |   0   | PM.CO |   0   |     0;
-            afToPm[(int)( AF.CI |   0   |   0   |   0   )] = PM.F | PM.CF |   0   | PM.GF |     0;
-            afToPm[(int)( AF.CI |   0   |   0   | AF.NP )] = PM.F | PM.CF |   0   |   0   |     0;
-            afToPm[(int)( AF.CI |   0   | AF.IO |   0   )] =   0  | PM.CF |   0   | PM.GF |     0;
-            afToPm[(int)( AF.CI |   0   | AF.IO | AF.NP )] =   0  | PM.CF |   0   |   0   |     0;
-            afToPm[(int)( AF.CI | AF.OI |   0   |   0   )] = PM.F | PM.CF | PM.CO | PM.GF | PM.GO;
-            afToPm[(int)( AF.CI | AF.OI |   0   | AF.NP )] = PM.F | PM.CF | PM.CO |   0   |     0;
-            afToPm[(int)( AF.CI | AF.OI | AF.IO |   0   )] =   0  | PM.CF | PM.CO | PM.GF | PM.GO;
-            afToPm[(int)( AF.CI | AF.OI | AF.IO | AF.NP )] =   0  | PM.CF | PM.CO |   0   |     0;
-
-            return afToPm;
-        }
-
-        private static AF[] CreatePMtoAFConversionMatrix()
-        {
-            var pmToAf = new AF[32];
-
-            for (int i = 0; i < pmToAf.Length; i++)
-            {
-                pmToAf[i] = AF.Invalid;
-            }
-
-            // This table is a reverse lookup table of the AFtoPM table
-            // Given how inheritance is applied to child objects and containers,
-            // it helps figure out whether that pattern is expressible using
-            // the four ACE inheritance bits
-            pmToAf[(int)( PM.F |   0   |   0   |   0   |   0   )] =    0   |   0   |   0   |     0;
-            pmToAf[(int)( PM.F |   0   | PM.CO |   0   | PM.GO )] =    0   | AF.OI |   0   |     0;
-            pmToAf[(int)( PM.F |   0   | PM.CO |   0   |   0   )] =    0   | AF.OI |   0   | AF.NP;
-            pmToAf[(int)(   0  |   0   | PM.CO |   0   | PM.GO )] =    0   | AF.OI | AF.IO |     0;
-            pmToAf[(int)(   0  |   0   | PM.CO |   0   |   0   )] =    0   | AF.OI | AF.IO | AF.NP;
-            pmToAf[(int)( PM.F | PM.CF |   0   | PM.GF |   0   )] =  AF.CI |   0   |   0   |     0;
-            pmToAf[(int)( PM.F | PM.CF |   0   |   0   |   0   )] =  AF.CI |   0   |   0   | AF.NP;
-            pmToAf[(int)(   0  | PM.CF |   0   | PM.GF |   0   )] =  AF.CI |   0   | AF.IO |     0;
-            pmToAf[(int)(   0  | PM.CF |   0   |   0   |   0   )] =  AF.CI |   0   | AF.IO | AF.NP;
-            pmToAf[(int)( PM.F | PM.CF | PM.CO | PM.GF | PM.GO )] =  AF.CI | AF.OI |   0   |     0;
-            pmToAf[(int)( PM.F | PM.CF | PM.CO |   0   |   0   )] =  AF.CI | AF.OI |   0   | AF.NP;
-            pmToAf[(int)(   0  | PM.CF | PM.CO | PM.GF | PM.GO )] =  AF.CI | AF.OI | AF.IO |     0;
-            pmToAf[(int)(   0  | PM.CF | PM.CO |   0   |   0   )] =  AF.CI | AF.OI | AF.IO | AF.NP;
-
-            return pmToAf;
-        }
+        // Propagation-to-AceFlags conversion matrix, indexed by PM bits (F|CF|CO|GF|GO).
+        // This table is a reverse lookup table of the AFtoPM table
+        // Given how inheritance is applied to child objects and containers,
+        // it helps figure out whether that pattern is expressible using
+        // the four ACE inheritance bits
+        private static ReadOnlySpan<AF> PMtoAF =>
+        [
+            AF.Invalid, AF.Invalid, AF.Invalid, AF.Invalid,   // 0-3
+            AF.OI | AF.IO | AF.NP,                            // 4  = CO
+            AF.OI | AF.IO,                                    // 5  = CO|GO
+            AF.Invalid, AF.Invalid,                           // 6-7
+            AF.CI | AF.IO | AF.NP,                            // 8  = CF
+            AF.Invalid,                                       // 9
+            AF.CI | AF.IO,                                    // 10 = CF|GF
+            AF.Invalid,                                       // 11
+            AF.CI | AF.OI | AF.IO | AF.NP,                    // 12 = CF|CO
+            AF.Invalid, AF.Invalid,                           // 13-14
+            AF.CI | AF.OI | AF.IO,                            // 15 = CF|CO|GF|GO
+            0,                                                // 16 = F
+            AF.Invalid, AF.Invalid, AF.Invalid,               // 17-19
+            AF.OI | AF.NP,                                    // 20 = F|CO
+            AF.OI,                                            // 21 = F|CO|GO
+            AF.Invalid, AF.Invalid,                           // 22-23
+            AF.CI | AF.NP,                                    // 24 = F|CF
+            AF.Invalid,                                       // 25
+            AF.CI,                                            // 26 = F|CF|GF
+            AF.Invalid,                                       // 27
+            AF.CI | AF.OI | AF.NP,                            // 28 = F|CF|CO
+            AF.Invalid, AF.Invalid,                           // 29-30
+            AF.CI | AF.OI,                                    // 31 = F|CF|CO|GF|GO
+        ];
 
         // Canonicalizes AceFlags into a form that the mapping tables understand
         private static AF AFFromAceFlags(AceFlags aceFlags, bool isDS)
@@ -565,8 +557,8 @@ namespace System.Security.AccessControl
             AF leftAF = AFFromAceFlags(left, isDS);
             AF rightAF = AFFromAceFlags(right, isDS);
 
-            PM leftPM = s_AFtoPM[(int)leftAF];
-            PM rightPM = s_AFtoPM[(int)rightAF];
+            PM leftPM = AFtoPM[(int)leftAF];
+            PM rightPM = AFtoPM[(int)rightAF];
 
             if (leftPM == PM.Invalid || rightPM == PM.Invalid)
             {
@@ -574,7 +566,7 @@ namespace System.Security.AccessControl
             }
 
             PM resultPM = leftPM | rightPM;
-            AF resultAF = s_PMtoAF[(int)resultPM];
+            AF resultAF = PMtoAF[(int)resultPM];
 
             if (resultAF == AF.Invalid)
             {
@@ -595,8 +587,8 @@ namespace System.Security.AccessControl
             AF leftAF = AFFromAceFlags(existing, isDS);
             AF rightAF = AFFromAceFlags(remove, isDS);
 
-            PM leftPM = s_AFtoPM[(int)leftAF];
-            PM rightPM = s_AFtoPM[(int)rightAF];
+            PM leftPM = AFtoPM[(int)leftAF];
+            PM rightPM = AFtoPM[(int)rightAF];
 
             if (leftPM == PM.Invalid || rightPM == PM.Invalid)
             {
@@ -614,7 +606,7 @@ namespace System.Security.AccessControl
                 return true;
             }
 
-            AF resultAF = s_PMtoAF[(int)resultPM];
+            AF resultAF = PMtoAF[(int)resultPM];
 
             if (resultAF == AF.Invalid)
             {

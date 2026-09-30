@@ -15,7 +15,7 @@ namespace System.Runtime.Caching
     internal sealed class MemoryCacheEntryChangeMonitor : CacheEntryChangeMonitor
     {
         // use UTC minimum DateTime for error free conversions to DateTimeOffset
-        private static readonly DateTime s_DATETIME_MINVALUE_UTC = new DateTime(0, DateTimeKind.Utc);
+        private static DateTime DateTimeMinValueUtc => new DateTime(0, DateTimeKind.Utc);
         private const int MAX_CHAR_COUNT_OF_LONG_CONVERTED_TO_HEXADECIMAL_STRING = 16;
         private readonly ReadOnlyCollection<string> _keys;
         private readonly string _regionName;
@@ -37,7 +37,7 @@ namespace System.Runtime.Caching
                 {
                     string k = _keys[0];
                     MemoryCacheEntry entry = cache.GetEntry(k);
-                    DateTime utcCreated = s_DATETIME_MINVALUE_UTC;
+                    DateTime utcCreated = DateTimeMinValueUtc;
                     StartMonitoring(cache, entry, ref hasChanged, ref utcCreated);
                     uniqueId = $"{k}{utcCreated.Ticks:X}";
                     _lastModified = utcCreated;
@@ -53,7 +53,7 @@ namespace System.Runtime.Caching
                     foreach (string key in _keys)
                     {
                         MemoryCacheEntry entry = cache.GetEntry(key);
-                        DateTime utcCreated = s_DATETIME_MINVALUE_UTC;
+                        DateTime utcCreated = DateTimeMinValueUtc;
                         StartMonitoring(cache, entry, ref hasChanged, ref utcCreated);
                         sb.Append(key);
                         sb.Append($"{utcCreated.Ticks:X}");

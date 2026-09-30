@@ -902,7 +902,7 @@ namespace System.DirectoryServices.AccountManagement
                 Debug.Assert(values[0] is string);
 
                 string commaSeparatedValues = (string)values[0];
-                string[] individualValues = commaSeparatedValues.Split(s_comma);
+                string[] individualValues = commaSeparatedValues.Split(',');
 
                 // ValueCollection<string> is Load'ed from a List<string>
                 List<string> list = new List<string>(individualValues.Length);

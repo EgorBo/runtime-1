@@ -13,9 +13,9 @@ namespace System.IO.Packaging
     {
         // We need to perform Escaping for the following - '%'; '@'; ',' and '?'
         // !!Important!! - The order is important - The '%' sign should be escaped first.
-        // If any more characters need to be added to the array below they should be added at the end.
+        // If any more characters need to be added to the list below they should be added at the end.
         // All of these arrays must maintain the same ordering.
-        private static readonly char[] s_specialCharacterChars = { '%', '@', ',', '?' };
+        private static ReadOnlySpan<char> SpecialCharacterChars => "%@,?";
 
         #region Public Methods
 
@@ -282,8 +282,8 @@ namespace System.IO.Packaging
         {
             // Escaping for the following - '%'; '@'; ',' and '?'
             // !!Important!! - The order is important - The '%' sign should be escaped first.
-            // This is currently enforced by the order of characters in the s_specialCharacterChars array
-            foreach (char c in s_specialCharacterChars)
+            // This is currently enforced by the order of characters in SpecialCharacterChars
+            foreach (char c in SpecialCharacterChars)
             {
                 if (path.Contains(c))
                 {

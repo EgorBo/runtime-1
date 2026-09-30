@@ -92,16 +92,16 @@ namespace System.Speech.Internal
 
             int i;
             int oldLangId = _currentLangId;
-            for (i = 0; i < s_langIds.Length; i++)
+            for (i = 0; i < LangIds.Length; i++)
             {
-                if (s_langIds[i] == langId)
+                if (LangIds[i] == langId)
                 {
                     break;
                 }
             }
-            if (i == s_langIds.Length)
+            if (i == LangIds.Length)
             {
-                //Debug.Fail($"No phoneme map for LCID {langId}, maps exist for {string.Join(',', s_langIds)}\n");
+                //Debug.Fail($"No phoneme map for LCID {langId}, maps exist for {string.Join(',', LangIds.ToArray())}\n");
                 _currentLangId = langId;
                 _phoneMap = null;
             }
@@ -216,7 +216,7 @@ namespace System.Speech.Internal
         private int _currentLangId;
         private PhoneMapData? _phoneMap;
 
-        private static readonly int[] s_langIds = new int[] { 0x804, 0x404, 0x407, 0x409, 0x40A, 0x40C, 0x411 };
+        private static ReadOnlySpan<int> LangIds => [0x804, 0x404, 0x407, 0x409, 0x40A, 0x40C, 0x411];
         private static readonly string[] s_resourceNames =
                     new string[] { "upstable_chs.upsmap", "upstable_cht.upsmap", "upstable_deu.upsmap", "upstable_enu.upsmap",
                                    "upstable_esp.upsmap", "upstable_fra.upsmap", "upstable_jpn.upsmap",

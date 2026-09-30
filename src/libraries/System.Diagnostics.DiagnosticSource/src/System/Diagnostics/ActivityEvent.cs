@@ -12,7 +12,7 @@ namespace System.Diagnostics
     [DebuggerDisplay("Name = {Name}, Timestamp = {Timestamp}")]
     public readonly struct ActivityEvent
     {
-        private static readonly IEnumerable<KeyValuePair<string, object?>> s_emptyTags = Array.Empty<KeyValuePair<string, object?>>();
+        private static IEnumerable<KeyValuePair<string, object?>> EmptyTags => Array.Empty<KeyValuePair<string, object?>>();
         private readonly Activity.TagsLinkedList? _tags;
 
         /// <summary>
@@ -66,7 +66,7 @@ namespace System.Diagnostics
         /// <summary>
         /// Gets the collection of tags associated with the event.
         /// </summary>
-        public IEnumerable<KeyValuePair<string, object?>> Tags => _tags ?? s_emptyTags;
+        public IEnumerable<KeyValuePair<string, object?>> Tags => _tags ?? EmptyTags;
 
         /// <summary>
         /// Enumerate the tags attached to this <see cref="ActivityEvent"/> object.

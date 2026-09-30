@@ -17,7 +17,8 @@ internal static partial class ZipHelper
     internal const int ValidZipDate_YearMin = 1980;
     internal const int ValidZipDate_YearMax = 2107;
 
-    private static readonly DateTime s_invalidDateIndicator = new DateTime(ValidZipDate_YearMin, 1, 1, 0, 0, 0);
+    // 1980-01-01T00:00:00 (ValidZipDate_YearMin), DateTimeKind.Unspecified
+    private static DateTime InvalidDateIndicator => new DateTime(624511296000000000);
 
     internal static Encoding GetEncoding(string text)
     {
@@ -37,7 +38,7 @@ internal static partial class ZipHelper
     {
         if (dateTime == 0)
         {
-            return s_invalidDateIndicator;
+            return InvalidDateIndicator;
         }
 
         // DosTime format 32 bits
@@ -63,11 +64,11 @@ internal static partial class ZipHelper
         }
         catch (ArgumentOutOfRangeException)
         {
-            return s_invalidDateIndicator;
+            return InvalidDateIndicator;
         }
         catch (ArgumentException)
         {
-            return s_invalidDateIndicator;
+            return InvalidDateIndicator;
         }
     }
 

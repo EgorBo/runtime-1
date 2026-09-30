@@ -696,7 +696,7 @@ namespace System.DirectoryServices.AccountManagement
 
             Debug.Assert(qmt.Value is DateTime);
 
-            return (DateTimeFilterBuilder(suggestedAdProperty, (DateTime)qmt.Value, LdapConstants.defaultUtcTime, false, qmt.Match));
+            return (DateTimeFilterBuilder(suggestedAdProperty, (DateTime)qmt.Value, LdapConstants.DefaultUtcTime, false, qmt.Match));
         }
 
         protected static string MatchingDateTimeConverter(FilterBase filter, string suggestedAdProperty)
@@ -721,8 +721,8 @@ namespace System.DirectoryServices.AccountManagement
 
             return
                 "(|" +
-                DateTimeFilterBuilder("lastLogon", (DateTime)qmt.Value, LdapConstants.defaultUtcTime, false, qmt.Match) +
-                DateTimeFilterBuilder("lastLogonTimestamp", (DateTime)qmt.Value, LdapConstants.defaultUtcTime, true, qmt.Match) +
+                DateTimeFilterBuilder("lastLogon", (DateTime)qmt.Value, LdapConstants.DefaultUtcTime, false, qmt.Match) +
+                DateTimeFilterBuilder("lastLogonTimestamp", (DateTime)qmt.Value, LdapConstants.DefaultUtcTime, true, qmt.Match) +
                 ")";
         }
 

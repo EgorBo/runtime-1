@@ -15,7 +15,7 @@ namespace System.Runtime.Caching
 {
     internal readonly struct ExpiresEntryRef : IEquatable<ExpiresEntryRef>
     {
-        internal static readonly ExpiresEntryRef INVALID = new ExpiresEntryRef(0, 0);
+        internal static ExpiresEntryRef INVALID => default;
 
         private const uint ENTRY_MASK = 0x000000ffu;
         private const int PAGE_SHIFT = 8;
@@ -85,7 +85,7 @@ namespace System.Runtime.Caching
 
         private const int COUNTS_LENGTH = 4;
 
-        private static readonly TimeSpan s_COUNT_INTERVAL = new TimeSpan(CacheExpires._tsPerBucket.Ticks / COUNTS_LENGTH);
+        private static TimeSpan CountInterval => new TimeSpan(CacheExpires.TsPerBucket.Ticks / COUNTS_LENGTH);
 
         private readonly CacheExpires _cacheExpires;
         private readonly byte _bucket;
@@ -139,7 +139,7 @@ namespace System.Runtime.Caching
 
         private int GetCountIndex(DateTime utcExpires)
         {
-            return Math.Max(0, (int)((utcExpires - _utcLastCountReset).Ticks / s_COUNT_INTERVAL.Ticks));
+            return Math.Max(0, (int)((utcExpires - _utcLastCountReset).Ticks / CountInterval.Ticks));
         }
 
         private void AddCount(DateTime utcExpires)
@@ -757,12 +757,12 @@ namespace System.Runtime.Caching
 
     internal sealed class CacheExpires
     {
-        internal static readonly TimeSpan MIN_UPDATE_DELTA = new TimeSpan(0, 0, 1);
-        internal static readonly TimeSpan MIN_FLUSH_INTERVAL = new TimeSpan(0, 0, 1);
-        internal static readonly TimeSpan _tsPerBucket = new TimeSpan(0, 0, 20);
+        internal static TimeSpan MIN_UPDATE_DELTA => new TimeSpan(TimeSpan.TicksPerSecond);
+        internal static TimeSpan MIN_FLUSH_INTERVAL => new TimeSpan(TimeSpan.TicksPerSecond);
+        internal static TimeSpan TsPerBucket => new TimeSpan(20 * TimeSpan.TicksPerSecond);
 
         private const int NUMBUCKETS = 30;
-        private static readonly TimeSpan s_tsPerCycle = new TimeSpan(NUMBUCKETS * _tsPerBucket.Ticks);
+        private static TimeSpan TsPerCycle => new TimeSpan(NUMBUCKETS * TsPerBucket.Ticks);
 
         private readonly MemoryCacheStore _cacheStore;
         private readonly ExpiresBucket[] _buckets;
@@ -786,8 +786,8 @@ namespace System.Runtime.Caching
 
         private static int UtcCalcExpiresBucket(DateTime utcDate)
         {
-            long ticksFromCycleStart = utcDate.Ticks % s_tsPerCycle.Ticks;
-            int bucket = (int)(((ticksFromCycleStart / _tsPerBucket.Ticks) + 1) % NUMBUCKETS);
+            long ticksFromCycleStart = utcDate.Ticks % TsPerCycle.Ticks;
+            int bucket = (int)(((ticksFromCycleStart / TsPerBucket.Ticks) + 1) % NUMBUCKETS);
 
             return bucket;
         }
@@ -842,7 +842,7 @@ namespace System.Runtime.Caching
                 if (_timerHandleRef == null)
                 {
                     DateTime utcNow = DateTime.UtcNow;
-                    TimeSpan due = _tsPerBucket - (new TimeSpan(utcNow.Ticks % _tsPerBucket.Ticks));
+                    TimeSpan due = TsPerBucket - (new TimeSpan(utcNow.Ticks % TsPerBucket.Ticks));
                     Timer timer;
                     // Don't capture the current ExecutionContext and its AsyncLocals onto the timer causing them to live forever
                     bool restoreFlow = false;
@@ -855,7 +855,7 @@ namespace System.Runtime.Caching
                         }
 
                         timer = new Timer(new TimerCallback(this.TimerCallback), null,
-                            due.Ticks / TimeSpan.TicksPerMillisecond, _tsPerBucket.Ticks / TimeSpan.TicksPerMillisecond);
+                            due.Ticks / TimeSpan.TicksPerMillisecond, TsPerBucket.Ticks / TimeSpan.TicksPerMillisecond);
                     }
                     finally
                     {

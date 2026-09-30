@@ -27,7 +27,7 @@ namespace System.DirectoryServices.ActiveDirectory
         private ReplicationSecurityLevel _cachedSecurityLevel = (ReplicationSecurityLevel)(-1);
 
         // 4 minutes timeout for locating an ADAM instance in the configset
-        private static readonly TimeSpan s_locationTimeout = new TimeSpan(0, 4, 0);
+        private static TimeSpan LocationTimeout => new TimeSpan(4 * TimeSpan.TicksPerMinute);
 
         #region constructors
         internal ConfigurationSet(DirectoryContext context, string configSetName, DirectoryEntryManager directoryEntryMgr)
@@ -556,7 +556,7 @@ namespace System.DirectoryServices.ActiveDirectory
                         (e.ErrorCode == unchecked((int)0x800705b4)))
                     {
                         // if we are passed the timeout period, we should throw, else do nothing
-                        if (DateTime.UtcNow.Subtract(startTime) > s_locationTimeout)
+                        if (DateTime.UtcNow.Subtract(startTime) > LocationTimeout)
                             throw new ActiveDirectoryObjectNotFoundException(SR.Format(SR.ADAMInstanceNotFoundInConfigSet, configSetName ?? context.Name), typeof(AdamInstance), null);
                     }
                     else

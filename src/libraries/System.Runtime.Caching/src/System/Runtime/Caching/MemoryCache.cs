@@ -25,7 +25,7 @@ namespace System.Runtime.Caching
                                                               | DefaultCacheCapabilities.SlidingExpirations
                                                               | DefaultCacheCapabilities.CacheEntryUpdateCallback
                                                               | DefaultCacheCapabilities.CacheEntryRemovedCallback;
-        private static readonly TimeSpan s_oneYear = new TimeSpan(365, 0, 0, 0);
+        private static TimeSpan OneYear => new TimeSpan(365 * TimeSpan.TicksPerDay);
         private static readonly object s_initLock = new object();
         private static MemoryCache s_defaultCache;
         private static readonly CacheEntryRemovedCallback s_sentinelRemovedCallback = new CacheEntryRemovedCallback(SentinelEntry.OnCacheEntryRemovedCallback);
@@ -232,9 +232,9 @@ namespace System.Runtime.Caching
             {
                 throw new ArgumentException(SR.Invalid_expiration_combination, nameof(policy));
             }
-            if (policy.SlidingExpiration < ObjectCache.NoSlidingExpiration || s_oneYear < policy.SlidingExpiration)
+            if (policy.SlidingExpiration < ObjectCache.NoSlidingExpiration || OneYear < policy.SlidingExpiration)
             {
-                throw new ArgumentOutOfRangeException(nameof(policy), RH.Format(SR.Argument_out_of_range, "SlidingExpiration", ObjectCache.NoSlidingExpiration, s_oneYear));
+                throw new ArgumentOutOfRangeException(nameof(policy), RH.Format(SR.Argument_out_of_range, "SlidingExpiration", ObjectCache.NoSlidingExpiration, OneYear));
             }
             if (policy.RemovedCallback != null
                 && policy.UpdateCallback != null)

@@ -61,9 +61,6 @@ namespace System.Numerics
         /// representation (sign=-1, bits=[0x80000000]) so that negation is symmetric.
         /// </summary>
         private static readonly BigInteger s_int32MinValue = new(-1, [UInt32HighBit]);
-        private static readonly BigInteger s_one = new(1);
-        private static readonly BigInteger s_zero = new(0);
-        private static readonly BigInteger s_minusOne = new(-1);
 
         public BigInteger(int value)
         {
@@ -270,7 +267,7 @@ namespace System.Numerics
 
             if (size == 0)
             {
-                this = s_zero;
+                this = Zero;
             }
             else if (size == 1 && bits[0] > 0)
             {
@@ -477,7 +474,7 @@ namespace System.Numerics
                     {
                         if (val[0] == 1) // abs(-1)
                         {
-                            this = s_minusOne;
+                            this = MinusOne;
                             return;
                         }
                         else if (val[0] == UInt32HighBit) // abs(int.MinValue)
@@ -612,7 +609,7 @@ namespace System.Numerics
             if (value.Length == 0)
             {
                 // 0
-                this = s_zero;
+                this = Zero;
             }
             else if (value.Length == 1)
             {
@@ -621,7 +618,7 @@ namespace System.Numerics
                     if (value[0] == nuint.MaxValue)
                     {
                         // -1
-                        this = s_minusOne;
+                        this = MinusOne;
                     }
                     else if (nint.Size == 4 && value[0] == UInt32HighBit)
                     {
@@ -766,11 +763,11 @@ namespace System.Numerics
             info.AddValue("_bits", bits32, typeof(uint[]));
         }
 
-        public static BigInteger Zero => s_zero;
+        public static BigInteger Zero => default;
 
-        public static BigInteger One => s_one;
+        public static BigInteger One => new(1, null);
 
-        public static BigInteger MinusOne => s_minusOne;
+        public static BigInteger MinusOne => new(-1, null);
 
         public bool IsPowerOfTwo
         {
@@ -931,7 +928,7 @@ namespace System.Numerics
             {
                 // The divisor is non-trivial and therefore the bigger one.
                 remainder = dividend;
-                return s_zero;
+                return Zero;
             }
 
             Debug.Assert(dividend._bits is not null);
@@ -967,7 +964,7 @@ namespace System.Numerics
             if (dividendBits.Length < divisorBits.Length)
             {
                 remainder = dividend;
-                return s_zero;
+                return Zero;
             }
             else
             {
@@ -1236,7 +1233,7 @@ namespace System.Numerics
 
         private static BigInteger CreatePowerOfTwo(int exponent, bool negative)
         {
-            BigInteger result = s_one << exponent;
+            BigInteger result = One << exponent;
             return negative ? -result : result;
         }
 
@@ -1254,7 +1251,7 @@ namespace System.Numerics
 
             if (exponent == 0)
             {
-                return s_zero;
+                return Zero;
             }
 
             ReadOnlySpan<nuint> dividendBits = dividend._bits;
@@ -1308,23 +1305,23 @@ namespace System.Numerics
             {
                 if (modulusExponent == 0)
                 {
-                    return s_zero;
+                    return Zero;
                 }
 
                 if (exponent.IsZero)
                 {
-                    return s_one;
+                    return One;
                 }
 
                 if (valueExponent == 0)
                 {
-                    return value._sign < 0 && !exponent.IsEven ? s_minusOne : s_one;
+                    return value._sign < 0 && !exponent.IsEven ? MinusOne : One;
                 }
 
                 int maximumExponent = (modulusExponent - 1) / valueExponent;
                 if (exponent > maximumExponent)
                 {
-                    return s_zero;
+                    return Zero;
                 }
 
                 int resultExponent = valueExponent * (int)exponent;
@@ -1384,7 +1381,7 @@ namespace System.Numerics
 
             if (exponent == 0)
             {
-                return s_one;
+                return One;
             }
 
             if (exponent == 1)
@@ -1417,7 +1414,7 @@ namespace System.Numerics
 
                 if (value._sign == -1)
                 {
-                    return (exponent & 1) != 0 ? value : s_one;
+                    return (exponent & 1) != 0 ? value : One;
                 }
 
                 nuint magnitude = NumericsHelpers.Abs(value._sign);
@@ -3349,7 +3346,7 @@ namespace System.Numerics
         {
             if (value == 0)
             {
-                return s_zero;
+                return Zero;
             }
 
             nuint m = NumericsHelpers.Abs(value);
@@ -3660,7 +3657,7 @@ namespace System.Numerics
             {
                 // The divisor is non-trivial
                 // and therefore the bigger one
-                return s_zero;
+                return Zero;
             }
 
             if (trivialDivisor)
@@ -3695,7 +3692,7 @@ namespace System.Numerics
 
             if (dividendBits.Length < divisorBits.Length)
             {
-                return s_zero;
+                return Zero;
             }
             else
             {
@@ -6063,7 +6060,7 @@ namespace System.Numerics
                     --zLength;
                     if (zLength <= 0)
                     {
-                        return s_minusOne;
+                        return MinusOne;
                     }
 
                     if (zLength == 1)
@@ -6111,7 +6108,7 @@ namespace System.Numerics
             BigInteger result;
             if (zd.IsEmpty)
             {
-                result = neg ? s_minusOne : default;
+                result = neg ? MinusOne : default;
             }
             else if (neg && (nint)zd[^1] < 0)
             {

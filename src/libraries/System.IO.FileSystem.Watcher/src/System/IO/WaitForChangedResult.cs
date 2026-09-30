@@ -13,7 +13,7 @@ namespace System.IO
             TimedOut = timedOut;
         }
 
-        internal static readonly WaitForChangedResult TimedOutResult =
+        internal static WaitForChangedResult TimedOutResult =>
             new WaitForChangedResult(changeType: 0, name: null, oldName: null, timedOut: true);
 
         public WatcherChangeTypes ChangeType { get; set; }

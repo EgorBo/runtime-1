@@ -28,7 +28,7 @@ namespace System.DirectoryServices.AccountManagement
     {
         public const int LDAP_SSL_PORT = 636;
         public const int LDAP_PORT = 389;
-        internal static readonly DateTime defaultUtcTime = new DateTime(1601, 1, 1, 0, 0, 0);
+        internal static DateTime DefaultUtcTime => new DateTime(504911232000000000); // 1601-01-01T00:00:00, DateTimeKind.Unspecified
     }
     // The string constants used internally to specify each property
     internal static class PropertyNames
@@ -101,18 +101,15 @@ namespace System.DirectoryServices.AccountManagement
     // Given an internal property name (from PropertyNames), returns the external form of the name for use in error-reporting
     internal static class PropertyNamesExternal
     {
-        private static readonly int s_acctInfoPrefixLength = PropertyNames.AcctInfoPrefix.Length;
-        private static readonly int s_pwdInfoPrefixLength = PropertyNames.PwdInfoPrefix.Length;
-
         internal static string GetExternalForm(string propertyName)
         {
             if (propertyName.StartsWith(PropertyNames.AcctInfoPrefix, StringComparison.Ordinal))
             {
-                return "AuthenticablePrincipal" + propertyName.Substring(s_acctInfoPrefixLength);
+                return "AuthenticablePrincipal" + propertyName.Substring(PropertyNames.AcctInfoPrefix.Length);
             }
             else if (propertyName.StartsWith(PropertyNames.PwdInfoPrefix, StringComparison.Ordinal))
             {
-                return "AuthenticablePrincipal" + propertyName.Substring(s_pwdInfoPrefixLength);
+                return "AuthenticablePrincipal" + propertyName.Substring(PropertyNames.PwdInfoPrefix.Length);
             }
             else
             {

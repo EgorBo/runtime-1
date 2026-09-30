@@ -279,8 +279,7 @@ namespace System.Speech.Internal.SapiInterop
 
     internal static class SAPIGuids
     {
-        internal static readonly Guid SPDFID_WaveFormatEx = new("C31ADBAE-527F-4ff5-A230-F62BB61FF70C");
-        internal static readonly Guid SPDFID_Text = new("7CEEF9F9-3D13-11d2-9EE7-00C04F797396");
+        internal static Guid SPDFID_WaveFormatEx => new(0xC31ADBAE, 0x527F, 0x4FF5, 0xA2, 0x30, 0xF6, 0x2B, 0xB6, 0x1F, 0xF7, 0x0C); // C31ADBAE-527F-4ff5-A230-F62BB61FF70C
     }
 
     #endregion

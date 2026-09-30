@@ -2395,7 +2395,6 @@ namespace System.DirectoryServices.AccountManagement
         private static readonly string[] s_msDSUACCLockoutTime = new string[] { "msDS-User-Account-Control-Computed", "lockoutTime" };
         private static readonly string[] s_memberOfPrimaryGroupId = new string[] { "memberOf", "primaryGroupID" };
         private static readonly string[] s_lockoutDuration = new string[] { "lockoutDuration" };
-        internal static readonly char[] s_comma = new char[] { ',' };
 
         protected enum StoreCapabilityMap
         {
@@ -2442,7 +2441,7 @@ namespace System.DirectoryServices.AccountManagement
                 this.contextBasePartitionDN = this.defaultNamingContext;
 
                 // Split the naming context's DN into its RDNs
-                string[] ncComponents = defaultNamingContext.Split(s_comma);
+                string[] ncComponents = defaultNamingContext.Split(',');
 
                 StringBuilder sb = new StringBuilder();
 

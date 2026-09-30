@@ -15,7 +15,7 @@ namespace System.Runtime.Caching
 {
     internal readonly struct UsageEntryRef : IEquatable<UsageEntryRef>
     {
-        internal static readonly UsageEntryRef INVALID = new UsageEntryRef(0, 0);
+        internal static UsageEntryRef INVALID => default;
 
         private const uint ENTRY_MASK = 0x000000ffu;
         private const int PAGE_SHIFT = 8;
@@ -818,9 +818,9 @@ namespace System.Runtime.Caching
 
     internal sealed class CacheUsage
     {
-        internal static readonly TimeSpan NEWADD_INTERVAL = new TimeSpan(0, 0, 10);
-        internal static readonly TimeSpan CORRELATED_REQUEST_TIMEOUT = new TimeSpan(0, 0, 1);
-        internal static readonly TimeSpan MIN_LIFETIME_FOR_USAGE = NEWADD_INTERVAL;
+        internal static TimeSpan NEWADD_INTERVAL => new TimeSpan(10 * TimeSpan.TicksPerSecond);
+        internal static TimeSpan CORRELATED_REQUEST_TIMEOUT => new TimeSpan(TimeSpan.TicksPerSecond);
+        internal static TimeSpan MIN_LIFETIME_FOR_USAGE => NEWADD_INTERVAL;
         private const byte NUMBUCKETS = 1;
 
         private readonly MemoryCacheStore _cacheStore;

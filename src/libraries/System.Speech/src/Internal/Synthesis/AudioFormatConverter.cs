@@ -164,7 +164,7 @@ namespace System.Speech.Internal.Synthesis
             short[] newData = new short[size];
             for (int i = 0; i < size; i++)
             {
-                int sample = s_ULaw_exp_table[data[i]];
+                int sample = ULawExpTable[data[i]];
 
                 newData[i] = unchecked((short)sample);
             }
@@ -222,7 +222,7 @@ namespace System.Speech.Internal.Synthesis
 
                     // Convert from 16 bit linear to ULaw.
                     sample += uBIAS;
-                    exponent = s_exp_lut_linear2ulaw[(sample >> 7) & 0xFF];
+                    exponent = ExpLutLinear2Ulaw[(sample >> 7) & 0xFF];
                     mantissa = (sample >> (exponent + 3)) & 0x0F;
 
                     ULawbyte = (byte)(~(sign | (exponent << 4) | mantissa));
@@ -277,7 +277,7 @@ namespace System.Speech.Internal.Synthesis
             short[] newData = new short[size];
             for (int i = 0; i < size; i++)
             {
-                int sample = s_ALaw_exp_table[data[i]];
+                int sample = ALawExpTable[data[i]];
 
                 newData[i] = unchecked((short)sample);
             }
@@ -330,7 +330,7 @@ namespace System.Speech.Internal.Synthesis
                 // Convert from 16 bit linear to ULaw.
                 if (sample >= 256)
                 {
-                    exponent = s_exp_lut_linear2alaw[(sample >> 8) & 0x7F];
+                    exponent = ExpLutLinear2Alaw[(sample >> 8) & 0x7F];
                     mantissa = (sample >> (exponent + 3)) & 0x0F;
                     ALawbyte = (byte)((exponent << 4) | mantissa);
                 }
@@ -439,8 +439,8 @@ namespace System.Speech.Internal.Synthesis
 
         #region Conversion tables for algorithmic conversions
 
-        private static readonly int[] s_exp_lut_linear2alaw = new int[128]
-        {
+        private static ReadOnlySpan<byte> ExpLutLinear2Alaw =>
+        [
             1, 1, 2, 2, 3, 3, 3, 3,
             4, 4, 4, 4, 4, 4, 4, 4,
             5, 5, 5, 5, 5, 5, 5, 5,
@@ -457,10 +457,10 @@ namespace System.Speech.Internal.Synthesis
             7, 7, 7, 7, 7, 7, 7, 7,
             7, 7, 7, 7, 7, 7, 7, 7,
             7, 7, 7, 7, 7, 7, 7, 7
-        };
+        ];
 
-        private static int[] s_exp_lut_linear2ulaw = new int[256]
-        {
+        private static ReadOnlySpan<byte> ExpLutLinear2Ulaw =>
+        [
             0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
             4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
@@ -477,7 +477,7 @@ namespace System.Speech.Internal.Synthesis
             7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
             7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
             7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
-        };
+        ];
 
         #endregion
 
@@ -486,8 +486,8 @@ namespace System.Speech.Internal.Synthesis
         /// <summary>
         /// Table to converts ULaw values to Linear
         /// </summary>
-        private static int[] s_ULaw_exp_table = new int[256]
-        {
+        private static ReadOnlySpan<short> ULawExpTable =>
+        [
             -32124, -31100, -30076, -29052, -28028, -27004, -25980, -24956,
             -23932, -22908, -21884, -20860, -19836, -18812, -17788, -16764,
             -15996, -15484, -14972, -14460, -13948, -13436, -12924, -12412,
@@ -520,13 +520,13 @@ namespace System.Speech.Internal.Synthesis
             244,   228,   212,   196,   180,   164,   148,   132,
             120,   112,   104,    96,    88,    80,    72,    64,
             56,    48,    40,    32,    24,    16,     8,     0
-        };
+        ];
 
         /// <summary>
         /// Table to converts ALaw values to Linear
         /// </summary>
-        private static int[] s_ALaw_exp_table = new int[256]
-        {
+        private static ReadOnlySpan<short> ALawExpTable =>
+        [
             -5504, -5248, -6016, -5760, -4480, -4224, -4992, -4736,
             -7552, -7296, -8064, -7808, -6528, -6272, -7040, -6784,
             -2752, -2624, -3008, -2880, -2240, -2112, -2496, -2368,
@@ -559,7 +559,7 @@ namespace System.Speech.Internal.Synthesis
             1888,  1824,  2016,  1952,  1632,  1568,  1760,  1696,
             688,   656,   752,   720,   560,   528,   624,   592,
             944,   912,  1008,   976,   816,   784,   880,   848
-        };
+        ];
 
         #endregion
 
