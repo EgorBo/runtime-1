@@ -3989,9 +3989,10 @@ namespace System.Runtime.Intrinsics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Sum<T>(Vector64<T> vector)
         {
-            T sum = default!;
+            // Start from the first element rather than zero so that summing only -0.0 values returns -0.0
+            T sum = vector.ToScalar();
 
-            for (int index = 0; index < Vector64<T>.Count; index++)
+            for (int index = 1; index < Vector64<T>.Count; index++)
             {
                 sum = Scalar<T>.Add(sum, vector.GetElementUnsafe(index));
             }

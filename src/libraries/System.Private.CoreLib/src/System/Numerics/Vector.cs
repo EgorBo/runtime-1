@@ -3359,9 +3359,10 @@ namespace System.Numerics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Sum<T>(Vector<T> value)
         {
-            T sum = default!;
+            // Start from the first element rather than zero so that summing only -0.0 values returns -0.0
+            T sum = value.ToScalar();
 
-            for (int index = 0; index < Vector<T>.Count; index++)
+            for (int index = 1; index < Vector<T>.Count; index++)
             {
                 sum = Scalar<T>.Add(sum, value.GetElementUnsafe(index));
             }
