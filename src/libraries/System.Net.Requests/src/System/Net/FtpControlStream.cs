@@ -899,8 +899,8 @@ namespace System.Net
             }
         }
 
-        private static readonly char[] s_whitespaceDot = new char[] { ' ', '.', '\r', '\n' };
-        private static readonly char[] s_spaceCommaBrackets = new char[] { ' ', '(', ',', ')' };
+        private static ReadOnlySpan<char> WhitespaceDot => " .\r\n";
+        private static ReadOnlySpan<char> SpaceCommaBrackets => " (,)";
 
         /// <summary>
         ///    <para>Parses a response string for content length</para>
@@ -977,7 +977,7 @@ namespace System.Net
             if (end <= start)
                 return;
 
-            string filename = str.AsSpan(start, end - start).TrimEnd(s_whitespaceDot).ToString();
+            string filename = str.AsSpan(start, end - start).TrimEnd(WhitespaceDot).ToString();
             // Do minimal escaping that we need to get a valid Uri
             // when combined with the baseUri
             string escapedFilename = filename.Replace("%", "%25");
@@ -1056,7 +1056,7 @@ namespace System.Net
         /// </summary>
         private static int GetPortV4(string responseString)
         {
-            string[] parsedList = responseString.Split(s_spaceCommaBrackets);
+            string[] parsedList = responseString.Split(SpaceCommaBrackets);
 
             // We need at least the status code and the port
             if (parsedList.Length <= 7)

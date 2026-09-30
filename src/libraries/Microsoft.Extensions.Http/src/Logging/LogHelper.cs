@@ -13,21 +13,21 @@ namespace Microsoft.Extensions.Http.Logging
 
         private static class EventIds
         {
-            public static readonly EventId RequestStart = new EventId(100, "RequestStart");
-            public static readonly EventId RequestEnd = new EventId(101, "RequestEnd");
+            public static EventId RequestStart => new EventId(100, "RequestStart");
+            public static EventId RequestEnd => new EventId(101, "RequestEnd");
 
-            public static readonly EventId RequestHeader = new EventId(102, "RequestHeader");
-            public static readonly EventId ResponseHeader = new EventId(103, "ResponseHeader");
+            public static EventId RequestHeader => new EventId(102, "RequestHeader");
+            public static EventId ResponseHeader => new EventId(103, "ResponseHeader");
 
-            public static readonly EventId RequestFailed = new EventId(104, "RequestFailed");
+            public static EventId RequestFailed => new EventId(104, "RequestFailed");
 
-            public static readonly EventId PipelineStart = new EventId(100, "RequestPipelineStart");
-            public static readonly EventId PipelineEnd = new EventId(101, "RequestPipelineEnd");
+            public static EventId PipelineStart => new EventId(100, "RequestPipelineStart");
+            public static EventId PipelineEnd => new EventId(101, "RequestPipelineEnd");
 
-            public static readonly EventId RequestPipelineRequestHeader = new EventId(102, "RequestPipelineRequestHeader");
-            public static readonly EventId RequestPipelineResponseHeader = new EventId(103, "RequestPipelineResponseHeader");
+            public static EventId RequestPipelineRequestHeader => new EventId(102, "RequestPipelineRequestHeader");
+            public static EventId RequestPipelineResponseHeader => new EventId(103, "RequestPipelineResponseHeader");
 
-            public static readonly EventId PipelineFailed = new EventId(104, "RequestPipelineFailed");
+            public static EventId PipelineFailed => new EventId(104, "RequestPipelineFailed");
         }
 
         public static readonly Func<string, bool> ShouldRedactHeaderValue = (header) => true;

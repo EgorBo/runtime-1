@@ -39,8 +39,9 @@ namespace System.Net.Http
         /// </remarks>
         private const int MaxChunkBytesAllowed = 16 * 1024;
 
-        private static readonly ulong s_http10Bytes = BitConverter.ToUInt64("HTTP/1.0"u8);
-        private static readonly ulong s_http11Bytes = BitConverter.ToUInt64("HTTP/1.1"u8);
+        // "HTTP/1.0" and "HTTP/1.1" read as a native-endian ulong.
+        private static ulong Http10Bytes => BitConverter.IsLittleEndian ? 0x302E312F50545448UL : 0x485454502F312E30UL;
+        private static ulong Http11Bytes => BitConverter.IsLittleEndian ? 0x312E312F50545448UL : 0x485454502F312E31UL;
 
         internal readonly Stream _stream;
         private readonly TransportContext? _transportContext;
@@ -1071,11 +1072,11 @@ namespace System.Net.Http
             }
 
             ulong first8Bytes = BitConverter.ToUInt64(line);
-            if (first8Bytes == s_http11Bytes)
+            if (first8Bytes == Http11Bytes)
             {
                 response.SetVersionWithoutValidation(HttpVersion.Version11);
             }
-            else if (first8Bytes == s_http10Bytes)
+            else if (first8Bytes == Http10Bytes)
             {
                 response.SetVersionWithoutValidation(HttpVersion.Version10);
             }

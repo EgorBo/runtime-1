@@ -15,7 +15,7 @@ namespace System.Net.ServerSentEvents
     /// </summary>
     public static class SseFormatter
     {
-        private static readonly byte[] s_newLine = "\n"u8.ToArray();
+        private static ReadOnlySpan<byte> NewLine => "\n"u8;
 
         /// <summary>
         /// Writes the <paramref name="source"/> of server-sent events to the <paramref name="destination"/> stream.
@@ -112,11 +112,11 @@ namespace System.Net.ServerSentEvents
 
                 bufferWriter.WriteUtf8String("event: "u8);
                 bufferWriter.WriteUtf8String(eventType);
-                bufferWriter.WriteUtf8String(s_newLine);
+                bufferWriter.WriteUtf8String(NewLine);
             }
 
             WriteLinesWithPrefix(bufferWriter, prefix: "data: "u8, data);
-            bufferWriter.Write(s_newLine);
+            bufferWriter.Write(NewLine);
 
             if (eventId is not null)
             {
@@ -124,7 +124,7 @@ namespace System.Net.ServerSentEvents
 
                 bufferWriter.WriteUtf8String("id: "u8);
                 bufferWriter.WriteUtf8String(eventId);
-                bufferWriter.WriteUtf8String(s_newLine);
+                bufferWriter.WriteUtf8String(NewLine);
             }
 
             if (reconnectionInterval is { } retry)
@@ -133,10 +133,10 @@ namespace System.Net.ServerSentEvents
 
                 bufferWriter.WriteUtf8String("retry: "u8);
                 bufferWriter.WriteUtf8Number((long)retry.TotalMilliseconds);
-                bufferWriter.WriteUtf8String(s_newLine);
+                bufferWriter.WriteUtf8String(NewLine);
             }
 
-            bufferWriter.WriteUtf8String(s_newLine);
+            bufferWriter.WriteUtf8String(NewLine);
         }
 
         private static void WriteLinesWithPrefix(PooledByteBufferWriter writer, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data)
@@ -165,7 +165,7 @@ namespace System.Net.ServerSentEvents
                 data = data.Slice(i);
 
                 writer.WriteUtf8String(nextLine);
-                writer.WriteUtf8String(s_newLine);
+                writer.WriteUtf8String(NewLine);
             }
         }
     }

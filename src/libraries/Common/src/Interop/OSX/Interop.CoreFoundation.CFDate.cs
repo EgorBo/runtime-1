@@ -15,7 +15,7 @@ internal static partial class Interop
     internal static partial class CoreFoundation
     {
         // https://developer.apple.com/reference/corefoundation/cfabsolutetime
-        private static readonly DateTime s_cfDateEpoch = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        private static DateTime CFDateEpoch => new DateTime(631139040000000000L, DateTimeKind.Utc); // 2001-01-01T00:00:00Z
 
         [LibraryImport(Libraries.CoreFoundationLibrary)]
         private static partial SafeCFDateHandle CFDateCreate(IntPtr zero, CFAbsoluteTime at);
@@ -30,7 +30,7 @@ internal static partial class Interop
             // Unspecified gets treated as Local (which may or may not be desired).
             DateTime utcDate = date.ToUniversalTime();
 
-            double epochDeltaSeconds = (utcDate - s_cfDateEpoch).TotalSeconds;
+            double epochDeltaSeconds = (utcDate - CFDateEpoch).TotalSeconds;
 
             SafeCFDateHandle cfDate = CFDateCreate(IntPtr.Zero, epochDeltaSeconds);
 

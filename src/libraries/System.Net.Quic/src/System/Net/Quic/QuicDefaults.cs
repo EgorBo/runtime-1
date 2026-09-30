@@ -36,7 +36,7 @@ internal static partial class QuicDefaults
     /// <summary>
     /// Default handshake timeout.
     /// </summary>
-    public static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(10);
+    public static TimeSpan HandshakeTimeout => TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Default initial_max_data value.

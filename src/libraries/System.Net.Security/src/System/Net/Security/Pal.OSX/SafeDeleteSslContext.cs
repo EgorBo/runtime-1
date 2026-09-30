@@ -341,8 +341,8 @@ namespace System.Net
             }
         }
 
-        private static readonly SslProtocols[] s_orderedSslProtocols = new SslProtocols[5]
-        {
+        private static ReadOnlySpan<SslProtocols> OrderedSslProtocols =>
+        [
 #pragma warning disable 0618
             SslProtocols.Ssl2,
             SslProtocols.Ssl3,
@@ -352,13 +352,13 @@ namespace System.Net
             SslProtocols.Tls11,
 #pragma warning restore SYSLIB0039
             SslProtocols.Tls12
-        };
+        ];
 
         private static void SetProtocols(SafeSslHandle sslContext, SslProtocols protocols)
         {
-            (int minIndex, int maxIndex) = protocols.ValidateContiguous(s_orderedSslProtocols);
-            SslProtocols minProtocolId = s_orderedSslProtocols[minIndex];
-            SslProtocols maxProtocolId = s_orderedSslProtocols[maxIndex];
+            (int minIndex, int maxIndex) = protocols.ValidateContiguous(OrderedSslProtocols);
+            SslProtocols minProtocolId = OrderedSslProtocols[minIndex];
+            SslProtocols maxProtocolId = OrderedSslProtocols[maxIndex];
 
             // Set the min and max.
             Interop.AppleCrypto.SslSetMinProtocolVersion(sslContext, minProtocolId);

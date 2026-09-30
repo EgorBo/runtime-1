@@ -16,10 +16,12 @@ namespace System.Net.Security
 {
     internal static class SslStreamPal
     {
-        private static readonly byte[] s_http1 = Interop.Sec_Application_Protocols.ToByteArray(new List<SslApplicationProtocol> { SslApplicationProtocol.Http11 });
-        private static readonly byte[] s_http2 = Interop.Sec_Application_Protocols.ToByteArray(new List<SslApplicationProtocol> { SslApplicationProtocol.Http2 });
-        private static readonly byte[] s_http12 = Interop.Sec_Application_Protocols.ToByteArray(new List<SslApplicationProtocol> { SslApplicationProtocol.Http11, SslApplicationProtocol.Http2 });
-        private static readonly byte[] s_http21 = Interop.Sec_Application_Protocols.ToByteArray(new List<SslApplicationProtocol> { SslApplicationProtocol.Http2, SslApplicationProtocol.Http11 });
+        // Precomputed Sec_Application_Protocols headers (ProtocolListsSize, ProtocolExtensionType = ALPN, ProtocolListSize)
+        // followed by the length-prefixed protocol ids.
+        private static ReadOnlySpan<byte> Http1AlpnBuffer => [15, 0, 0, 0, 2, 0, 0, 0, 9, 0, 8, (byte)'h', (byte)'t', (byte)'t', (byte)'p', (byte)'/', (byte)'1', (byte)'.', (byte)'1'];
+        private static ReadOnlySpan<byte> Http2AlpnBuffer => [9, 0, 0, 0, 2, 0, 0, 0, 3, 0, 2, (byte)'h', (byte)'2'];
+        private static ReadOnlySpan<byte> Http11And2AlpnBuffer => [18, 0, 0, 0, 2, 0, 0, 0, 12, 0, 8, (byte)'h', (byte)'t', (byte)'t', (byte)'p', (byte)'/', (byte)'1', (byte)'.', (byte)'1', 2, (byte)'h', (byte)'2'];
+        private static ReadOnlySpan<byte> Http2And11AlpnBuffer => [18, 0, 0, 0, 2, 0, 0, 0, 12, 0, 2, (byte)'h', (byte)'2', 8, (byte)'h', (byte)'t', (byte)'t', (byte)'p', (byte)'/', (byte)'1', (byte)'.', (byte)'1'];
 
         private static readonly bool UseNewCryptoApi =
             // On newer Windows version we use new API to get TLS1.3.
@@ -83,19 +85,19 @@ namespace System.Net.Security
         {
             if (alpn.Count == 1 && alpn[0] == SslApplicationProtocol.Http11)
             {
-                inputBuffers.SetNextBuffer(new InputSecurityBuffer(s_http1, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
+                inputBuffers.SetNextBuffer(new InputSecurityBuffer(Http1AlpnBuffer, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
             }
             else if (alpn.Count == 1 && alpn[0] == SslApplicationProtocol.Http2)
             {
-                inputBuffers.SetNextBuffer(new InputSecurityBuffer(s_http2, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
+                inputBuffers.SetNextBuffer(new InputSecurityBuffer(Http2AlpnBuffer, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
             }
             else if (alpn.Count == 2 && alpn[0] == SslApplicationProtocol.Http11 && alpn[1] == SslApplicationProtocol.Http2)
             {
-                inputBuffers.SetNextBuffer(new InputSecurityBuffer(s_http12, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
+                inputBuffers.SetNextBuffer(new InputSecurityBuffer(Http11And2AlpnBuffer, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
             }
             else if (alpn.Count == 2 && alpn[0] == SslApplicationProtocol.Http2 && alpn[1] == SslApplicationProtocol.Http11)
             {
-                inputBuffers.SetNextBuffer(new InputSecurityBuffer(s_http21, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
+                inputBuffers.SetNextBuffer(new InputSecurityBuffer(Http2And11AlpnBuffer, SecurityBufferType.SECBUFFER_APPLICATION_PROTOCOLS));
             }
             else
             {

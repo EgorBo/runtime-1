@@ -11,9 +11,9 @@ namespace System.Net.WebSockets
     /// </summary>
     internal static partial class WebSocketDefaults
     {
-        public static readonly TimeSpan DefaultKeepAliveInterval = TimeSpan.Zero;
-        public static readonly TimeSpan DefaultClientKeepAliveInterval = TimeSpan.FromSeconds(30);
+        public static TimeSpan DefaultKeepAliveInterval => TimeSpan.Zero;
+        public static TimeSpan DefaultClientKeepAliveInterval => TimeSpan.FromSeconds(30);
 
-        public static readonly TimeSpan DefaultKeepAliveTimeout = Timeout.InfiniteTimeSpan;
+        public static TimeSpan DefaultKeepAliveTimeout => Timeout.InfiniteTimeSpan;
     }
 }

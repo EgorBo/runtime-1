@@ -388,7 +388,7 @@ internal static partial class Interop
 
         internal readonly struct X509VerifyStatusCode : IEquatable<X509VerifyStatusCode>
         {
-            internal static readonly X509VerifyStatusCode X509_V_OK = X509VerifyStatusCodeUniversal.X509_V_OK;
+            internal static X509VerifyStatusCode X509_V_OK => X509VerifyStatusCodeUniversal.X509_V_OK;
 
             public int Code { get; }
 

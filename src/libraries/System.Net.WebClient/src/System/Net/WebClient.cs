@@ -1082,7 +1082,7 @@ namespace System.Net
             }
         }
 
-        private static readonly char[] s_parseContentTypeSeparators = new char[] { ';', '=', ' ' };
+        private static ReadOnlySpan<char> ParseContentTypeSeparators => ";= ";
         private static readonly Encoding[] s_knownEncodings = { Encoding.UTF8, Encoding.UTF32, Encoding.Unicode, Encoding.BigEndianUnicode };
 
         private string GetStringUsingEncoding(WebRequest request, byte[] data)
@@ -1105,7 +1105,7 @@ namespace System.Net
             if (contentType != null)
             {
                 contentType = contentType.ToLowerInvariant();
-                string[] parsedList = contentType.Split(s_parseContentTypeSeparators);
+                string[] parsedList = contentType.Split(ParseContentTypeSeparators);
                 bool nextItem = false;
                 foreach (string item in parsedList)
                 {

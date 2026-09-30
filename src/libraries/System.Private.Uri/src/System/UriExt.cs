@@ -698,7 +698,7 @@ namespace System
             // Here we can assert that passed "relativeUri" is indeed a relative one
 
             if (relativeStr.Length > 0 && (UriHelper.IsLWS(relativeStr[0]) || UriHelper.IsLWS(relativeStr[relativeStr.Length - 1])))
-                relativeStr = relativeStr.Trim(UriHelper.s_WSchars);
+                relativeStr = relativeStr.AsSpan().Trim(UriHelper.WSchars).ToString();
 
             if (relativeStr.Length == 0)
             {

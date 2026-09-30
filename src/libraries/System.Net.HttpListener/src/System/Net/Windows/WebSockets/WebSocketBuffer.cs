@@ -24,7 +24,7 @@ namespace System.Net.WebSockets
     internal sealed class WebSocketBuffer : IDisposable
     {
         private const int NativeOverheadBufferSize = 144;
-        private static readonly int s_PropertyBufferSize = 3 * sizeof(uint) + IntPtr.Size;
+        private static int PropertyBufferSize => 3 * sizeof(uint) + IntPtr.Size;
 
         private readonly int _receiveBufferSize;
 
@@ -68,7 +68,7 @@ namespace System.Net.WebSockets
                 _receiveBufferSize);
             _propertyBuffer = new ArraySegment<byte>(internalBuffer.Array,
                 _payloadBuffer.Offset + _payloadBuffer.Count,
-                s_PropertyBufferSize);
+                PropertyBufferSize);
             _sendBufferState = SendBufferState.None;
         }
 
@@ -659,7 +659,7 @@ namespace System.Net.WebSockets
             Debug.Assert(sendBufferSize <= HttpWebSocket.MaxBufferSize, $"'sendBufferSize' MUST be at less than or equal to {HttpWebSocket.MaxBufferSize}.");
 
             int nativeSendBufferSize = GetNativeSendBufferSize(sendBufferSize, isServerBuffer);
-            return 2 * receiveBufferSize + nativeSendBufferSize + NativeOverheadBufferSize + s_PropertyBufferSize;
+            return 2 * receiveBufferSize + nativeSendBufferSize + NativeOverheadBufferSize + PropertyBufferSize;
         }
 
         private enum SendBufferState

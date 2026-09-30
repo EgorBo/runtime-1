@@ -19,7 +19,7 @@ namespace System.Net.Sockets
     internal static class SocketPal
     {
         public const bool SupportsMultipleConnectAttempts = true;
-        public static readonly int MaximumAddressSize = UnixDomainSocketEndPoint.MaxAddressSize;
+        public static int MaximumAddressSize => UnixDomainSocketEndPoint.MaxAddressSize;
 
         private static void MicrosecondsToTimeValue(long microseconds, ref Interop.Winsock.TimeValue socketTime)
         {

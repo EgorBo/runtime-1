@@ -66,7 +66,7 @@ internal static partial class Interop
             internal int MulticastAddress; // IP multicast address of group
             internal int InterfaceAddress; // local IP address of interface
 
-            internal static readonly int Size = sizeof(IPMulticastRequest);
+            internal static int Size => sizeof(IPMulticastRequest);
         }
 
         // Argument structure for IPV6_ADD_MEMBERSHIP and IPV6_DROP_MEMBERSHIP.
@@ -108,7 +108,7 @@ internal static partial class Interop
                 }
             }
 
-            internal static readonly unsafe int Size = sizeof(Marshaller.Native);
+            internal static unsafe int Size => sizeof(Marshaller.Native);
         }
 
         [StructLayout(LayoutKind.Sequential)]

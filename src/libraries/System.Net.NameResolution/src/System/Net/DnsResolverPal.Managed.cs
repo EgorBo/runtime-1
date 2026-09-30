@@ -39,7 +39,7 @@ namespace System.Net
         private const int InitialTcpBufferSize = 4096;
 
         // Default per-attempt timeout and retry count (DnsResolverOptions exposes only Servers).
-        private static readonly TimeSpan s_queryTimeout = TimeSpan.FromSeconds(3);
+        private static TimeSpan QueryTimeout => TimeSpan.FromSeconds(3);
         private const int MaxRetries = 2;
 
         // ---- Public PAL entry points (one per record type) ----
@@ -634,7 +634,7 @@ namespace System.Net
         {
             using DnsSocket socket = new DnsSocket(server.AddressFamily, stream: false);
             using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(s_queryTimeout);
+            timeoutCts.CancelAfter(QueryTimeout);
 
             await socket.ConnectAsync(server, timeoutCts.Token).ConfigureAwait(false);
             await socket.SendAsync(query, timeoutCts.Token).ConfigureAwait(false);
@@ -645,8 +645,8 @@ namespace System.Net
             ReadOnlyMemory<byte> query, IPEndPoint server, byte[] responseBuffer)
         {
             using DnsSocket socket = new DnsSocket(server.AddressFamily, stream: false);
-            socket.SendTimeout = (int)s_queryTimeout.TotalMilliseconds;
-            socket.ReceiveTimeout = (int)s_queryTimeout.TotalMilliseconds;
+            socket.SendTimeout = (int)QueryTimeout.TotalMilliseconds;
+            socket.ReceiveTimeout = (int)QueryTimeout.TotalMilliseconds;
 
             socket.Connect(server);
             socket.Send(query.Span);
@@ -694,7 +694,7 @@ namespace System.Net
         {
             using DnsSocket socket = new DnsSocket(server.AddressFamily, stream: true);
             using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(s_queryTimeout);
+            timeoutCts.CancelAfter(QueryTimeout);
 
             await socket.ConnectAsync(server, timeoutCts.Token).ConfigureAwait(false);
 
@@ -728,12 +728,12 @@ namespace System.Net
             ReadOnlyMemory<byte> query, IPEndPoint server)
         {
             using DnsSocket socket = new DnsSocket(server.AddressFamily, stream: true);
-            socket.SendTimeout = (int)s_queryTimeout.TotalMilliseconds;
-            socket.ReceiveTimeout = (int)s_queryTimeout.TotalMilliseconds;
+            socket.SendTimeout = (int)QueryTimeout.TotalMilliseconds;
+            socket.ReceiveTimeout = (int)QueryTimeout.TotalMilliseconds;
 
             // Connect with explicit timeout to prevent unbounded blocking when
             // the server's TCP endpoint is unreachable.
-            socket.ConnectWithTimeout(server, s_queryTimeout);
+            socket.ConnectWithTimeout(server, QueryTimeout);
 
             byte[] buffer = ArrayPool<byte>.Shared.Rent(InitialTcpBufferSize);
             try

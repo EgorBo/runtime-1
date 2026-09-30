@@ -304,7 +304,7 @@ internal static partial class Interop
             public SecurityBufferType BufferType;
             public IntPtr pvBuffer;
 
-            public static readonly unsafe int Size = sizeof(SecBuffer);
+            public static unsafe int Size => sizeof(SecBuffer);
         }
 
         [StructLayout(LayoutKind.Sequential)]

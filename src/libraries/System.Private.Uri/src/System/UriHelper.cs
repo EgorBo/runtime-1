@@ -551,7 +551,7 @@ namespace System
         public static readonly SearchValues<char> UnreservedReservedExceptQuestionMarkHash =
             SearchValues.Create("!$&'()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_abcdefghijklmnopqrstuvwxyz~");
 
-        internal static readonly char[] s_WSchars = new char[] { ' ', '\n', '\r', '\t' };
+        internal static ReadOnlySpan<char> WSchars => " \n\r\t";
 
         internal static bool IsLWS(char ch)
         {

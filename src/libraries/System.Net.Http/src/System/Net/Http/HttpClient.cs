@@ -16,9 +16,9 @@ namespace System.Net.Http
         #region Fields
 
         private static IWebProxy? s_defaultProxy;
-        private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromSeconds(100);
-        private static readonly TimeSpan s_maxTimeout = TimeSpan.FromMilliseconds(int.MaxValue);
-        private static readonly TimeSpan s_infiniteTimeout = Threading.Timeout.InfiniteTimeSpan;
+        private static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(100);
+        private static TimeSpan MaxTimeout => TimeSpan.FromMilliseconds(int.MaxValue);
+        private static TimeSpan InfiniteTimeout => Threading.Timeout.InfiniteTimeSpan;
         private const HttpCompletionOption DefaultCompletionOption = HttpCompletionOption.ResponseContentRead;
 
         private volatile bool _operationStarted;
@@ -107,10 +107,10 @@ namespace System.Net.Http
             get => _timeout;
             set
             {
-                if (value != s_infiniteTimeout)
+                if (value != InfiniteTimeout)
                 {
                     ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero);
-                    ArgumentOutOfRangeException.ThrowIfGreaterThan(value, s_maxTimeout);
+                    ArgumentOutOfRangeException.ThrowIfGreaterThan(value, MaxTimeout);
                 }
                 CheckDisposedOrStarted();
                 _timeout = value;
@@ -150,7 +150,7 @@ namespace System.Net.Http
 
         public HttpClient(HttpMessageHandler handler, bool disposeHandler) : base(handler, disposeHandler)
         {
-            _timeout = s_defaultTimeout;
+            _timeout = DefaultTimeout;
             _maxResponseContentBufferSize = HttpContent.MaxBufferSize;
             _pendingRequestsCts = new CancellationTokenSource();
         }
@@ -813,7 +813,7 @@ namespace System.Net.Http
             // it's more approximate checking elapsed time.
             CancellationTokenSource pendingRequestsCts = _pendingRequestsCts;
 
-            bool hasTimeout = _timeout != s_infiniteTimeout;
+            bool hasTimeout = _timeout != InfiniteTimeout;
             if (hasTimeout || cancellationToken.CanBeCanceled)
             {
                 CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, pendingRequestsCts.Token);

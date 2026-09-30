@@ -20,7 +20,7 @@ namespace System.Net.Http.Metrics
     /// </remarks>
     public sealed class HttpMetricsEnrichmentContext
     {
-        private static readonly HttpRequestOptionsKey<List<Action<HttpMetricsEnrichmentContext>>> s_optionsKeyForCallbacks = new(nameof(HttpMetricsEnrichmentContext));
+        private static HttpRequestOptionsKey<List<Action<HttpMetricsEnrichmentContext>>> OptionsKeyForCallbacks => new(nameof(HttpMetricsEnrichmentContext));
 
         private HttpRequestMessage? _request;
         private HttpResponseMessage? _response;
@@ -75,20 +75,20 @@ namespace System.Net.Http.Metrics
 
             HttpRequestOptions options = request.Options;
 
-            if (options.TryGetValue(s_optionsKeyForCallbacks, out List<Action<HttpMetricsEnrichmentContext>>? callbacks))
+            if (options.TryGetValue(OptionsKeyForCallbacks, out List<Action<HttpMetricsEnrichmentContext>>? callbacks))
             {
                 callbacks.Add(callback);
             }
             else
             {
-                options.Set(s_optionsKeyForCallbacks, [callback]);
+                options.Set(OptionsKeyForCallbacks, [callback]);
             }
         }
 
         internal static List<Action<HttpMetricsEnrichmentContext>>? GetEnrichmentCallbacksForRequest(HttpRequestMessage request)
         {
             if (request._options is HttpRequestOptions options &&
-                options.Remove(s_optionsKeyForCallbacks.Key, out object? callbacks))
+                options.Remove(OptionsKeyForCallbacks.Key, out object? callbacks))
             {
                 return (List<Action<HttpMetricsEnrichmentContext>>)callbacks!;
             }

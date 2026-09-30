@@ -10,10 +10,10 @@ namespace System.Net.Http
     /// </summary>
     internal static partial class HttpHandlerDefaults
     {
-        public static readonly int DefaultMaxConnectionsPerServer = GlobalHttpSettings.SocketsHttpHandler.MaxConnectionsPerServer;
+        public static int DefaultMaxConnectionsPerServer => GlobalHttpSettings.SocketsHttpHandler.MaxConnectionsPerServer;
 
-        public static readonly TimeSpan DefaultKeepAlivePingTimeout = TimeSpan.FromSeconds(20);
-        public static readonly TimeSpan DefaultKeepAlivePingDelay = Timeout.InfiniteTimeSpan;
+        public static TimeSpan DefaultKeepAlivePingTimeout => TimeSpan.FromSeconds(20);
+        public static TimeSpan DefaultKeepAlivePingDelay => Timeout.InfiniteTimeSpan;
         public const HttpKeepAlivePingPolicy DefaultKeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always;
 
         // This is the default value for SocketsHttpHandler.InitialHttp2StreamWindowSize,

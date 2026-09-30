@@ -10,12 +10,10 @@ namespace System.Net
     // on how to format the memory buffers that the platform uses for network addresses.
     public class SocketAddress : IEquatable<SocketAddress>
     {
-#pragma warning disable CA1802 // these could be const on Windows but need to be static readonly for Unix
-        internal static readonly int IPv6AddressSize = SocketAddressPal.IPv6AddressSize;
-        internal static readonly int IPv4AddressSize = SocketAddressPal.IPv4AddressSize;
-        internal static readonly int UdsAddressSize = SocketAddressPal.UdsAddressSize;
-        internal static readonly int MaxAddressSize = SocketAddressPal.MaxAddressSize;
-#pragma warning restore CA1802
+        internal static int IPv6AddressSize => SocketAddressPal.IPv6AddressSize;
+        internal static int IPv4AddressSize => SocketAddressPal.IPv4AddressSize;
+        internal static int UdsAddressSize => SocketAddressPal.UdsAddressSize;
+        internal static int MaxAddressSize => SocketAddressPal.MaxAddressSize;
 
         private int _size;
         private byte[] _buffer;

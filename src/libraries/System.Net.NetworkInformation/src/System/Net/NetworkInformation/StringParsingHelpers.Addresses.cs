@@ -141,7 +141,7 @@ namespace System.Net.NetworkInformation
 
                     while (labelIndex != -1)
                     {
-                        int commentIndex = fileContents.IndexOfAny(CommentSymbols, labelLineStart, labelIndex - labelLineStart);
+                        int commentIndex = fileContents.AsSpan(labelLineStart, labelIndex - labelLineStart).IndexOfAny(';', '#');
                         if (commentIndex == -1)
                         {
                             break;
@@ -169,7 +169,5 @@ namespace System.Net.NetworkInformation
 
             return collection;
         }
-
-        private static readonly char[] CommentSymbols = [';', '#'];
     }
 }

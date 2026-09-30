@@ -9,18 +9,6 @@ namespace System.Net.Mime
 {
     internal static class MailBnfHelper
     {
-        // characters allowed in atoms
-        internal static readonly bool[] Atext = CreateCharactersAllowedInAtoms();
-
-        // characters allowed in quoted strings (not including Unicode)
-        internal static readonly bool[] Qtext = CreateCharactersAllowedInQuotedStrings();
-
-        // characters allowed in domain literals
-        internal static readonly bool[] Dtext = CreateCharactersAllowedInDomainLiterals();
-
-        // characters allowed inside of comments
-        internal static readonly bool[] Ctext = CreateCharactersAllowedInComments();
-
         private static readonly SearchValues<char> s_charactersAllowedInHeaderNames =
             // ftext = %d33-57 / %d59-126
             SearchValues.Create("!\"#$%&'()*+,-./0123456789;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
@@ -46,78 +34,65 @@ namespace System.Net.Mime
         internal const char Dot = '.';
         internal const string ConsecutiveDots = "..";
 
-        // NOTE: See RFC 2822 for more detail.  By default, every value in the array is false and only
-        // those values which are allowed in that particular set are then set to true.  The numbers
+        // NOTE: See RFC 2822 for more detail.  Each table is indexed by ASCII value and only
+        // those values which are allowed in that particular set are true.  The numbers
         // annotating each definition below are the range of ASCII values which are allowed in that definition.
 
-        private static bool[] CreateCharactersAllowedInAtoms()
-        {
-            // atext = ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "/" / "=" / "?" / "^" / "_" / "`" / "{" / "|" / "}" / "~"
-            var atext = new bool[128];
-            for (int i = '0'; i <= '9'; i++) { atext[i] = true; }
-            for (int i = 'A'; i <= 'Z'; i++) { atext[i] = true; }
-            for (int i = 'a'; i <= 'z'; i++) { atext[i] = true; }
-            atext['!'] = true;
-            atext['#'] = true;
-            atext['$'] = true;
-            atext['%'] = true;
-            atext['&'] = true;
-            atext['\''] = true;
-            atext['*'] = true;
-            atext['+'] = true;
-            atext['-'] = true;
-            atext['/'] = true;
-            atext['='] = true;
-            atext['?'] = true;
-            atext['^'] = true;
-            atext['_'] = true;
-            atext['`'] = true;
-            atext['{'] = true;
-            atext['|'] = true;
-            atext['}'] = true;
-            atext['~'] = true;
-            return atext;
-        }
+        // characters allowed in atoms
+        // atext = ALPHA / DIGIT / "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "/" / "=" / "?" / "^" / "_" / "`" / "{" / "|" / "}" / "~"
+        internal static ReadOnlySpan<bool> Atext =>
+        [
+            false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 0x00-0x0F
+            false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 0x10-0x1F
+            false, true, false, true, true, true, true, true, false, false, true, true, false, true, false, true, // 0x20-0x2F
+            true, true, true, true, true, true, true, true, true, true, false, false, false, true, false, true, // 0x30-0x3F
+            false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4F
+            true, true, true, true, true, true, true, true, true, true, true, false, false, false, true, true, // 0x50-0x5F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false // 0x70-0x7F
+        ];
 
-        private static bool[] CreateCharactersAllowedInQuotedStrings()
-        {
-            // fqtext = %d1-9 / %d11 / %d12 / %d14-33 / %d35-91 / %d93-127
-            var qtext = new bool[128];
-            for (int i = 1; i <= 9; i++) { qtext[i] = true; }
-            qtext[11] = true;
-            qtext[12] = true;
-            for (int i = 14; i <= 33; i++) { qtext[i] = true; }
-            for (int i = 35; i <= 91; i++) { qtext[i] = true; }
-            for (int i = 93; i <= 127; i++) { qtext[i] = true; }
-            return qtext;
-        }
+        // characters allowed in quoted strings (not including Unicode)
+        // fqtext = %d1-9 / %d11 / %d12 / %d14-33 / %d35-91 / %d93-127
+        internal static ReadOnlySpan<bool> Qtext =>
+        [
+            false, true, true, true, true, true, true, true, true, true, false, true, true, false, true, true, // 0x00-0x0F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x10-0x1F
+            true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x20-0x2F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x30-0x3F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4F
+            true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, // 0x50-0x5F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true // 0x70-0x7F
+        ];
 
-        private static bool[] CreateCharactersAllowedInDomainLiterals()
-        {
-            // fdtext = %d1-8 / %d11 / %d12 / %d14-31 / %d33-90 / %d94-127
-            var dtext = new bool[128];
-            for (int i = 1; i <= 8; i++) { dtext[i] = true; }
-            dtext[11] = true;
-            dtext[12] = true;
-            for (int i = 14; i <= 31; i++) { dtext[i] = true; }
-            for (int i = 33; i <= 90; i++) { dtext[i] = true; }
-            for (int i = 94; i <= 127; i++) { dtext[i] = true; }
-            return dtext;
-        }
+        // characters allowed in domain literals
+        // fdtext = %d1-8 / %d11 / %d12 / %d14-31 / %d33-90 / %d94-127
+        internal static ReadOnlySpan<bool> Dtext =>
+        [
+            false, true, true, true, true, true, true, true, true, false, false, true, true, false, true, true, // 0x00-0x0F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x10-0x1F
+            false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x20-0x2F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x30-0x3F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4F
+            true, true, true, true, true, true, true, true, true, true, true, false, false, false, true, true, // 0x50-0x5F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true // 0x70-0x7F
+        ];
 
-        private static bool[] CreateCharactersAllowedInComments()
-        {
-            // ctext- %d1-8 / %d11 / %d12 / %d14-31 / %33-39 / %42-91 / %93-127
-            var ctext = new bool[128];
-            for (int i = 1; i <= 8; i++) { ctext[i] = true; }
-            ctext[11] = true;
-            ctext[12] = true;
-            for (int i = 14; i <= 31; i++) { ctext[i] = true; }
-            for (int i = 33; i <= 39; i++) { ctext[i] = true; }
-            for (int i = 42; i <= 91; i++) { ctext[i] = true; }
-            for (int i = 93; i <= 127; i++) { ctext[i] = true; }
-            return ctext;
-        }
+        // characters allowed inside of comments
+        // ctext- %d1-8 / %d11 / %d12 / %d14-31 / %33-39 / %42-91 / %93-127
+        internal static ReadOnlySpan<bool> Ctext =>
+        [
+            false, true, true, true, true, true, true, true, true, false, false, true, true, false, true, true, // 0x00-0x0F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x10-0x1F
+            false, true, true, true, true, true, true, true, false, false, true, true, true, true, true, true, // 0x20-0x2F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x30-0x3F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x40-0x4F
+            true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, // 0x50-0x5F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, // 0x60-0x6F
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true // 0x70-0x7F
+        ];
 
         internal static bool SkipCFWS(string data, ref int offset)
         {

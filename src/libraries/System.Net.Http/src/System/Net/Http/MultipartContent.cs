@@ -22,8 +22,8 @@ namespace System.Net.Http
         private static readonly SearchValues<char> s_allowedBoundaryChars =
             SearchValues.Create(" '()+,-./0123456789:=?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz");
 
-        private static readonly byte[] CrLfBytes = HttpRuleParser.DefaultHttpEncoding.GetBytes("\r\n");
-        private static readonly byte[] DashDashBytes = HttpRuleParser.DefaultHttpEncoding.GetBytes("--");
+        private static ReadOnlySpan<byte> CrLfBytes => "\r\n"u8;
+        private static ReadOnlySpan<byte> DashDashBytes => "--"u8;
 
         private readonly List<HttpContent> _nestedContent;
         private readonly byte[] _startBoundaryBytes;   // "--{boundary}\r\n"

@@ -221,7 +221,7 @@ namespace System.DirectoryServices.Protocols
         public NOTIFYOFNEWCONNECTIONInternal notify;
         public DEREFERENCECONNECTIONInternal dereference;
 #if NET
-        public static readonly unsafe int Size = sizeof(Marshaller.MarshalValue.Native);
+        public static unsafe int Size => sizeof(Marshaller.MarshalValue.Native);
 
         [CustomMarshaller(typeof(LdapReferralCallback), MarshalMode.ManagedToUnmanagedIn, typeof(MarshalValue))]
         [CustomMarshaller(typeof(LdapReferralCallback), MarshalMode.ManagedToUnmanagedRef, typeof(MarshalValue))]

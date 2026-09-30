@@ -39,35 +39,6 @@ internal static partial class Interop
             return protocolListSize;
         }
 
-        public static unsafe byte[] ToByteArray(List<SslApplicationProtocol> applicationProtocols)
-        {
-            int protocolListSize = GetProtocolLength(applicationProtocols);
-
-            Sec_Application_Protocols protocols = default;
-
-            int protocolListConstSize = sizeof(Sec_Application_Protocols) - sizeof(uint) /* offsetof(Sec_Application_Protocols, ProtocolExtensionType) */;
-            protocols.ProtocolListsSize = (uint)(protocolListConstSize + protocolListSize);
-
-            protocols.ProtocolExtensionType = ApplicationProtocolNegotiationExt.ALPN;
-            protocols.ProtocolListSize = (ushort)protocolListSize;
-
-            byte[] buffer = new byte[sizeof(Sec_Application_Protocols) + protocolListSize];
-            int index = 0;
-
-            MemoryMarshal.Write(buffer.AsSpan(index), in protocols);
-            index += sizeof(Sec_Application_Protocols);
-
-            for (int i = 0; i < applicationProtocols.Count; i++)
-            {
-                ReadOnlySpan<byte> protocol = applicationProtocols[i].Protocol.Span;
-                buffer[index++] = (byte)protocol.Length;
-                protocol.CopyTo(buffer.AsSpan(index));
-                index += protocol.Length;
-            }
-
-            return buffer;
-        }
-
         public static unsafe void SetProtocols(Span<byte> buffer, List<SslApplicationProtocol> applicationProtocols, int protocolLength)
         {
             Span<Sec_Application_Protocols> alpn = MemoryMarshal.Cast<byte, Sec_Application_Protocols>(buffer);

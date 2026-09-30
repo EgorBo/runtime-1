@@ -15,7 +15,7 @@ internal static partial class Interop
         {
             internal int ByteLength;
 
-            internal static readonly int SizeOf = Marshal.SizeOf<PERF_COUNTER_BLOCK>();
+            internal static unsafe int SizeOf => sizeof(PERF_COUNTER_BLOCK);
 
             public readonly void Validate(int bufferSize)
             {
@@ -41,7 +41,7 @@ internal static partial class Interop
             internal int CounterSize;
             internal int CounterOffset;
 
-            internal static readonly int SizeOf = Marshal.SizeOf<PERF_COUNTER_DEFINITION>();
+            internal static unsafe int SizeOf => sizeof(PERF_COUNTER_DEFINITION);
 
             public readonly void Validate(int bufferSize)
             {
@@ -78,7 +78,7 @@ internal static partial class Interop
 
             internal const int Signature1Int = (int)'P' + ('E' << 16);
             internal const int Signature2Int = (int)'R' + ('F' << 16);
-            internal static readonly int SizeOf = Marshal.SizeOf<PERF_DATA_BLOCK>();
+            internal static unsafe int SizeOf => sizeof(PERF_DATA_BLOCK);
 
             public readonly void Validate(int bufferSize)
             {
@@ -104,7 +104,7 @@ internal static partial class Interop
             internal int NameOffset;
             internal int NameLength;
 
-            internal static readonly int SizeOf = Marshal.SizeOf<PERF_INSTANCE_DEFINITION>();
+            internal static unsafe int SizeOf => sizeof(PERF_INSTANCE_DEFINITION);
 
             internal static ReadOnlySpan<char> GetName(in PERF_INSTANCE_DEFINITION instance, ReadOnlySpan<byte> data)
                 => (instance.NameLength == 0) ? default
@@ -141,7 +141,7 @@ internal static partial class Interop
             internal long PerfTime;
             internal long PerfFreq;
 
-            internal static readonly int SizeOf = Marshal.SizeOf<PERF_OBJECT_TYPE>();
+            internal static unsafe int SizeOf => sizeof(PERF_OBJECT_TYPE);
 
             public readonly void Validate(int bufferSize)
             {

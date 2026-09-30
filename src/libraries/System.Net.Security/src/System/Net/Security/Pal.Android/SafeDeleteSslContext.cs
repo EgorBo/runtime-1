@@ -18,15 +18,15 @@ namespace System.Net
     internal sealed class SafeDeleteSslContext : SafeDeleteContext
     {
         private const int InitialBufferSize = 2048;
-        private static readonly SslProtocols[] s_orderedSslProtocols = new SslProtocols[]
-        {
+        private static ReadOnlySpan<SslProtocols> OrderedSslProtocols =>
+        [
 #pragma warning disable SYSLIB0039 // TLS 1.0 and 1.1 are obsolete
             SslProtocols.Tls,
             SslProtocols.Tls11,
 #pragma warning restore SYSLIB0039
             SslProtocols.Tls12,
             SslProtocols.Tls13,
-        };
+        ];
         private static readonly Lazy<SslProtocols> s_supportedSslProtocols = new Lazy<SslProtocols>(Interop.AndroidCrypto.SSLGetSupportedProtocols);
 
         private readonly SafeSslHandle _sslContext;
@@ -348,8 +348,8 @@ namespace System.Net
                     throw new PlatformNotSupportedException(SR.Format(SR.net_security_sslprotocol_notsupported, authOptions.EnabledSslProtocols));
                 }
 
-                (int minIndex, int maxIndex) = protocolsToEnable.ValidateContiguous(s_orderedSslProtocols);
-                Interop.AndroidCrypto.SSLStreamSetEnabledProtocols(handle, s_orderedSslProtocols.AsSpan(minIndex, maxIndex - minIndex + 1));
+                (int minIndex, int maxIndex) = protocolsToEnable.ValidateContiguous(OrderedSslProtocols);
+                Interop.AndroidCrypto.SSLStreamSetEnabledProtocols(handle, OrderedSslProtocols.Slice(minIndex, maxIndex - minIndex + 1));
             }
 
             if (authOptions.ApplicationProtocols != null && authOptions.ApplicationProtocols.Count != 0

@@ -14,7 +14,7 @@ namespace System.Net.Http
     {
         public const int DefaultMaxAutomaticRedirections = 50;
         public const int DefaultMaxResponseDrainSize = 1024 * 1024;
-        public static readonly TimeSpan DefaultResponseDrainTimeout = TimeSpan.FromSeconds(2);
+        public static TimeSpan DefaultResponseDrainTimeout => TimeSpan.FromSeconds(2);
         public const int DefaultMaxResponseHeadersLength = 64; // Units in K (1024) bytes.
         public const DecompressionMethods DefaultAutomaticDecompression = DecompressionMethods.None;
         public const bool DefaultAutomaticRedirection = true;
@@ -25,9 +25,9 @@ namespace System.Net.Http
         public const bool DefaultUseDefaultCredentials = false;
         public const bool DefaultCheckCertificateRevocationList = false;
         public const TokenImpersonationLevel DefaultImpersonationLevel = TokenImpersonationLevel.None;
-        public static readonly TimeSpan DefaultPooledConnectionLifetime = Timeout.InfiniteTimeSpan;
-        public static readonly TimeSpan DefaultPooledConnectionIdleTimeout = TimeSpan.FromMinutes(1);
-        public static readonly TimeSpan DefaultExpect100ContinueTimeout = TimeSpan.FromSeconds(1);
-        public static readonly TimeSpan DefaultConnectTimeout = Timeout.InfiniteTimeSpan;
+        public static TimeSpan DefaultPooledConnectionLifetime => Timeout.InfiniteTimeSpan;
+        public static TimeSpan DefaultPooledConnectionIdleTimeout => TimeSpan.FromMinutes(1);
+        public static TimeSpan DefaultExpect100ContinueTimeout => TimeSpan.FromSeconds(1);
+        public static TimeSpan DefaultConnectTimeout => Timeout.InfiniteTimeSpan;
     }
 }

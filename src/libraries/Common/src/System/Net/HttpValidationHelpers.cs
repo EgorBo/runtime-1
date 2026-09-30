@@ -31,7 +31,7 @@ namespace System.Net
                 && !ContainsNonAsciiChars(token);
         }
 
-        private static readonly char[] s_httpTrimCharacters = new char[] { (char)0x09, (char)0xA, (char)0xB, (char)0xC, (char)0xD, (char)0x20 };
+        private static ReadOnlySpan<char> HttpTrimCharacters => "\t\n\v\f\r ";
 
         /// <summary>
         /// Throws on invalid header value chars.
@@ -45,7 +45,11 @@ namespace System.Net
             }
 
             // Trim spaces from both ends.
-            value = value.Trim(s_httpTrimCharacters);
+            ReadOnlySpan<char> trimmed = value.AsSpan().Trim(HttpTrimCharacters);
+            if (trimmed.Length != value.Length)
+            {
+                value = trimmed.ToString();
+            }
 
             // First, check for correctly formed multi-line value.
             // Second, check for absence of CTL characters.
