@@ -4555,7 +4555,9 @@ void Compiler::optHoistLoopBlocks(FlowGraphNaturalLoop* loop,
                     if (top.m_hoistable)
                     {
                         const bool defExecuted = BitVecOps::IsMember(m_traits, m_defExec, block->bbPostorderNum);
-                        m_compiler->optHoistCandidate(stmt->GetRootNode(), block, m_loop, m_hoistContext, defExecuted);
+                        const bool hoisted =
+                            m_compiler->optHoistCandidate(top.Node(), block, m_loop, m_hoistContext, defExecuted);
+                        m_canHoistSideEffects &= hoisted || !top.Node()->OperMayThrow(m_compiler);
                     }
                     else
                     {
@@ -4900,8 +4902,9 @@ void Compiler::optHoistLoopBlocks(FlowGraphNaturalLoop* loop,
                         {
                             const bool defExecuted =
                                 BitVecOps::IsMember(m_traits, m_defExec, m_currentBlock->bbPostorderNum);
-                            m_compiler->optHoistCandidate(value.Node(), m_currentBlock, m_loop, m_hoistContext,
-                                                          defExecuted);
+                            const bool hoisted = m_compiler->optHoistCandidate(value.Node(), m_currentBlock, m_loop,
+                                                                               m_hoistContext, defExecuted);
+                            m_canHoistSideEffects &= hoisted || !value.Node()->OperMayThrow(m_compiler);
                         }
 
                         // Don't hoist this tree again.
@@ -4956,14 +4959,14 @@ void Compiler::optHoistLoopBlocks(FlowGraphNaturalLoop* loop,
     hoistContext->ResetHoistedInCurLoop();
 }
 
-void Compiler::optHoistCandidate(
+bool Compiler::optHoistCandidate(
     GenTree* tree, BasicBlock* treeBb, FlowGraphNaturalLoop* loop, LoopHoistContext* hoistCtxt, bool defExecuted)
 {
     // It must pass the hoistable profitability tests for this loop level
     if (!optIsProfitableToHoistTree(tree, loop, hoistCtxt, defExecuted))
     {
         JITDUMP("   ... not profitable to hoist\n");
-        return;
+        return false;
     }
 
     if (hoistCtxt->GetHoistedInCurLoop(this)->Lookup(tree->gtVNPair.GetLiberal()))
@@ -4972,7 +4975,7 @@ void Compiler::optHoistCandidate(
 
         JITDUMP("      [%06u] ... already hoisted " FMT_VN " in " FMT_LP "\n ", dspTreeID(tree),
                 tree->gtVNPair.GetLiberal(), loop->GetIndex());
-        return;
+        return false;
     }
 
     // We should already have a pre-header for the loop.
@@ -4986,7 +4989,7 @@ void Compiler::optHoistCandidate(
         JITDUMP("   ... not hoisting in " FMT_LP ", eh region constraint (pre-header try index %d, candidate " FMT_BB
                 " try index %d\n",
                 loop->GetIndex(), preheader->bbTryIndex, treeBb->bbNum, treeBb->bbTryIndex);
-        return;
+        return false;
     }
 
 #if defined(DEBUG)
@@ -4999,7 +5002,7 @@ void Compiler::optHoistCandidate(
     {
         JITDUMP("   ... not hoisting in " FMT_LP ", hoist count %u >= JitHoistLimit %u\n", loop->GetIndex(), current,
                 static_cast<unsigned>(limit));
-        return;
+        return false;
     }
 
 #endif // defined(DEBUG)
@@ -5035,6 +5038,7 @@ void Compiler::optHoistCandidate(
     hoistCtxt->GetHoistedInCurLoop(this)->Set(tree->gtVNPair.GetLiberal(), true);
 
     Metrics.HoistedExpressions++;
+    return true;
 }
 
 bool Compiler::optVNIsLoopInvariant(ValueNum vn, FlowGraphNaturalLoop* loop, VNSet* loopVnInvariantCache)
