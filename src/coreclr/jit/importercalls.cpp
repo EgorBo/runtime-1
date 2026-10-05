@@ -6481,6 +6481,13 @@ GenTree* Compiler::impSRCSUnsafeIntrinsic(NamedIntrinsic          intrinsic,
             var_types            type    = TypeHandleToVarType(typeHnd, &layout);
             GenTreeFlags         flags   = intrinsic == NI_SRCS_UNSAFE_ReadUnaligned ? GTF_IND_UNALIGNED : GTF_EMPTY;
 
+            // The loaded value may be stored to a location overlapping the source.
+            // Structs with GC pointers can't partially overlap.
+            if ((type == TYP_STRUCT) && !layout->HasGCPtr())
+            {
+                flags |= GTF_IND_MAY_OVERLAP;
+            }
+
             return gtNewLoadValueNode(type, layout, impPopStack().val, flags);
         }
 
@@ -6586,6 +6593,13 @@ GenTree* Compiler::impSRCSUnsafeIntrinsic(NamedIntrinsic          intrinsic,
             ClassLayout*         layout  = nullptr;
             var_types            type    = TypeHandleToVarType(typeHnd, &layout);
             GenTreeFlags         flags   = intrinsic == NI_SRCS_UNSAFE_WriteUnaligned ? GTF_IND_UNALIGNED : GTF_EMPTY;
+
+            // The stored value may come from a location overlapping the destination.
+            // Structs with GC pointers can't partially overlap.
+            if ((type == TYP_STRUCT) && !layout->HasGCPtr())
+            {
+                flags |= GTF_IND_MAY_OVERLAP;
+            }
 
             GenTree* value = impPopStack().val;
             GenTree* addr  = impPopStack().val;

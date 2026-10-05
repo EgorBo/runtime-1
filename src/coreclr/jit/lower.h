@@ -428,6 +428,8 @@ private:
     void     LowerBlockStoreAsGcBulkCopyCall(GenTreeBlk* blkNode);
     void     LowerInitBlockStore(GenTreeBlk* blkNode);
     void     LowerCopyBlockStore(GenTreeBlk* blkNode);
+    bool     CopyBlockNeedsMemmove(GenTreeBlk* blkNode);
+    bool     TryLowerCopyBlockAsUnrolledMemmove(GenTreeBlk* blkNode);
     bool     TryDecomposeBlockStoreAsIndirs(GenTreeBlk* blkNode);
     void     LowerLclHeap(GenTree* node);
     void     ContainBlockStoreAddress(GenTreeBlk* blkNode, unsigned size, GenTree* addr, GenTree* addrParent);

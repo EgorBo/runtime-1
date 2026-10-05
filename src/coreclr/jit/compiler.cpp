@@ -9633,6 +9633,10 @@ JITDBGAPI void __cdecl cTreeFlags(Compiler* comp, GenTree* tree)
                 {
                     chars += printf("[IND_UNALIGNED]");
                 }
+                if (tree->gtFlags & GTF_IND_MAY_OVERLAP)
+                {
+                    chars += printf("[IND_MAY_OVERLAP]");
+                }
                 if (tree->gtFlags & GTF_IND_INVARIANT)
                 {
                     chars += printf("[IND_INVARIANT]");
@@ -9734,6 +9738,10 @@ JITDBGAPI void __cdecl cTreeFlags(Compiler* comp, GenTree* tree)
                 if (tree->gtFlags & GTF_IND_UNALIGNED)
                 {
                     chars += printf("[IND_UNALIGNED]");
+                }
+                if (tree->gtFlags & GTF_IND_MAY_OVERLAP)
+                {
+                    chars += printf("[IND_MAY_OVERLAP]");
                 }
                 break;
 

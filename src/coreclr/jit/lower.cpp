@@ -10207,18 +10207,215 @@ void Lowering::LowerCopyBlockStore(GenTreeBlk* blkNode)
 #else
     if (size <= unrollLimit)
     {
-        blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
-        if (src->OperIs(GT_IND))
+        // A copy done by a single load followed by a single store is overlap-safe.
+        bool isSingleLoadStore = isPow2(size) && (size <= REGSIZE_BYTES);
+#if defined(TARGET_XARCH)
+        isSingleLoadStore |= (m_compiler->roundDownSIMDSize(size) == size);
+#elif defined(TARGET_ARM64)
+        isSingleLoadStore |= (size == FP_REGSIZE_BYTES);
+#endif
+
+        // Copies that must tolerate partially overlapping source and destination can't use
+        // interleaved loads and stores.
+        if (isSingleLoadStore || !CopyBlockNeedsMemmove(blkNode))
         {
-            ContainBlockStoreAddress(blkNode, size, src->AsIndir()->Addr(), src->AsIndir());
+            blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnroll;
+            if (src->OperIs(GT_IND))
+            {
+                ContainBlockStoreAddress(blkNode, size, src->AsIndir()->Addr(), src->AsIndir());
+            }
+            ContainBlockStoreAddress(blkNode, size, dstAddr, nullptr);
+            return;
         }
-        ContainBlockStoreAddress(blkNode, size, dstAddr, nullptr);
-        return;
+
+        if (TryLowerCopyBlockAsUnrolledMemmove(blkNode))
+        {
+            return;
+        }
     }
 
-    // Use memcpy
+    // Use memcpy (the helper has memmove semantics)
     LowerBlockStoreAsHelperCall(blkNode);
 #endif // TARGET_WASM
+}
+
+//------------------------------------------------------------------------
+// IsAddrInGcHeapObject: Check whether an address is known to point into a GC heap
+//    object, i.e. it is derived from an object reference.
+//
+// Arguments:
+//    addr - The address
+//
+// Return Value:
+//    true if the address is derived from an object reference.
+//
+static bool IsAddrInGcHeapObject(GenTree* addr)
+{
+    while (!addr->TypeIs(TYP_REF))
+    {
+        if (!addr->TypeIs(TYP_BYREF) || !addr->OperIs(GT_ADD))
+        {
+            return false;
+        }
+
+        GenTree* op1 = addr->gtGetOp1();
+        GenTree* op2 = addr->gtGetOp2();
+        if (varTypeIsGC(op1) == varTypeIsGC(op2))
+        {
+            return false;
+        }
+
+        addr = varTypeIsGC(op1) ? op1 : op2;
+    }
+
+    return true;
+}
+
+//------------------------------------------------------------------------
+// CopyBlockNeedsMemmove: Check whether a block copy must behave as if the whole
+//    source was read before anything is written to the destination.
+//
+// Arguments:
+//    blkNode - The block copy node
+//
+// Return Value:
+//    true if the source and destination are known to partially overlap, or if the copy
+//    was requested to be overlap-safe (GTF_IND_MAY_OVERLAP) and they may partially overlap.
+//
+bool Lowering::CopyBlockNeedsMemmove(GenTreeBlk* blkNode)
+{
+    assert(blkNode->OperIsCopyBlkOp());
+
+    GenTree* src = blkNode->Data();
+    if (blkNode->IsVolatile() || (src->OperIs(GT_IND) && src->AsIndir()->IsVolatile()))
+    {
+        return false;
+    }
+
+    // Partially overlapping structs with GC pointers are UB.
+    if (blkNode->GetLayout()->HasGCPtr())
+    {
+        return false;
+    }
+
+    const unsigned size      = blkNode->Size();
+    unsigned       srcLclNum = BAD_VAR_NUM;
+    unsigned       srcOffs   = 0;
+    unsigned       dstLclNum = BAD_VAR_NUM;
+    unsigned       dstOffs   = 0;
+
+    if (src->OperIs(GT_LCL_VAR, GT_LCL_FLD) || src->AsIndir()->Addr()->OperIs(GT_LCL_ADDR))
+    {
+        GenTreeLclVarCommon* lcl =
+            src->OperIs(GT_IND) ? src->AsIndir()->Addr()->AsLclVarCommon() : src->AsLclVarCommon();
+        srcLclNum = lcl->GetLclNum();
+        srcOffs   = lcl->GetLclOffs();
+    }
+
+    if (blkNode->Addr()->OperIs(GT_LCL_ADDR))
+    {
+        dstLclNum = blkNode->Addr()->AsLclVarCommon()->GetLclNum();
+        dstOffs   = blkNode->Addr()->AsLclVarCommon()->GetLclOffs();
+    }
+
+    if ((srcLclNum != BAD_VAR_NUM) && (srcLclNum == dstLclNum))
+    {
+        // Same local: we know exactly whether the two ranges partially overlap.
+        return (srcOffs != dstOffs) && (srcOffs < (dstOffs + size)) && (dstOffs < (srcOffs + size));
+    }
+
+    GenTreeFlags indirFlags = blkNode->gtFlags;
+    if (src->OperIs(GT_IND))
+    {
+        indirFlags |= src->gtFlags;
+    }
+
+    if ((indirFlags & GTF_IND_MAY_OVERLAP) == 0)
+    {
+        return false;
+    }
+
+    auto rootLclNum = [this](unsigned lclNum) {
+        const LclVarDsc* varDsc = m_compiler->lvaGetDesc(lclNum);
+        return varDsc->lvIsStructField ? varDsc->lvParentLcl : lclNum;
+    };
+
+    if ((srcLclNum != BAD_VAR_NUM) && (dstLclNum != BAD_VAR_NUM))
+    {
+        // Different locals can only overlap if one is a promoted field of the other.
+        return rootLclNum(srcLclNum) == rootLclNum(dstLclNum);
+    }
+
+    // Objects on the GC heap never overlap with the stack (locals, return buffer, implicit byrefs).
+    GenTree*   dstAddr    = blkNode->Addr();
+    GenTree*   srcAddr    = src->OperIs(GT_IND) ? src->AsIndir()->Addr() : nullptr;
+    const bool srcOnStack = (srcAddr == nullptr) || !m_compiler->fgAddrCouldBeHeap(srcAddr);
+    const bool dstOnStack = !m_compiler->fgAddrCouldBeHeap(dstAddr);
+    if ((srcOnStack && IsAddrInGcHeapObject(dstAddr)) ||
+        (dstOnStack && (srcAddr != nullptr) && IsAddrInGcHeapObject(srcAddr)))
+    {
+        return false;
+    }
+
+    if ((srcLclNum != BAD_VAR_NUM) || (dstLclNum != BAD_VAR_NUM))
+    {
+        // A local can only be accessed via an arbitrary indirection if it's address exposed.
+        const unsigned lclNum = (srcLclNum != BAD_VAR_NUM) ? srcLclNum : dstLclNum;
+        return m_compiler->lvaGetDesc(lclNum)->IsAddressExposed() ||
+               m_compiler->lvaGetDesc(rootLclNum(lclNum))->IsAddressExposed();
+    }
+
+    return true;
+}
+
+//------------------------------------------------------------------------
+// TryLowerCopyBlockAsUnrolledMemmove: Try to lower a block copy as an unrolled memmove,
+//    that loads the whole source into registers before storing it to the destination.
+//
+// Arguments:
+//    blkNode - The block copy node
+//
+// Return Value:
+//    true if the block copy was lowered as BlkOpKindUnrollMemmove.
+//
+bool Lowering::TryLowerCopyBlockAsUnrolledMemmove(GenTreeBlk* blkNode)
+{
+#if defined(TARGET_AMD64) || defined(TARGET_ARM64)
+    GenTree* src = blkNode->Data();
+
+    if (blkNode->Size() > m_compiler->getUnrollThreshold(Compiler::UnrollKind::Memmove))
+    {
+        return false;
+    }
+
+    // genCodeForMemmove expects the source to be an indirection and both addresses in registers.
+    if (src->OperIs(GT_LCL_VAR, GT_LCL_FLD))
+    {
+        const unsigned lclOffs = src->AsLclVarCommon()->GetLclOffs();
+        m_compiler->lvaSetVarDoNotEnregister(src->AsLclVarCommon()->GetLclNum()
+                                                 DEBUGARG(DoNotEnregisterReason::BlockOp));
+        src->ChangeOper(GT_LCL_ADDR);
+        src->ChangeType(TYP_I_IMPL);
+        src->AsLclFld()->SetLclOffs(lclOffs);
+        src->ClearContained();
+
+        GenTreeIndir* srcIndir = m_compiler->gtNewIndir(TYP_STRUCT, src, GTF_IND_NONFAULTING);
+        srcIndir->SetContained();
+        BlockRange().InsertAfter(src, srcIndir);
+        blkNode->SetData(srcIndir);
+        src = srcIndir;
+    }
+
+    assert(src->isContained());
+    assert(!src->AsIndir()->Addr()->isContained());
+    assert(!blkNode->Addr()->isContained());
+
+    JITDUMP("Lowering STORE_BLK [%06u] as an unrolled memmove\n", m_compiler->dspTreeID(blkNode));
+    blkNode->gtBlkOpKind = GenTreeBlk::BlkOpKindUnrollMemmove;
+    return true;
+#else
+    return false;
+#endif
 }
 
 #ifndef TARGET_WASM
