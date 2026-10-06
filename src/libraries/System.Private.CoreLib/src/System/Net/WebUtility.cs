@@ -451,6 +451,11 @@ namespace System.Net
                 return value;
             }
 
+            if (!value.Contains('%'))
+            {
+                return value.Replace('+', ' ');
+            }
+
             int count = value.Length;
             UrlDecoder helper = new UrlDecoder(count, encoding);
 
