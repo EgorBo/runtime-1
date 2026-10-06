@@ -835,19 +835,7 @@ namespace System
         {
             Debug.Assert(typeof(TChar) == typeof(char) || typeof(TChar) == typeof(byte));
 
-            // An inline array rather than a stackalloc: the latter's localloc keeps this method
-            // from being inlined into the FormatCustomized loop that calls it.
-            Unsafe.SkipInit(out InlineArray11<TChar> buffer);
-            Span<TChar> chars = buffer;
-
-            int charCount;
-            bool formatted = typeof(TChar) == typeof(char) ?
-                fraction.TryFormat(Unsafe.BitCast<Span<TChar>, Span<char>>(chars), out charCount, fractionFormat, CultureInfo.InvariantCulture) :
-                fraction.TryFormat(Unsafe.BitCast<Span<TChar>, Span<byte>>(chars), out charCount, fractionFormat, CultureInfo.InvariantCulture);
-            Debug.Assert(formatted);
-            Debug.Assert(charCount != 0);
-
-            result.Append(chars.Slice(0, charCount));
+            FormatDigits(ref result, fraction, fractionFormat.Length);
         }
 
         // output the 'z' family of formats, which output a the offset from UTC, e.g. "-07:30"
@@ -1067,16 +1055,13 @@ namespace System
                         format = dtfi.FullDateTimePattern;
                         break;
 
-                    // For invariant DateTime ToString("G"), the expanded pattern is
-                    // "MM/dd/yyyy HH:mm:ss" which is exactly what TryFormatInvariantG
-                    // produces in the NullOffset case. Take the same fast path that
-                    // ToString(InvariantCulture) (null format) already uses.
+                    // Explicit invariant "G" omits the offset for both DateTime and DateTimeOffset.
                     case 'G':
                         dtfi = DateTimeFormatInfo.GetInstance(provider);
-                        if (offset.Ticks == NullOffset && ReferenceEquals(dtfi, DateTimeFormatInfo.InvariantInfo))
+                        if (ReferenceEquals(dtfi, DateTimeFormatInfo.InvariantInfo))
                         {
                             str = string.FastAllocateString(FormatInvariantGMinLength);
-                            TryFormatInvariantG(dateTime, offset, new Span<char>(ref str.GetRawStringData(), str.Length), out charsWritten);
+                            TryFormatInvariantG(dateTime, new TimeSpan(NullOffset), new Span<char>(ref str.GetRawStringData(), str.Length), out charsWritten);
                             Debug.Assert(charsWritten == FormatInvariantGMinLength);
                             return str;
                         }
@@ -1174,15 +1159,12 @@ namespace System
                         format = dtfi.FullDateTimePattern;
                         break;
 
-                    // For invariant DateTime ToString("G"), the expanded pattern is
-                    // "MM/dd/yyyy HH:mm:ss" which is exactly what TryFormatInvariantG
-                    // produces in the NullOffset case. Take the same fast path that
-                    // ToString(InvariantCulture) (null format) already uses.
+                    // Explicit invariant "G" omits the offset for both DateTime and DateTimeOffset.
                     case 'G':
                         dtfi = DateTimeFormatInfo.GetInstance(provider);
-                        if (offset.Ticks == NullOffset && ReferenceEquals(dtfi, DateTimeFormatInfo.InvariantInfo))
+                        if (ReferenceEquals(dtfi, DateTimeFormatInfo.InvariantInfo))
                         {
-                            return TryFormatInvariantG(dateTime, offset, destination, out charsWritten);
+                            return TryFormatInvariantG(dateTime, new TimeSpan(NullOffset), destination, out charsWritten);
                         }
                         format = dtfi.GeneralLongTimePattern;
                         break;
