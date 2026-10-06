@@ -1556,7 +1556,7 @@ namespace System.IO
 
         private static unsafe void WriteToFile(string path, FileMode mode, ReadOnlySpan<char> contents, Encoding encoding)
         {
-            ReadOnlySpan<byte> preamble = encoding.GetPreamble();
+            ReadOnlySpan<byte> preamble = encoding.Preamble;
             int preambleSize = preamble.Length;
 
             using SafeFileHandle fileHandle = OpenHandle(path, mode, FileAccess.Write, FileShare.Read, FileOptions.None, GetPreallocationSize(mode, contents, encoding, preambleSize));
