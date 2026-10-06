@@ -57,6 +57,9 @@ namespace System.Text
         private const int MaxUtf8BytesPerChar = 3;
 
 
+        private static readonly EncoderReplacementFallback s_defaultEncoderFallback = new EncoderReplacementFallback("\xFFFD");
+        private static readonly DecoderReplacementFallback s_defaultDecoderFallback = new DecoderReplacementFallback("\xFFFD");
+
         // Used by Encoding.UTF8 for lazy initialization
         // The initialization code will not be run until a static member of the class is referenced
         internal static readonly UTF8EncodingSealed s_default = new UTF8EncodingSealed(encoderShouldEmitUTF8Identifier: true);
@@ -103,8 +106,8 @@ namespace System.Text
             }
             else
             {
-                this.encoderFallback = new EncoderReplacementFallback("\xFFFD");
-                this.decoderFallback = new DecoderReplacementFallback("\xFFFD");
+                this.encoderFallback = s_defaultEncoderFallback;
+                this.decoderFallback = s_defaultDecoderFallback;
             }
         }
 
