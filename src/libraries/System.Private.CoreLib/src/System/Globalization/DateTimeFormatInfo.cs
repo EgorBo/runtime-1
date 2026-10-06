@@ -90,6 +90,7 @@ namespace System.Globalization
         private int calendarWeekRule = -1;
 
         private string? fullDateTimePattern;        // long date + long time (whidbey expects, arrowhead doesn't)
+        private string? fullShortTimePattern;
 
         private string[]? abbreviatedDayNames;
 
@@ -427,6 +428,7 @@ namespace System.Globalization
 
                             // These properies are not in the OS data, but they are dependent on the values like shortDatePattern.
                             fullDateTimePattern = null; // Long date + long time
+                            fullShortTimePattern = null;
                             generalShortTimePattern = null; // short date + short time
                             generalLongTimePattern = null; // short date + long time
 
@@ -723,6 +725,7 @@ namespace System.Globalization
 
             // Clean up cached values that will be affected by this property.
             fullDateTimePattern = null;
+            fullShortTimePattern = null;
         }
 
         /// <summary>
@@ -889,9 +892,12 @@ namespace System.Globalization
 
             // Clean up cached values that will be affected by this property.
             generalShortTimePattern = null; // General short date = short date + short time.
+            fullShortTimePattern = null;
         }
 
         public string SortableDateTimePattern => sortableDateTimePattern;
+
+        internal string FullShortTimePattern => fullShortTimePattern ??= LongDatePattern + " " + ShortTimePattern;
 
         /// <summary>
         /// Return the pattern for 'g' general format: shortDate + short time
@@ -1755,10 +1761,10 @@ namespace System.Globalization
             // Build the format flags from the data in this DTFI
             formatFlags =
                 (DateTimeFormatFlags)DateTimeFormatInfoScanner.GetFormatFlagGenitiveMonth(
-                    MonthNames, InternalGetGenitiveMonthNames(false), AbbreviatedMonthNames, InternalGetGenitiveMonthNames(true)) |
+                    InternalGetMonthNames(), InternalGetGenitiveMonthNames(false), InternalGetAbbreviatedMonthNames(), InternalGetGenitiveMonthNames(true)) |
                 (DateTimeFormatFlags)DateTimeFormatInfoScanner.GetFormatFlagUseSpaceInMonthNames(
-                    MonthNames, InternalGetGenitiveMonthNames(false), AbbreviatedMonthNames, InternalGetGenitiveMonthNames(true)) |
-                (DateTimeFormatFlags)DateTimeFormatInfoScanner.GetFormatFlagUseSpaceInDayNames(DayNames, AbbreviatedDayNames) |
+                    InternalGetMonthNames(), InternalGetGenitiveMonthNames(false), InternalGetAbbreviatedMonthNames(), InternalGetGenitiveMonthNames(true)) |
+                (DateTimeFormatFlags)DateTimeFormatInfoScanner.GetFormatFlagUseSpaceInDayNames(InternalGetDayOfWeekNames(), InternalGetAbbreviatedDayOfWeekNames()) |
                 (DateTimeFormatFlags)DateTimeFormatInfoScanner.GetFormatFlagUseHebrewCalendar((int)Calendar.ID);
             return formatFlags;
         }

@@ -958,7 +958,7 @@ namespace System
             {
                 'd' => dtfi.ShortDatePattern, // Short Date
                 'D' => dtfi.LongDatePattern, // Long Date
-                'f' => dtfi.LongDatePattern + " " + dtfi.ShortTimePattern, // Full (long date + short time)
+                'f' => dtfi.FullShortTimePattern, // Full (long date + short time)
                 'F' => dtfi.FullDateTimePattern, // Full (long date + long time)
                 'g' => dtfi.GeneralShortTimePattern, // General (short date + short time)
                 'G' => dtfi.GeneralLongTimePattern, // General (short date + long time)
