@@ -1081,7 +1081,7 @@ namespace System
                 ReadOnlySpan<char> formatSpan = format;
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return value >= 0 ?
                         UInt32ToDecStr((uint)value, digits) :
@@ -1138,7 +1138,7 @@ namespace System
             {
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return value >= 0 ?
                         TryUInt32ToDecStr((uint)value, digits, destination, out charsWritten) :
@@ -1193,7 +1193,7 @@ namespace System
                 ReadOnlySpan<char> formatSpan = format;
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return UInt32ToDecStr(value, digits);
                 }
@@ -1248,7 +1248,7 @@ namespace System
             {
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return TryUInt32ToDecStr(value, digits, destination, out charsWritten);
                 }
@@ -1303,7 +1303,7 @@ namespace System
                 ReadOnlySpan<char> formatSpan = format;
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return value >= 0 ?
                         UInt64ToDecStr((ulong)value, digits) :
@@ -1362,7 +1362,7 @@ namespace System
             {
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return value >= 0 ?
                         TryUInt64ToDecStr((ulong)value, digits, destination, out charsWritten) :
@@ -1417,7 +1417,7 @@ namespace System
                 ReadOnlySpan<char> formatSpan = format;
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return UInt64ToDecStr(value, digits);
                 }
@@ -1472,7 +1472,7 @@ namespace System
             {
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return TryUInt64ToDecStr(value, digits, destination, out charsWritten);
                 }
@@ -1529,7 +1529,7 @@ namespace System
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
 
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return Int128.IsPositive(value)
                         ? UInt128ToDecStr((UInt128)value, digits)
@@ -1588,7 +1588,7 @@ namespace System
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
 
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return Int128.IsPositive(value)
                         ? TryUInt128ToDecStr((UInt128)value, digits, destination, out charsWritten)
@@ -1645,7 +1645,7 @@ namespace System
                 char fmt = ParseFormatSpecifier(formatSpan, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
 
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return UInt128ToDecStr(value, digits);
                 }
@@ -1700,7 +1700,7 @@ namespace System
                 char fmt = ParseFormatSpecifier(format, out int digits);
                 char fmtUpper = (char)(fmt & 0xFFDF); // ensure fmt is upper-cased for purposes of comparison
 
-                if (fmtUpper == 'G' ? digits < 1 : fmtUpper == 'D')
+                if (fmtUpper is 'G' or 'R' ? digits < 1 : fmtUpper == 'D' || (fmtUpper == 'F' && digits == 0))
                 {
                     return TryUInt128ToDecStr(value, digits, destination, out charsWritten);
                 }
@@ -1821,7 +1821,8 @@ namespace System
                 digits = 1;
             }
 
-            int bufferLength = Math.Max(digits, FormattingHelpers.CountDigits((uint)(-value))) + sNegative.Length;
+            int countedDigits = FormattingHelpers.CountDigits((uint)(-value));
+            int bufferLength = Math.Max(digits, countedDigits) + sNegative.Length;
             if (bufferLength > destination.Length)
             {
                 charsWritten = 0;
@@ -1829,7 +1830,9 @@ namespace System
             }
 
             charsWritten = bufferLength;
-            int pos = UInt32ToDecChars<TChar>(destination, bufferLength, (uint)(-value), digits);
+            int pos = digits > countedDigits ?
+                UInt32ToDecChars<TChar>(destination, bufferLength, (uint)(-value), digits) :
+                UInt32ToDecChars<TChar>(destination, bufferLength, (uint)(-value));
             Debug.Assert(pos == sNegative.Length);
             CopyNegativeSign(sNegative, destination);
             return true;
@@ -2111,7 +2114,8 @@ namespace System
                 digits = 1;
             }
 
-            int bufferLength = Math.Max(digits, FormattingHelpers.CountDigits((ulong)(-value))) + sNegative.Length;
+            int countedDigits = FormattingHelpers.CountDigits((ulong)(-value));
+            int bufferLength = Math.Max(digits, countedDigits) + sNegative.Length;
             if (bufferLength > destination.Length)
             {
                 charsWritten = 0;
@@ -2119,7 +2123,9 @@ namespace System
             }
 
             charsWritten = bufferLength;
-            int pos = UInt64ToDecChars<TChar>(destination, bufferLength, (ulong)(-value), digits);
+            int pos = digits > countedDigits ?
+                UInt64ToDecChars<TChar>(destination, bufferLength, (ulong)(-value), digits) :
+                UInt64ToDecChars<TChar>(destination, bufferLength, (ulong)(-value));
             Debug.Assert(pos == sNegative.Length);
             CopyNegativeSign(sNegative, destination);
             return true;
@@ -2515,7 +2521,8 @@ namespace System
 
             UInt128 absValue = (UInt128)(-value);
 
-            int bufferLength = Math.Max(digits, FormattingHelpers.CountDigits(absValue)) + sNegative.Length;
+            int countedDigits = FormattingHelpers.CountDigits(absValue);
+            int bufferLength = Math.Max(digits, countedDigits) + sNegative.Length;
             if (bufferLength > destination.Length)
             {
                 charsWritten = 0;
@@ -2523,7 +2530,9 @@ namespace System
             }
 
             charsWritten = bufferLength;
-            int pos = UInt128ToDecChars<TChar>(destination, bufferLength, absValue, digits);
+            int pos = digits > countedDigits ?
+                UInt128ToDecChars<TChar>(destination, bufferLength, absValue, digits) :
+                UInt128ToDecChars<TChar>(destination, bufferLength, absValue);
             Debug.Assert(pos == sNegative.Length);
             CopyNegativeSign(sNegative, destination);
             return true;
