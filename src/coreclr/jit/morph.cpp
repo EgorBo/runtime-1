@@ -815,7 +815,7 @@ void CallArgs::ArgsComplete(Compiler* comp, GenTreeCall* call)
             }
         }
 
-        bool treatLikeCall = ((argx->gtFlags & GTF_CALL) != 0);
+        bool treatLikeCall = ((argx->gtFlags & (GTF_CALL | GTF_ORDER_SIDEEFF)) != 0);
 
         ExceptionSetFlags exceptionFlags = ExceptionSetFlags::None;
 #if FEATURE_FIXED_OUT_ARGS
@@ -849,9 +849,8 @@ void CallArgs::ArgsComplete(Compiler* comp, GenTreeCall* call)
         }
 #endif // FEATURE_FIXED_OUT_ARGS
 
-        // If it contains a call (GTF_CALL) then itself and everything before the call
-        // with a GLOB_EFFECT must eval to temp (this is because everything with SIDE_EFFECT
-        // has to be kept in the right order since we will move the call to the first position)
+        // Calls and ordering side effects must stay ordered with earlier arguments
+        // that have effects, so evaluate them to temps before sorting the arguments.
 
         // For calls we don't have to be quite as conservative as we are with stores
         // since the call won't be modifying any non-address taken LclVars.
