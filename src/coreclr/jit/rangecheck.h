@@ -928,8 +928,14 @@ private:
     // return "false". For example: CORINFO_Array_MaxLength for array length.
     bool GetLimitMax(Limit& limit, int* pMax);
 
+    // The minimum possible value of the given "limit", or "false" if it could not be determined.
+    bool GetLimitMin(Limit& limit, int* pMin);
+
     // Does the addition of the two limits overflow?
     bool AddOverflows(Limit& limit1, Limit& limit2);
+
+    // Can the addition of values bounded below by the two limits underflow?
+    bool AddUnderflows(Limit& limit1, Limit& limit2);
 
     // Does the multiplication of the two limits overflow?
     bool MultiplyOverflows(Limit& limit1, Limit& limit2);
