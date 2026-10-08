@@ -6116,6 +6116,13 @@ void Compiler::fgMorphRecursiveFastTailCallIntoLoop(BasicBlock* block, GenTreeCa
         fgInsertStmtBefore(block, paramAssignmentInsertionPoint, arg0StoreStmt);
     }
 
+    if (recursiveTailCall->NeedsNullCheck())
+    {
+        assert(!info.compIsStatic);
+        GenTree* nullCheck = gtNewNullCheck(gtNewLclVarNode(info.compThisArg));
+        fgInsertStmtBefore(block, lastStmt, gtNewStmt(nullCheck, callDI));
+    }
+
     // If compInitMem is set, we may need to zero-initialize some locals. Normally it's done in the prolog
     // but this loop can't include the prolog. Since we don't have liveness information, we insert zero-initialization
     // for all non-parameter IL locals as well as temp structs with GC fields.
