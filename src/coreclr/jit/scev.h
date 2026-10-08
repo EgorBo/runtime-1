@@ -45,12 +45,17 @@ enum class ScevVisit
 
 struct Scev
 {
+    static constexpr unsigned MaxTreeSize = 512;
+
     const ScevOper  Oper;
     const var_types Type;
+    // Count shared operands once per incoming edge to bound non-memoized tree walks.
+    const unsigned TreeSize;
 
-    Scev(ScevOper oper, var_types type)
+    Scev(ScevOper oper, var_types type, unsigned treeSize = 1)
         : Oper(oper)
         , Type(type)
+        , TreeSize(min(treeSize, MaxTreeSize + 1))
     {
     }
 
@@ -104,8 +109,8 @@ struct ScevLocal : Scev
 
 struct ScevUnop : Scev
 {
-    ScevUnop(ScevOper oper, var_types type, Scev* op1)
-        : Scev(oper, type)
+    ScevUnop(ScevOper oper, var_types type, Scev* op1, unsigned additionalTreeSize = 0)
+        : Scev(oper, type, 1 + op1->TreeSize + additionalTreeSize)
         , Op1(op1)
     {
     }
@@ -116,7 +121,7 @@ struct ScevUnop : Scev
 struct ScevBinop : ScevUnop
 {
     ScevBinop(ScevOper oper, var_types type, Scev* op1, Scev* op2)
-        : ScevUnop(oper, type, op1)
+        : ScevUnop(oper, type, op1, op2->TreeSize)
         , Op2(op2)
     {
     }
@@ -130,7 +135,7 @@ struct ScevBinop : ScevUnop
 struct ScevAddRec : Scev
 {
     ScevAddRec(var_types type, Scev* start, Scev* step DEBUGARG(FlowGraphNaturalLoop* loop))
-        : Scev(ScevOper::AddRec, type)
+        : Scev(ScevOper::AddRec, type, 1 + start->TreeSize + step->TreeSize)
         , Start(start)
         , Step(step) DEBUGARG(Loop(loop))
     {
@@ -226,6 +231,8 @@ class ScalarEvolutionContext
 
     Scev* Analyze(BasicBlock* block, GenTree* tree, int depth);
     Scev* AnalyzeNew(BasicBlock* block, GenTree* tree, int depth);
+    Scev* Simplify(Scev* scev, const SimplificationAssumptions& assumptions, unsigned& budget);
+    Scev* SimplifyNew(Scev* scev, const SimplificationAssumptions& assumptions, unsigned& budget);
     Scev* CreateSimpleAddRec(GenTreePhi* headerPhi, ScevLocal* start, BasicBlock* stepDefBlock, GenTree* stepDefData);
     Scev* MakeAddRecFromRecursiveScev(Scev* start, Scev* scev, Scev* recursiveScev);
     Scev* CreateSimpleInvariantScev(GenTree* tree);

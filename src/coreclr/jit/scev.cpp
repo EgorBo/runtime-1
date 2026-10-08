@@ -1012,6 +1012,11 @@ Scev* ScalarEvolutionContext::Analyze(BasicBlock* block, GenTree* tree, int dept
         }
 
         result = AnalyzeNew(block, tree, depth);
+        if ((result != nullptr) && (result->TreeSize > Scev::MaxTreeSize))
+        {
+            JITDUMP("SCEV tree size limit exceeded for [%06u]\n", Compiler::dspTreeID(tree));
+            result = nullptr;
+        }
 
         if (m_usingEphemeralCache)
         {
@@ -1077,6 +1082,24 @@ const SimplificationAssumptions ScalarEvolutionContext::NoAssumptions;
 //
 Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptions& assumptions)
 {
+    unsigned budget = Scev::MaxTreeSize * 4;
+    return Simplify(scev, assumptions, budget);
+}
+
+Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptions& assumptions, unsigned& budget)
+{
+    if ((budget == 0) || (scev->TreeSize > Scev::MaxTreeSize))
+    {
+        return scev;
+    }
+
+    budget--;
+    Scev* result = SimplifyNew(scev, assumptions, budget);
+    return result->TreeSize <= Scev::MaxTreeSize ? result : scev;
+}
+
+Scev* ScalarEvolutionContext::SimplifyNew(Scev* scev, const SimplificationAssumptions& assumptions, unsigned& budget)
+{
     switch (scev->Oper)
     {
         case ScevOper::Constant:
@@ -1100,7 +1123,7 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
             ScevUnop* unop = (ScevUnop*)scev;
             assert(genTypeSize(unop->Type) >= genTypeSize(unop->Op1->Type));
 
-            Scev* op1 = Simplify(unop->Op1, assumptions);
+            Scev* op1 = Simplify(unop->Op1, assumptions, budget);
 
             if (unop->Type == op1->Type)
             {
@@ -1131,8 +1154,8 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
                 //
                 if (!AddRecMayOverflow(addRec, unop->OperIs(ScevOper::SignExtend), assumptions))
                 {
-                    Scev* newStart = Simplify(NewExtension(unop->Oper, TYP_LONG, addRec->Start), assumptions);
-                    Scev* newStep  = Simplify(NewExtension(unop->Oper, TYP_LONG, addRec->Step), assumptions);
+                    Scev* newStart = Simplify(NewExtension(unop->Oper, TYP_LONG, addRec->Start), assumptions, budget);
+                    Scev* newStep  = Simplify(NewExtension(unop->Oper, TYP_LONG, addRec->Step), assumptions, budget);
                     return NewAddRec(newStart, newStep);
                 }
             }
@@ -1144,8 +1167,8 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
         case ScevOper::Lsh:
         {
             ScevBinop* binop = (ScevBinop*)scev;
-            Scev*      op1   = Simplify(binop->Op1, assumptions);
-            Scev*      op2   = Simplify(binop->Op2, assumptions);
+            Scev*      op1   = Simplify(binop->Op1, assumptions, budget);
+            Scev*      op2   = Simplify(binop->Op2, assumptions, budget);
 
             if (binop->OperIs(ScevOper::Add, ScevOper::Mul))
             {
@@ -1166,9 +1189,9 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
                 // <L, start, step> + x => <L, start + x, step>
                 // <L, start, step> * x => <L, start * x, step * x>
                 ScevAddRec* addRec   = (ScevAddRec*)op1;
-                Scev*       newStart = Simplify(NewBinop(binop->Oper, addRec->Start, op2), assumptions);
+                Scev*       newStart = Simplify(NewBinop(binop->Oper, addRec->Start, op2), assumptions, budget);
                 Scev*       newStep  = scev->OperIs(ScevOper::Mul, ScevOper::Lsh)
-                                           ? Simplify(NewBinop(binop->Oper, addRec->Step, op2), assumptions)
+                                           ? Simplify(NewBinop(binop->Oper, addRec->Step, op2), assumptions, budget)
                                            : addRec->Step;
                 return NewAddRec(newStart, newStep);
             }
@@ -1208,7 +1231,7 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
                     {
                         ScevBinop* newOp2 = NewBinop(ScevOper::Add, ((ScevBinop*)op1)->Op2, cns2);
                         ScevBinop* newAdd = NewBinop(ScevOper::Add, ((ScevBinop*)op1)->Op1, newOp2);
-                        return Simplify(newAdd, assumptions);
+                        return Simplify(newAdd, assumptions, budget);
                     }
                 }
 
@@ -1231,7 +1254,7 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
                     {
                         ScevBinop* newOp2 = NewBinop(ScevOper::Mul, ((ScevBinop*)op1)->Op2, cns2);
                         ScevBinop* newMul = NewBinop(ScevOper::Mul, ((ScevBinop*)op1)->Op1, newOp2);
-                        return Simplify(newMul, assumptions);
+                        return Simplify(newMul, assumptions, budget);
                     }
                 }
             }
@@ -1253,7 +1276,7 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
                     ScevBinop* newOp1 = NewBinop(ScevOper::Add, ((ScevBinop*)op1)->Op1, ((ScevBinop*)op2)->Op1);
                     ScevBinop* newOp2 = NewBinop(ScevOper::Add, ((ScevBinop*)op1)->Op2, ((ScevBinop*)op2)->Op2);
                     ScevBinop* newAdd = NewBinop(ScevOper::Add, newOp1, newOp2);
-                    return Simplify(newAdd, assumptions);
+                    return Simplify(newAdd, assumptions, budget);
                 }
             }
 
@@ -1262,8 +1285,8 @@ Scev* ScalarEvolutionContext::Simplify(Scev* scev, const SimplificationAssumptio
         case ScevOper::AddRec:
         {
             ScevAddRec* addRec = (ScevAddRec*)scev;
-            Scev*       start  = Simplify(addRec->Start, assumptions);
-            Scev*       step   = Simplify(addRec->Step, assumptions);
+            Scev*       start  = Simplify(addRec->Start, assumptions, budget);
+            Scev*       step   = Simplify(addRec->Step, assumptions, budget);
             return (start == addRec->Start) && (step == addRec->Step) ? addRec : NewAddRec(start, step);
         }
         default:
