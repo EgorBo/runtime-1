@@ -50,6 +50,7 @@ RangeCheck::RangeCheck(Compiler* pCompiler)
     : m_preferredBound(ValueNumStore::NoVN)
     , m_pRangeMap(nullptr)
     , m_pSearchPath(nullptr)
+    , m_pNonNegativeSearchPath(nullptr)
     , m_compiler(pCompiler)
     , m_alloc(pCompiler->getAllocator(CMK_RangeCheck))
     , m_nVisitBudget(MAX_VISIT_BUDGET)
@@ -80,13 +81,14 @@ void RangeCheck::ClearRangeMap()
     }
 }
 
-RangeCheck::SearchPath* RangeCheck::GetSearchPath()
+RangeCheck::SearchPath* RangeCheck::GetSearchPath(bool rejectNegativeConst)
 {
-    if (m_pSearchPath == nullptr)
+    SearchPath*& path = rejectNegativeConst ? m_pNonNegativeSearchPath : m_pSearchPath;
+    if (path == nullptr)
     {
-        m_pSearchPath = new (m_alloc) SearchPath(m_alloc);
+        path = new (m_alloc) SearchPath(m_alloc);
     }
-    return m_pSearchPath;
+    return path;
 }
 
 void RangeCheck::ClearSearchPath()
@@ -94,6 +96,10 @@ void RangeCheck::ClearSearchPath()
     if (m_pSearchPath != nullptr)
     {
         m_pSearchPath->RemoveAll();
+    }
+    if (m_pNonNegativeSearchPath != nullptr)
+    {
+        m_pNonNegativeSearchPath->RemoveAll();
     }
 }
 
@@ -311,7 +317,7 @@ void RangeCheck::Widen(BasicBlock* block, GenTree* tree, Range* pRange)
     }
 }
 
-bool RangeCheck::IsBinOpMonotonicallyIncreasing(GenTreeOp* binop)
+bool RangeCheck::IsBinOpMonotonicallyIncreasing(GenTreeOp* binop, bool rejectNegativeConst)
 {
     assert(binop->OperIs(GT_ADD));
 
@@ -345,7 +351,7 @@ bool RangeCheck::IsBinOpMonotonicallyIncreasing(GenTreeOp* binop)
                 return false;
             }
 
-            return IsMonotonicallyIncreasing(op1, false);
+            return IsMonotonicallyIncreasing(op1, rejectNegativeConst);
 
         default:
             JITDUMP("Not monotonically increasing because expression is not recognized.\n");
@@ -364,20 +370,23 @@ bool RangeCheck::IsMonotonicallyIncreasing(GenTree* expr, bool rejectNegativeCon
     }
     m_nVisitBudget--;
 
-    // Add hashtable entry for expr.
-    bool alreadyPresent = GetSearchPath()->Set(expr, nullptr, SearchPath::Overwrite);
+    // A cycle only discharges a proof with the same non-negativity requirement.
+    SearchPath* path           = GetSearchPath(rejectNegativeConst);
+    bool        alreadyPresent = path->Set(expr, nullptr, SearchPath::Overwrite);
     if (alreadyPresent)
     {
         return true;
     }
 
     // Remove hashtable entry for expr when we exit the present scope.
-    auto code = [this, expr] {
-        GetSearchPath()->Remove(expr);
+    auto code = [path, expr] {
+        path->Remove(expr);
     };
     jitstd::utility::scoped_code<decltype(code)> finally(code);
 
-    if (GetSearchPath()->GetCount() > MAX_SEARCH_DEPTH)
+    if (GetSearchPath()->GetCount() +
+            ((m_pNonNegativeSearchPath == nullptr) ? 0 : m_pNonNegativeSearchPath->GetCount()) >
+        MAX_SEARCH_DEPTH)
     {
         return false;
     }
@@ -405,14 +414,14 @@ bool RangeCheck::IsMonotonicallyIncreasing(GenTree* expr, bool rejectNegativeCon
     }
     else if (expr->OperIs(GT_ADD))
     {
-        return IsBinOpMonotonicallyIncreasing(expr->AsOp());
+        return IsBinOpMonotonicallyIncreasing(expr->AsOp(), rejectNegativeConst);
     }
     else if (expr->OperIs(GT_PHI))
     {
         for (GenTreePhi::Use& use : expr->AsPhi()->Uses())
         {
             // If the arg is already in the path, skip.
-            if (GetSearchPath()->Lookup(use.GetNode()))
+            if (path->Lookup(use.GetNode()))
             {
                 continue;
             }

@@ -952,7 +952,7 @@ private:
     void Widen(BasicBlock* block, GenTree* tree, Range* pRange);
 
     // Is the binary operation increasing the value.
-    bool IsBinOpMonotonicallyIncreasing(GenTreeOp* binop);
+    bool IsBinOpMonotonicallyIncreasing(GenTreeOp* binop, bool rejectNegativeConst);
 
     // Given an expression trace its value to check if it is monotonically increasing.
     bool IsMonotonicallyIncreasing(GenTree* tree, bool rejectNegativeConst);
@@ -973,9 +973,10 @@ private:
     void      ClearRangeMap();
     RangeMap* m_pRangeMap;
 
-    SearchPath* GetSearchPath();
+    SearchPath* GetSearchPath(bool rejectNegativeConst = false);
     void        ClearSearchPath();
     SearchPath* m_pSearchPath;
+    SearchPath* m_pNonNegativeSearchPath;
 
     Compiler*     m_compiler;
     CompAllocator m_alloc;
