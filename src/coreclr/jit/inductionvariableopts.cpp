@@ -1885,7 +1885,8 @@ void StrengthReductionContext::AdvanceCursors(ArrayStack<CursorInfo>* cursors, A
             nextCursor.Tree = cur->gtGetParent(nullptr);
 
             if ((nextCursor.Tree == nullptr) ||
-                (nextCursor.Tree->OperIs(GT_COMMA) && (nextCursor.Tree->gtGetOp1() == cur)))
+                (nextCursor.Tree->OperIs(GT_COMMA) && (nextCursor.Tree->gtGetOp1() == cur)) ||
+                nextCursor.Tree->gtOverflowEx())
             {
                 nextCursor.IV = nullptr;
                 break;
@@ -1950,7 +1951,8 @@ void StrengthReductionContext::ExpandStoredCursors(ArrayStack<CursorInfo>* curso
             GenTree*    cur    = cursor->Tree;
 
             GenTree* parent = cur->gtGetParent(nullptr);
-            if ((parent == nullptr) || (parent->OperIs(GT_COMMA) && (parent->gtGetOp1() == cur)))
+            if ((parent == nullptr) || (parent->OperIs(GT_COMMA) && (parent->gtGetOp1() == cur)) ||
+                parent->gtOverflowEx())
             {
                 break;
             }
