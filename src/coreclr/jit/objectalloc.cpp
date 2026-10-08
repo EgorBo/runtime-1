@@ -46,6 +46,7 @@ ObjectAllocator::ObjectAllocator(Compiler* comp)
     , m_HeapLocalToStackArrLocalMap(comp->getAllocator(CMK_ObjectAllocator))
     , m_ConnGraphAdjacencyMatrix(nullptr)
     , m_StackAllocMaxSize(0)
+    , m_stackAllocatedSize(0)
     , m_stackAllocationCount(0)
     , m_EnumeratorLocalToPseudoIndexMap(comp->getAllocator(CMK_ObjectAllocator))
     , m_CloneMap(comp->getAllocator(CMK_ObjectAllocator))
@@ -1257,6 +1258,21 @@ bool ObjectAllocator::CanAllocateLclVarOnStack(unsigned int         lclNum,
         return false;
     }
 
+    uint64_t stackSize = classSize;
+    if ((allocType == OAT_NEWOBJ) && m_compiler->info.compCompHnd->isValueClass(clsHnd))
+    {
+        stackSize += TARGET_POINTER_SIZE;
+    }
+    stackSize = AlignUp(stackSize, 8);
+
+    if (stackSize > m_StackAllocMaxSize - m_stackAllocatedSize)
+    {
+        *reason = "[method stack allocation budget exceeded]";
+        return false;
+    }
+
+    m_stackAllocatedSize += static_cast<unsigned>(stackSize);
+
     if (blockSize != nullptr)
     {
         *blockSize = classSize;
@@ -1325,6 +1341,7 @@ ObjectAllocator::ObjectAllocationType ObjectAllocator::AllocationKind(GenTree* t
 
 bool ObjectAllocator::MorphAllocObjNodes()
 {
+    m_stackAllocatedSize              = 0;
     m_stackAllocationCount            = 0;
     m_PossiblyStackPointingPointers   = BitVecOps::MakeEmpty(&m_bitVecTraits);
     m_DefinitelyStackPointingPointers = BitVecOps::MakeEmpty(&m_bitVecTraits);

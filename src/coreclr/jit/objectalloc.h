@@ -184,6 +184,7 @@ class ObjectAllocator final : public Phase
     LocalToLocalMap     m_HeapLocalToStackArrLocalMap;
     BitSetShortLongRep* m_ConnGraphAdjacencyMatrix;
     unsigned int        m_StackAllocMaxSize;
+    unsigned            m_stackAllocatedSize;
     unsigned            m_stackAllocationCount;
 
     // Info for conditionally-escaping locals
