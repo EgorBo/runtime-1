@@ -4861,7 +4861,9 @@ GenTree* Compiler::impIntrinsic(CORINFO_CLASS_HANDLE    clsHnd,
             case NI_System_Half_ReciprocalSqrtEstimate:
             {
 #if defined(TARGET_XARCH)
-                if (compOpportunisticallyDependsOn(InstructionSet_AVX10v1))
+                // VRCPSH/VRSQRTSH may differ from the MathF estimate used by the managed fallback, and
+                // results of estimate APIs must not depend on whether a call site was expanded.
+                if ((ni == NI_System_Half_Sqrt) && compOpportunisticallyDependsOn(InstructionSet_AVX10v1))
                 {
                     NamedIntrinsic opId = lookupHalfIntrinsic(ni);
                     assert(opId != NI_Illegal);
@@ -13346,10 +13348,6 @@ NamedIntrinsic Compiler::lookupHalfIntrinsic(NamedIntrinsic ni)
             return NI_AVX10v1_DivideScalar;
         case NI_System_Half_Sqrt:
             return NI_AVX10v1_SqrtScalar;
-        case NI_System_Half_ReciprocalEstimate:
-            return NI_AVX10v1_ReciprocalScalar;
-        case NI_System_Half_ReciprocalSqrtEstimate:
-            return NI_AVX10v1_ReciprocalSqrtScalar;
         case NI_System_Half_FusedMultiplyAdd:
             return NI_AVX10v1_FusedMultiplyAddScalar;
         // The System.Half comparison operators explicitly return false for NaN inputs, matching the
