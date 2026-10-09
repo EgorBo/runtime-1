@@ -2563,13 +2563,32 @@ AssertionIndex Compiler::optAssertionIsSubrange(GenTree* tree, IntegralRange ran
 //   objVN      - VN to check
 //   castToVN   - VN representing the type handle being cast to.
 //   assertions - set of live assertions
-//   budget     - limits the depth of recursion when chasing assertions across
-//                phi-def reaching VNs.
 //
 // Return Value:
 //   True if the VN is known to be a subtype of castTo.
 //
-bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions, int budget)
+bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions)
+{
+    VNSet phiResults(getAllocator(CMK_AssertionProp));
+    return optAssertionVNIsSubtype(objVN, castToVN, assertions, 10, &phiResults);
+}
+
+//------------------------------------------------------------------------
+// optAssertionVNIsSubtype: worker for the above.
+//
+// Arguments:
+//   objVN      - VN to check
+//   castToVN   - VN representing the type handle being cast to.
+//   assertions - set of live assertions
+//   budget     - limits the depth of recursion when chasing assertions across
+//                phi-def reaching VNs.
+//   phiResults - results of PHI walks done so far in this query
+//
+// Return Value:
+//   True if the VN is known to be a subtype of castTo.
+//
+bool Compiler::optAssertionVNIsSubtype(
+    ValueNum objVN, ValueNum castToVN, ASSERT_VALARG_TP assertions, int budget, VNSet* phiResults)
 {
     if ((budget <= 0) || (objVN == ValueNumStore::NoVN))
     {
@@ -2632,12 +2651,29 @@ bool Compiler::optAssertionVNIsSubtype(ValueNum objVN, ValueNum castToVN, ASSERT
         }
     }
 
-    // For PHI-defs, walk reaching assertions/VNs and recursively check.
-    return optVisitReachingAssertions(objVN,
-                                      [this, castToVN, budget](ValueNum reachingVN, ASSERT_TP reachingAssertions) {
-        return optAssertionVNIsSubtype(reachingVN, castToVN, reachingAssertions, budget - 1) ? AssertVisit::Continue
-                                                                                             : AssertVisit::Abort;
+    // For PHI-defs, walk reaching assertions/VNs and recursively check. The walk does not depend on
+    // "assertions", so share its result across all paths reaching the same PHI. A PHI being walked
+    // is recorded as unproven, which also stops cycles.
+    if (!vnStore->IsPhiDef(objVN))
+    {
+        return false;
+    }
+
+    bool proven;
+    if (phiResults->Lookup(objVN, &proven))
+    {
+        return proven;
+    }
+
+    phiResults->Set(objVN, false);
+    proven = optVisitReachingAssertions(objVN, [this, castToVN, budget, phiResults](ValueNum  reachingVN,
+                                                                                    ASSERT_TP reachingAssertions) {
+        return optAssertionVNIsSubtype(reachingVN, castToVN, reachingAssertions, budget - 1, phiResults)
+                   ? AssertVisit::Continue
+                   : AssertVisit::Abort;
     }) == AssertVisit::Continue;
+    phiResults->Set(objVN, proven, VNSet::Overwrite);
+    return proven;
 }
 
 //------------------------------------------------------------------------------
