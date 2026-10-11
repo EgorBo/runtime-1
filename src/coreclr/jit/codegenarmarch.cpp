@@ -2517,6 +2517,14 @@ void CodeGen::genCodeForInitBlkUnroll(GenTreeBlk* node)
         const int dstOffsetAdjustment = helper.GetDstOffset() - dstRegAddrAlignment;
         dstRegAddrAlignment           = 0;
 
+        if ((dstLclNum == BAD_VAR_NUM) && !node->gtBlkOpGcUnsafe)
+        {
+            // The adjusted address may be an unreported interior pointer, so mark the block as non-interruptible.
+            // Corresponding EnableGC() will be done by the caller of this method.
+            node->gtBlkOpGcUnsafe = true;
+            GetEmitter()->emitDisableGC();
+        }
+
         const regNumber tempReg = internalRegisters.Extract(node, RBM_ALLINT);
         genInstrWithConstant(INS_add, EA_PTRSIZE, tempReg, dstReg, dstOffsetAdjustment, tempReg);
         dstReg = tempReg;
@@ -4112,6 +4120,10 @@ void CodeGen::genCodeForStoreBlk(GenTreeBlk* blkOp)
             {
                 assert(!blkOp->gtBlkOpGcUnsafe);
                 genCodeForInitBlkUnroll(blkOp);
+                if (blkOp->gtBlkOpGcUnsafe)
+                {
+                    GetEmitter()->emitEnableGC();
+                }
             }
             break;
 
