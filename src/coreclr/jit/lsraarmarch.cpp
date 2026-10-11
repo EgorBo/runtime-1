@@ -348,7 +348,8 @@ int LinearScan::BuildPutArgStk(GenTreePutArgStk* argNode)
                 {
                     // Vector3 is read/written as two reads/writes: 8 byte and 4 byte.
                     // To assemble the vector properly we would need an additional int register.
-                    buildInternalIntRegisterDefForNode(use.GetNode());
+                    // It is used when storing the field (by this node), so it must belong to this node.
+                    buildInternalIntRegisterDefForNode(argNode);
                 }
 #endif // FEATURE_SIMD
             }

@@ -1956,7 +1956,7 @@ void CodeGen::genPutArgStkFieldList(GenTreePutArgStk* putArgStk, unsigned outArg
 #if defined(FEATURE_SIMD)
         if (type == TYP_SIMD12)
         {
-            GetEmitter()->emitStoreSimd12ToLclOffset(outArgVarNum, thisFieldOffset, reg, nextArgNode);
+            GetEmitter()->emitStoreSimd12ToLclOffset(outArgVarNum, thisFieldOffset, reg, putArgStk);
         }
         else
 #endif // FEATURE_SIMD
