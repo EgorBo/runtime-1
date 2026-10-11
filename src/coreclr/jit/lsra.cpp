@@ -13034,7 +13034,8 @@ void LinearScan::RegisterSelection::try_SPILL_COST()
         {
             continue;
         }
-        else if (assignedInterval != nullptr)
+        // A stale copyReg association (the interval now lives in another register) doesn't need a spill.
+        else if ((assignedInterval != nullptr) && (assignedInterval->assignedReg == spillCandidateRegRecord))
 #endif
         {
             if ((linearScan->getNextIntervalRef(spillCandidateRegNum, regType) == thisLocation) &&
@@ -13084,7 +13085,7 @@ void LinearScan::RegisterSelection::try_SPILL_COST()
             // any interval. But it is possible for certain scenarios. One of them is that
             // `refPosition` needs consecutive registers and we decided to pick a mix of free+busy
             // registers. This candidate is part of that set and is free and hence is not assigned
-            // to any interval.
+            // to any interval (or only holds a stale copy of an interval assigned to another register).
         }
 #endif // TARGET_ARM64
 
