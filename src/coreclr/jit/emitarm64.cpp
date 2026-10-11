@@ -6822,6 +6822,7 @@ void emitter::emitIns_R_R_R(instruction     ins,
 //     reg2     - Register 2
 //     reg3     - Register 3
 //     imm      - Immediate offset, prior to scaling by operand size
+//     isLclVar - Whether both registers are stored to/loaded from local variables (varx1/varx2)
 //     varx1    - LclVar number 1
 //     varx2    - LclVar number 2
 //     offs1    - Memory offset of lclvar number 1
@@ -6834,6 +6835,7 @@ void emitter::emitIns_R_R_R_I_LdStPair(instruction ins,
                                        regNumber   reg2,
                                        regNumber   reg3,
                                        ssize_t     imm,
+                                       bool        isLclVar,
                                        int         varx1,
                                        int         varx2,
                                        int         offs1,
@@ -6882,12 +6884,10 @@ void emitter::emitIns_R_R_R_I_LdStPair(instruction ins,
         }
     }
 
-    bool validVar1 = varx1 != -1;
-    bool validVar2 = varx2 != -1;
-
     instrDesc* id;
 
-    if (validVar1 && validVar2)
+    // Note: varx1/varx2 can't be compared against -1 to detect locals, since spill temps have negative numbers.
+    if (isLclVar)
     {
         id = emitNewInstrLclVarPair(attr, imm);
         id->idAddr()->iiaLclVar.initLclVarAddr(varx1, offs1);
@@ -6898,16 +6898,6 @@ void emitter::emitIns_R_R_R_I_LdStPair(instruction ins,
     else
     {
         id = emitNewInstrCns(attr, imm);
-        if (validVar1)
-        {
-            id->idAddr()->iiaLclVar.initLclVarAddr(varx1, offs1);
-            id->idSetIsLclVar();
-        }
-        if (validVar2)
-        {
-            id->idAddr()->iiaLclVar.initLclVarAddr(varx2, offs2);
-            id->idSetIsLclVar();
-        }
     }
 
     id->idIns(ins);
@@ -12798,7 +12788,6 @@ SKIP_GC_UPDATE:
                 {
                     assert(encodingZRtoSP(id->idReg3()) == REG_SP);
                 }
-                assert(varNum2 != -1);
 #endif // DEBUG
             }
             else
@@ -17674,6 +17663,13 @@ bool emitter::ReplaceLdrStrWithPairInstr(instruction ins,
         return false;
     }
 
+    // The pair instruction can only track GC liveness of stack slots if both accesses are to locals.
+    const bool isLastLclVar = emitLastIns->idIsLclVar();
+    if (isLastLclVar != isCurrLclVar)
+    {
+        return false;
+    }
+
     regNumber prevReg1 = emitLastIns->idReg1();
 #ifdef DEBUG
     unsigned prevVarRefsOffs = emitLastIns->idDebugOnlyInfo()->idVarRefOffs;
@@ -17689,11 +17685,10 @@ bool emitter::ReplaceLdrStrWithPairInstr(instruction ins,
     emitAttr prevReg1Attr;
     ssize_t  prevImmSize   = (emitLastIns->idInsFmt() == IF_LS_2C) ? prevImm : (prevImm * size);
     ssize_t  newImmSize    = (fmt == IF_LS_2C) ? imm : (imm * size);
-    bool     isLastLclVar  = emitLastIns->idIsLclVar();
     int      prevOffset    = -1;
     int      prevLclVarNum = -1;
 
-    if (emitLastIns->idIsLclVar())
+    if (isLastLclVar)
     {
         prevOffset    = emitLastIns->idAddr()->iiaLclVar.lvaOffset();
         prevLclVarNum = emitLastIns->idAddr()->iiaLclVar.lvaVarNum();
@@ -17731,13 +17726,15 @@ bool emitter::ReplaceLdrStrWithPairInstr(instruction ins,
 
     if (optimizationOrder == eRO_ascending)
     {
-        emitIns_R_R_R_I_LdStPair(optIns, prevReg1Attr, reg1Attr, prevReg1, reg1, reg2, prevImmSize, prevLclVarNum, varx,
-                                 prevOffset, offs DEBUG_ARG(prevVarRefsOffs) DEBUG_ARG(newVarRefsOffs));
+        emitIns_R_R_R_I_LdStPair(optIns, prevReg1Attr, reg1Attr, prevReg1, reg1, reg2, prevImmSize, isCurrLclVar,
+                                 prevLclVarNum, varx, prevOffset, offs DEBUG_ARG(prevVarRefsOffs)
+                                                                      DEBUG_ARG(newVarRefsOffs));
     }
     else
     {
-        emitIns_R_R_R_I_LdStPair(optIns, reg1Attr, prevReg1Attr, reg1, prevReg1, reg2, newImmSize, varx, prevLclVarNum,
-                                 offs, prevOffset DEBUG_ARG(newVarRefsOffs) DEBUG_ARG(prevVarRefsOffs));
+        emitIns_R_R_R_I_LdStPair(optIns, reg1Attr, prevReg1Attr, reg1, prevReg1, reg2, newImmSize, isCurrLclVar, varx,
+                                 prevLclVarNum, offs, prevOffset DEBUG_ARG(newVarRefsOffs)
+                                                          DEBUG_ARG(prevVarRefsOffs));
     }
 
     return true;
