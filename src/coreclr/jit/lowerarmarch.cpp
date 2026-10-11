@@ -1806,6 +1806,9 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
             // CreateScalarUnsafe operand into the negated fused-multiply variant, so the node must
             // survive for that fold to trigger.
             //
+            // By-indexed-element intrinsics are excluded as well: LSRA and codegen derive the lane bounds
+            // from the SIMD type of the indexed element operand.
+            //
             // Integral scalars still require an explicit fmov to move the value from a general-purpose
             // register into a SIMD register, so those keep the CreateScalarUnsafe node and fall
             // through to standard containment.
@@ -1818,8 +1821,14 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
                 LIR::Use use;
                 if (BlockRange().TryGetUse(node, &use))
                 {
-                    if (!use.User()->OperIsHWIntrinsic() ||
-                        (use.User()->AsHWIntrinsic()->GetHWIntrinsicId() == NI_AdvSimd_FusedMultiplyAddScalar))
+                    if (!use.User()->OperIsHWIntrinsic())
+                    {
+                        break;
+                    }
+
+                    NamedIntrinsic userId = use.User()->AsHWIntrinsic()->GetHWIntrinsicId();
+                    if ((userId == NI_AdvSimd_FusedMultiplyAddScalar) ||
+                        (HWIntrinsicInfo::lookupCategory(userId) == HW_Category_SIMDByIndexedElement))
                     {
                         break;
                     }
