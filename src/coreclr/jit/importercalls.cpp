@@ -654,6 +654,10 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
 
                 GenTree* thisPtr = impPopStack().val;
                 thisPtr          = impTransformThis(thisPtr, pConstrainedResolvedToken, callInfo->thisTransform);
+                if (compDonotInline())
+                {
+                    return TYP_UNDEF;
+                }
                 assert(thisPtr != nullptr);
 
                 GenTree* origThisPtr = thisPtr;
@@ -671,6 +675,10 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
                 }
 
                 GenTree* fptr = impImportLdvirtftn(thisPtr, pResolvedToken, callInfo);
+                if (compDonotInline())
+                {
+                    return TYP_UNDEF;
+                }
                 assert(fptr != nullptr);
 
                 call->AsCall()

@@ -2718,6 +2718,12 @@ GenTree* Compiler::impImportLdvirtftn(GenTree*                thisPtr,
     if ((pCallInfo->sig.sigInst.methInstCount != 0) && IsTargetAbi(CORINFO_NATIVEAOT_ABI))
     {
         GenTree* dispatchCell = impLookupToTree(&pCallInfo->codePointerLookup, GTF_ICON_FTN_ADDR, pCallInfo->hMethod);
+        if (dispatchCell == nullptr)
+        {
+            assert(compIsForInlining());
+            return nullptr;
+        }
+
         call = gtNewVirtualFunctionLookupHelperCallNode(CORINFO_HELP_GVMLOOKUP_FOR_SLOT, TYP_I_IMPL, thisPtr,
                                                         dispatchCell);
     }
