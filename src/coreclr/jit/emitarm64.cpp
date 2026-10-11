@@ -5921,7 +5921,7 @@ void emitter::emitIns_R_R_I(instruction     ins,
         }
 
         // Try to optimize a load/store with an alternative instruction.
-        if (isLdrStr && m_compiler->opts.OptimizationEnabled() &&
+        if (isLdrStr && insOptsNone(opt) && m_compiler->opts.OptimizationEnabled() &&
             OptimizeLdrStr(ins, attr, reg1, reg2, imm, size, fmt, false, -1, -1 DEBUG_ARG(false)))
         {
             return;
@@ -17606,6 +17606,12 @@ bool emitter::OptimizeLdrStr(instruction ins,
     assert(ins == INS_ldr || ins == INS_str);
 
     if (!emitCanPeepholeLastIns() || (emitLastIns->idIns() != ins))
+    {
+        return false;
+    }
+
+    // Pre/post-indexed forms also update the base register, so they can't be combined with or reused by this one.
+    if (insOptsIndexed(emitLastIns->idInsOpt()))
     {
         return false;
     }
