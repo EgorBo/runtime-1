@@ -17450,9 +17450,11 @@ bool emitter::IsRedundantMov(instruction ins, emitAttr size, regNumber dst, regN
         if ((prevDst == src) && (prevSrc == dst) && isValidLastInsFormats)
         {
             // For mov with EA_8BYTE, ensure src/dst are both scalar or both vector.
+            // A vector mov with EA_8BYTE also clears the upper bits of dst (which the opposite move didn't do),
+            // so it can only be skipped if the caller doesn't need that side effect.
             if (size == EA_8BYTE)
             {
-                if (isVectorRegister(src) == isVectorRegister(dst))
+                if ((isVectorRegister(src) == isVectorRegister(dst)) && (canSkip || !isVectorRegister(dst)))
                 {
                     JITDUMP("\n -- suppressing mov because previous instruction already did an opposite move from dst "
                             "to src register.\n");
