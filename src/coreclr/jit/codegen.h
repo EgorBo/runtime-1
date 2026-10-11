@@ -103,6 +103,9 @@ private:
     void genRangeCheck(GenTree* node);
 
     void genLockedInstructions(GenTreeOp* node);
+#ifdef TARGET_ARM64
+    regMaskTP genKeepGCRegLive(GenTree* op);
+#endif
 #ifdef TARGET_XARCH
     void genCodeForLockAdd(GenTreeOp* node);
 #endif
