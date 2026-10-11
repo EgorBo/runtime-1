@@ -2161,8 +2161,9 @@ void CodeGen::genHWIntrinsic(GenTreeHWIntrinsic* node)
 
                         // registers should be consecutive
                         assert(argReg == argNode->GetRegNum());
-                        // and they should not interfere with targetReg
-                        assert(targetReg != argReg);
+                        // and they should not interfere with targetReg, unless targetReg already holds op1
+                        // (LSRA allows a last-use table vector to share op1's register).
+                        assert((targetReg != argReg) || (targetReg == op1Reg));
                         argReg = getNextSIMDRegWithWraparound(argReg);
 #endif
                     }
