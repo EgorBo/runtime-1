@@ -1192,10 +1192,9 @@ void RangeCheck::MergeEdgeAssertionsWorker(Compiler*                        comp
         // Example: "(uint)(i + 2) < (uint)span.Length"
         if (canUseCheckedBounds && curAssertion.KindIs(Compiler::OAK_LT_UN) &&
             curAssertion.GetOp2().KindIs(Compiler::O2K_VN_ADD_CNS) &&
-            // Normally, checked bound doesn't directly imply non-negativity, so we check
-            // that explicitly here:
-            curAssertion.GetOp2().IsVNNeverNegative() && (curAssertion.GetOp2().GetVN() == preferredBoundVN) &&
-            (curAssertion.GetOp1().GetVN() != normalLclVN))
+            // Normally, checked bound doesn't directly imply non-negativity, but the preferred
+            // bound is the length of the bounds check being optimized:
+            (curAssertion.GetOp2().GetVN() == preferredBoundVN) && (curAssertion.GetOp1().GetVN() != normalLclVN))
         {
             ValueNum addOpVN;
             int      addOpCns;
@@ -1449,14 +1448,13 @@ void RangeCheck::MergeEdgeAssertionsWorker(Compiler*                        comp
             }
         }
         // Current assertion asserts a bounds check does not throw
-        else if (curAssertion.IsBoundsCheckNoThrow())
+        else if (curAssertion.IsBoundsCheckNoThrow(preferredBoundVN))
         {
             // IsBoundsCheckNoThrow is "op1VN (Idx) LT_UN op2VN (Len)"
             ValueNum indexVN = curAssertion.GetOp1().GetVN();
             ValueNum lenVN   = curAssertion.GetOp2().GetVN();
 
             assert(curAssertion.GetOp2().GetCns() == 0);
-            assert(curAssertion.GetOp2().IsVNNeverNegative());
 
             if (normalLclVN == indexVN)
             {

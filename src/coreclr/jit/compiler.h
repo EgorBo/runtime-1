@@ -8804,12 +8804,13 @@ public:
             return false;
         }
 
-        bool IsBoundsCheckNoThrow() const
+        bool IsBoundsCheckNoThrow(ValueNum nonNegativeLenVN = ValueNumStore::NoVN) const
         {
-            // O1K_VN (idx) u< O2K_VN_ADD_CNS (len) where len is never negative.
+            // O1K_VN (idx) u< O2K_VN_ADD_CNS (len) where len is never negative (or is nonNegativeLenVN,
+            // e.g. the length of the bounds check being optimized).
             // Effectively, it's "idx >= 0 && idx < len"
             return GetOp1().KindIs(O1K_VN) && KindIs(OAK_LT_UN) && GetOp2().KindIs(O2K_VN_ADD_CNS) &&
-                   (GetOp2().GetCns() == 0) && GetOp2().IsVNNeverNegative();
+                   (GetOp2().GetCns() == 0) && (GetOp2().IsVNNeverNegative() || (GetOp2().GetVN() == nonNegativeLenVN));
         }
 
         // Convert VNFunc to optAssertionKind
@@ -9214,7 +9215,10 @@ public:
 
         // Create a no-throw bounds check assertion: idxVN u< lenVN where lenVN is never negative
         // Effectively, this means "idxVN is in range [0, lenVN)".
-        static AssertionDsc CreateNoThrowArrBnd(const Compiler* comp, ValueNum idxVN, ValueNum lenVN)
+        static AssertionDsc CreateNoThrowArrBnd(const Compiler* comp,
+                                                ValueNum        idxVN,
+                                                ValueNum        lenVN,
+                                                bool            isVNNeverNegative = true)
         {
             assert(idxVN != ValueNumStore::NoVN);
             assert(lenVN != ValueNumStore::NoVN);
@@ -9227,8 +9231,8 @@ public:
             dsc.m_op2.m_vn      = lenVN;
 
             // Normally, the VN of an O2K_VN_ADD_CNS assertion isn't proven non-negative, but
-            // in this particular case we know it is (it's a length).
-            dsc.m_op2.m_isVNNeverNegative = true;
+            // for a bounds check we know it is (it's a length).
+            dsc.m_op2.m_isVNNeverNegative = isVNNeverNegative;
             dsc.m_op2.m_icon.m_iconVal    = 0;
             return dsc;
         }

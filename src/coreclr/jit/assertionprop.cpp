@@ -1958,7 +1958,14 @@ AssertionInfo Compiler::optCreateJTrueBoundsAssertion(GenTree* tree)
         ValueNum idxVN = vnStore->VNNormalValue(unsignedCompareBnd.vnIdx);
         ValueNum lenVN = vnStore->VNNormalValue(unsignedCompareBnd.vnBound);
 
-        AssertionDsc   dsc   = AssertionDsc::CreateNoThrowArrBnd(this, idxVN, lenVN);
+        // Unlike a real bounds check, a checked bound isn't necessarily non-negative on this path.
+        auto isNeverNegativeLen = [this, lenVN](GenTree* op) {
+            return (optConservativeNormalVN(op) == lenVN) && op->IsNeverNegative(this);
+        };
+        bool lenIsNeverNegative = vnStore->IsVNNeverNegative(lenVN) || isNeverNegativeLen(relop->gtGetOp1()) ||
+                                  isNeverNegativeLen(relop->gtGetOp2());
+
+        AssertionDsc   dsc   = AssertionDsc::CreateNoThrowArrBnd(this, idxVN, lenVN, lenIsNeverNegative);
         AssertionIndex index = optAddAssertion(dsc);
         if (unsignedCompareBnd.cmpOper == VNF_GE_UN)
         {
@@ -5488,13 +5495,12 @@ GenTree* Compiler::optAssertionProp_BndsChk(ASSERT_VALARG_TP assertions,
     {
         // If it is not a nothrow assertion, skip.
         const AssertionDsc& curAssertion = optGetAssertion(GetAssertionIndex(index));
-        if (!curAssertion.IsBoundsCheckNoThrow())
+        if (!curAssertion.IsBoundsCheckNoThrow(vnCurLen))
         {
             continue;
         }
 
         assert(curAssertion.GetOp2().GetCns() == 0);
-        assert(curAssertion.GetOp2().IsVNNeverNegative());
 
         // Do we have a previous range check involving the same 'vnLen' upper bound?
         if (curAssertion.GetOp2().GetVN() == vnCurLen)
