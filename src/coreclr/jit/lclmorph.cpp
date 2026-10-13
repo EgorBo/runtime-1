@@ -1506,7 +1506,9 @@ private:
         if ((callUser != nullptr) && m_compiler->IsValidLclAddr(lclNum, val.Offset()))
         {
             unsigned defSize = UINT_MAX;
-            if (callUser->gtArgs.HasRetBuffer() && (val.Node() == callUser->gtArgs.GetRetBufferArg()->GetNode()))
+            bool     isRetBuffer =
+                callUser->gtArgs.HasRetBuffer() && (val.Node() == callUser->gtArgs.GetRetBufferArg()->GetNode());
+            if (isRetBuffer)
             {
                 // We will only attempt this optimization for locals that do not
                 // later turn into indirections.
@@ -1523,8 +1525,6 @@ private:
 
                 if (isSuitableLocal)
                 {
-                    m_compiler->lvaSetHiddenBufferStructArg(lclNum);
-                    callUser->gtCallMoreFlags |= GTF_CALL_M_RETBUFFARG_LCLOPT;
                     defSize = m_compiler->typGetObjLayout(callUser->gtRetClsHnd)->GetSize();
                 }
             }
@@ -1537,8 +1537,14 @@ private:
                 }
             }
 
-            if (defSize != UINT_MAX)
+            if ((defSize != UINT_MAX) && !m_compiler->IsWideAccess(lclNum, val.Offset(), ValueSize(defSize)))
             {
+                if (isRetBuffer)
+                {
+                    m_compiler->lvaSetHiddenBufferStructArg(lclNum);
+                    callUser->gtCallMoreFlags |= GTF_CALL_M_RETBUFFARG_LCLOPT;
+                }
+
                 INDEBUG(varDsc->SetDefinedViaAddress(true));
                 escapeAddr = false;
                 defFlags   = GTF_VAR_DEF;
