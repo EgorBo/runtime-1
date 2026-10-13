@@ -1276,6 +1276,28 @@ void CallArgs::SortArgs(Compiler* comp, GenTreeCall* call, CallArg** sortedArgs)
     // Finally, take care of all the remaining arguments.
     // Note that we fill in one arg at a time using a while loop.
     bool costsPrepared = false; // Only prepare tree costs once, the first time through this loop
+
+    // An arg with GTF_ORDER_SIDEEFF may rely on exceptions of earlier args (e.g. its null check was
+    // removed thanks to an earlier indirection), so it can't be evaluated before them.
+    auto dependsOnEarlierArgs = [this](CallArg* arg) {
+        if ((arg->GetEarlyNode()->gtFlags & GTF_ORDER_SIDEEFF) == 0)
+        {
+            return false;
+        }
+        for (CallArg& prevArg : Args())
+        {
+            if (&prevArg == arg)
+            {
+                break;
+            }
+            if (!prevArg.m_processed && ((prevArg.GetEarlyNode()->gtFlags & GTF_EXCEPT) != 0))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
     while (argsRemaining > 0)
     {
         /* Find the most expensive arg remaining and evaluate it next */
@@ -1320,7 +1342,7 @@ void CallArgs::SortArgs(Compiler* comp, GenTreeCall* call, CallArg** sortedArgs)
                         comp->gtPrepareCost(argx);
                     }
 
-                    if (argx->GetCostEx() > expensiveArgCost)
+                    if ((argx->GetCostEx() > expensiveArgCost) && !dependsOnEarlierArgs(arg))
                     {
                         // Remember this arg as the most expensive one that we have yet seen
                         expensiveArgCost  = argx->GetCostEx();
@@ -1328,7 +1350,7 @@ void CallArgs::SortArgs(Compiler* comp, GenTreeCall* call, CallArg** sortedArgs)
                         expensiveArg      = arg;
                     }
                 }
-                else
+                else if (!dependsOnEarlierArgs(arg))
                 {
                     // We don't have cost information in MinOpts
                     expensiveArgIndex = curInx;
