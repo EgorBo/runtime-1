@@ -2318,6 +2318,12 @@ bool Compiler::fgTryMorphStructArg(CallArg* arg)
             assert(varTypeIsSIMD(argNode) && varTypeIsSIMD(arg->GetSignatureType()));
         }
 
+        GenTree*       addrSpillStore  = nullptr;
+        unsigned       addrSpillTemp   = BAD_VAR_NUM;
+        var_types      addrSpillType   = TYP_UNDEF;
+        target_ssize_t addrSpillOffs   = 0;
+        FieldSeq*      addrSpillFldSeq = nullptr;
+
         if (argNode->OperIsLoad())
         {
             unsigned lastLoadSize = structSize % TARGET_POINTER_SIZE;
@@ -2328,11 +2334,24 @@ bool Compiler::fgTryMorphStructArg(CallArg* arg)
             }
 
             GenTree* indirAddr = argNode->AsIndir()->Addr();
-            if (((indirAddr->gtFlags & GTF_PERSISTENT_SIDE_EFFECTS) != 0) &&
-                (arg->AbiInfo.CountRegsAndStackSlots() > 1))
+            if (arg->AbiInfo.CountRegsAndStackSlots() > 1)
             {
-                // Cannot create multiple uses of the address. Bail.
-                return false;
+                if ((indirAddr->gtFlags & GTF_PERSISTENT_SIDE_EFFECTS) != 0)
+                {
+                    // Cannot create multiple uses of the address. Bail.
+                    return false;
+                }
+
+                if ((indirAddr->gtFlags & GTF_GLOB_REF) != 0)
+                {
+                    // The address reads memory so it must be evaluated only once: spill its base to a temp.
+                    GenTree* addrBase = indirAddr;
+                    gtPeelOffsets(&addrBase, &addrSpillOffs, &addrSpillFldSeq);
+
+                    addrSpillType  = addrBase->TypeGet();
+                    addrSpillTemp  = lvaGrabTemp(true DEBUGARG("Struct argument address"));
+                    addrSpillStore = gtNewTempStore(addrSpillTemp, addrBase);
+                }
             }
         }
 
@@ -2415,7 +2434,20 @@ bool Compiler::fgTryMorphStructArg(CallArg* arg)
                 GenTree* indirAddr = argNode->AsIndir()->Addr();
                 GenTree* addr;
 
-                if (offset == 0)
+                if (addrSpillTemp != BAD_VAR_NUM)
+                {
+                    addr = gtNewLclvNode(addrSpillTemp, addrSpillType);
+
+                    target_ssize_t fullOffs = addrSpillOffs + (target_ssize_t)offset;
+                    if ((fullOffs != 0) || (addrSpillFldSeq != nullptr))
+                    {
+                        GenTreeIntCon* offsetNode = gtNewIconNode(fullOffs, TYP_I_IMPL);
+                        offsetNode->SetFieldSeq(addrSpillFldSeq);
+                        addr = gtNewOperNode(GT_ADD, varTypeIsGC(addrSpillType) ? TYP_BYREF : TYP_I_IMPL, addr,
+                                             offsetNode);
+                    }
+                }
+                else if (offset == 0)
                 {
                     addr = indirAddr;
                 }
@@ -2454,6 +2486,11 @@ bool Compiler::fgTryMorphStructArg(CallArg* arg)
         }
 
         newArg = newArg->AsFieldList()->SoleFieldOrThis();
+
+        if (addrSpillStore != nullptr)
+        {
+            newArg = gtNewOperNode(GT_COMMA, newArg->TypeGet(), addrSpillStore, newArg);
+        }
     }
 
     JITDUMP("fgTryMorphStructArg created tree:\n");
