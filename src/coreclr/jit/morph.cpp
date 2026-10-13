@@ -13594,6 +13594,9 @@ void Compiler::fgMorphStmts(BasicBlock* block)
         compCurStmt      = stmt;
         GenTree* oldTree = stmt->GetRootNode();
 
+        // Morphing can insert statements before "stmt" (e.g. a multi-reg return temp store).
+        Statement* const prevStmt = (stmt == block->firstStmt()) ? nullptr : stmt->GetPrevStmt();
+
         if (optLocalAssertionProp)
         {
             BitVecOps::Assign(apTraits, apLocalPostorder, apLocal);
@@ -13692,10 +13695,30 @@ void Compiler::fgMorphStmts(BasicBlock* block)
         {
             fgHasNoReturnCall = false;
 
-            if ((fgGetTopLevelQmark(stmt->GetRootNode()) == nullptr) && gtRemoveTreesAfterNoReturnCall(block, stmt))
+            // The no-return call may be in a statement inserted before "stmt", in which case "stmt" is dead too.
+            Statement* noReturnStmt = (prevStmt == nullptr) ? block->firstStmt() : prevStmt->GetNextStmt();
+            while (true)
             {
-                fgRemoveRestOfBlock = true;
-                morphedTree         = stmt->GetRootNode();
+                if ((fgGetTopLevelQmark(noReturnStmt->GetRootNode()) == nullptr) &&
+                    gtRemoveTreesAfterNoReturnCall(block, noReturnStmt))
+                {
+                    fgRemoveRestOfBlock = true;
+                    morphedTree         = noReturnStmt->GetRootNode();
+
+                    Statement* const nextStmt = stmt->GetNextStmt();
+                    while (noReturnStmt->GetNextStmt() != nextStmt)
+                    {
+                        fgRemoveStmt(block, noReturnStmt->GetNextStmt());
+                    }
+                    break;
+                }
+
+                if (noReturnStmt == stmt)
+                {
+                    break;
+                }
+
+                noReturnStmt = noReturnStmt->GetNextStmt();
             }
         }
 
