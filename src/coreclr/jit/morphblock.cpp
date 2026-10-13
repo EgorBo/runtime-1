@@ -1356,6 +1356,11 @@ GenTree* MorphCopyBlockHelper::CopyFieldByField()
                 noway_assert(m_dstVarDsc != nullptr);
                 noway_assert(addrSpill == nullptr);
 
+                if (m_compiler->lvaGetDesc(m_dstLclNum)->lvNormalizeOnStore())
+                {
+                    srcFld = m_compiler->fgMorphTree(srcFld);
+                }
+
                 dstFldStore = m_compiler->gtNewStoreLclVarNode(m_dstLclNum, srcFld);
             }
             else
