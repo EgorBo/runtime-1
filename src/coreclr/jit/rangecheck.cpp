@@ -50,6 +50,7 @@ RangeCheck::RangeCheck(Compiler* pCompiler)
     : m_preferredBound(ValueNumStore::NoVN)
     , m_pRangeMap(nullptr)
     , m_pSearchPath(nullptr)
+    , m_pMonotonicPath(nullptr)
     , m_compiler(pCompiler)
     , m_alloc(pCompiler->getAllocator(CMK_RangeCheck))
     , m_nVisitBudget(MAX_VISIT_BUDGET)
@@ -95,6 +96,15 @@ void RangeCheck::ClearSearchPath()
     {
         m_pSearchPath->RemoveAll();
     }
+}
+
+RangeCheck::MonotonicPath* RangeCheck::GetMonotonicPath()
+{
+    if (m_pMonotonicPath == nullptr)
+    {
+        m_pMonotonicPath = new (m_alloc) MonotonicPath(m_alloc);
+    }
+    return m_pMonotonicPath;
 }
 
 // Get the length of the array vn, if it is new.
@@ -364,20 +374,31 @@ bool RangeCheck::IsMonotonicallyIncreasing(GenTree* expr, bool rejectNegativeCon
     }
     m_nVisitBudget--;
 
-    // Add hashtable entry for expr.
-    bool alreadyPresent = GetSearchPath()->Set(expr, nullptr, SearchPath::Overwrite);
-    if (alreadyPresent)
+    // A cycle back to expr is fine unless expr is on the path with a weaker requirement:
+    // then it has to be re-checked with rejectNegativeConst (e.g. for its seed values).
+    MonotonicPath* path                    = GetMonotonicPath();
+    bool           prevRejectNegativeConst = false;
+    bool           alreadyPresent          = path->Lookup(expr, &prevRejectNegativeConst);
+    if (alreadyPresent && (prevRejectNegativeConst || !rejectNegativeConst))
     {
         return true;
     }
+    path->Set(expr, rejectNegativeConst, MonotonicPath::Overwrite);
 
-    // Remove hashtable entry for expr when we exit the present scope.
-    auto code = [this, expr] {
-        GetSearchPath()->Remove(expr);
+    // Restore hashtable entry for expr when we exit the present scope.
+    auto code = [path, expr, alreadyPresent] {
+        if (alreadyPresent)
+        {
+            path->Set(expr, false, MonotonicPath::Overwrite);
+        }
+        else
+        {
+            path->Remove(expr);
+        }
     };
     jitstd::utility::scoped_code<decltype(code)> finally(code);
 
-    if (GetSearchPath()->GetCount() > MAX_SEARCH_DEPTH)
+    if (path->GetCount() > MAX_SEARCH_DEPTH)
     {
         return false;
     }
@@ -411,11 +432,6 @@ bool RangeCheck::IsMonotonicallyIncreasing(GenTree* expr, bool rejectNegativeCon
     {
         for (GenTreePhi::Use& use : expr->AsPhi()->Uses())
         {
-            // If the arg is already in the path, skip.
-            if (GetSearchPath()->Lookup(use.GetNode()))
-            {
-                continue;
-            }
             if (!IsMonotonicallyIncreasing(use.GetNode(), rejectNegativeConst))
             {
                 JITDUMP("Phi argument not monotonically increasing\n");

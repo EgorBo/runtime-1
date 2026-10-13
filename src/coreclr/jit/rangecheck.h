@@ -860,6 +860,7 @@ public:
 private:
     typedef JitHashTable<GenTree*, JitPtrKeyFuncs<GenTree>, Range*>      RangeMap;
     typedef JitHashTable<GenTree*, JitPtrKeyFuncs<GenTree>, BasicBlock*> SearchPath;
+    typedef JitHashTable<GenTree*, JitPtrKeyFuncs<GenTree>, bool>        MonotonicPath;
 
     // Cheaper version of TryGetRange that is based only on incoming assertions.
     static Range GetRangeFromAssertionsWorker(Compiler*                        comp,
@@ -976,6 +977,10 @@ private:
     SearchPath* GetSearchPath();
     void        ClearSearchPath();
     SearchPath* m_pSearchPath;
+
+    // Nodes on the current IsMonotonicallyIncreasing path, mapped to their rejectNegativeConst mode.
+    MonotonicPath* GetMonotonicPath();
+    MonotonicPath* m_pMonotonicPath;
 
     Compiler*     m_compiler;
     CompAllocator m_alloc;
