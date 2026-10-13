@@ -13155,8 +13155,15 @@ bool Compiler::fgGetStaticFieldSeqAndAddress(ValueNumStore* vnStore,
     // where CNS_INT has field sequence corresponding to field's offset
     if (tree->OperIs(GT_ADD) && tree->gtGetOp2()->IsCnsIntOrI() && !tree->gtGetOp2()->IsIconHandle())
     {
+        GenTree*       base = tree->gtGetOp1();
         GenTreeIntCon* cns2 = tree->gtGetOp2()->AsIntCon();
-        if ((cns2->GetFieldSeq() != nullptr) && (cns2->GetFieldSeq()->GetKind() == FieldSeq::FieldKind::SimpleStatic))
+
+        const bool isStaticBase =
+            base->IsIconHandle(GTF_ICON_STATIC_HDL) ||
+            (base->OperIs(GT_IND) && base->AsIndir()->Addr()->IsIconHandle(GTF_ICON_STATIC_ADDR_PTR));
+
+        if (isStaticBase && (cns2->GetFieldSeq() != nullptr) &&
+            (cns2->GetFieldSeq()->GetKind() == FieldSeq::FieldKind::SimpleStatic))
         {
             *byteOffset = cns2->IconValue() - cns2->GetFieldSeq()->GetOffset();
             *pFseq      = cns2->GetFieldSeq();
