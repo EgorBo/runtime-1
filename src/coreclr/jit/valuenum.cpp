@@ -3547,7 +3547,7 @@ TailCall:
     MapSelectWorkCacheEntry entry;
 
     VNDefFuncApp<2> fstruct(VNF_MapSelect, map, index);
-    if (GetMapSelectWorkCache()->Lookup(fstruct, &entry))
+    if (GetMapSelectWorkCache(vnk)->Lookup(fstruct, &entry))
     {
         entry.GetMemoryDependencies(m_compiler, memoryDependencies);
         return entry.Result;
@@ -3571,7 +3571,7 @@ TailCall:
         // the IR may "evaluate" to this same VNForExpr, so it is not "unique" in the sense
         // that permits the BasicBlock attribution.
         entry.Result = VNForExpr(nullptr, type);
-        GetMapSelectWorkCache()->Set(fstruct, entry);
+        GetMapSelectWorkCache(vnk)->Set(fstruct, entry);
         return entry.Result;
     }
 
@@ -3795,7 +3795,7 @@ TailCall:
                     // If we ran out of budget we could have already cached the
                     // result in the leaf. In that case it is ok to overwrite
                     // it here.
-                    MapSelectWorkCache* cache = GetMapSelectWorkCache();
+                    MapSelectWorkCache* cache = GetMapSelectWorkCache(vnk);
                     assert(!cache->Lookup(fstruct) || ((*cache)[fstruct].Result == sameSelResult));
                     cache->Set(fstruct, entry, MapSelectWorkCache::Overwrite);
                 }
@@ -3812,7 +3812,7 @@ TailCall:
     }
 
     // We may have run out of budget and already assigned a result
-    if (!GetMapSelectWorkCache()->Lookup(fstruct, &entry))
+    if (!GetMapSelectWorkCache(vnk)->Lookup(fstruct, &entry))
     {
         // Otherwise, assign a new VN for the function application.
         Chunk* const          c                 = GetAllocChunk(type, CEA_Func2);
@@ -3825,7 +3825,7 @@ TailCall:
         entry.Result = c->m_baseVN + offsetWithinChunk;
         entry.SetMemoryDependencies(m_compiler, recMemoryDependencies);
 
-        GetMapSelectWorkCache()->Set(fstruct, entry);
+        GetMapSelectWorkCache(vnk)->Set(fstruct, entry);
     }
 
     recMemoryDependencies.ForEach([this, &memoryDependencies](ValueNum vn) {

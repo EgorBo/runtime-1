@@ -2242,14 +2242,16 @@ private:
     };
 
     typedef JitHashTable<VNDefFuncApp<2>, VNDefFuncAppKeyFuncs<2>, MapSelectWorkCacheEntry> MapSelectWorkCache;
-    MapSelectWorkCache* m_mapSelectWorkCache = nullptr;
-    MapSelectWorkCache* GetMapSelectWorkCache()
+    // Selecting from a PHI reads the phi args' VNs of the requested kind, so results are cached per kind.
+    MapSelectWorkCache* m_mapSelectWorkCache[2] = {};
+    MapSelectWorkCache* GetMapSelectWorkCache(ValueNumKind vnk)
     {
-        if (m_mapSelectWorkCache == nullptr)
+        MapSelectWorkCache*& cache = m_mapSelectWorkCache[vnk == VNK_Liberal ? 0 : 1];
+        if (cache == nullptr)
         {
-            m_mapSelectWorkCache = new (m_alloc) MapSelectWorkCache(m_alloc);
+            cache = new (m_alloc) MapSelectWorkCache(m_alloc);
         }
-        return m_mapSelectWorkCache;
+        return cache;
     }
 
     // We reserve Chunk 0 for "special" VNs.
