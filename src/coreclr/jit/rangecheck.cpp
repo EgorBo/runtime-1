@@ -2056,6 +2056,40 @@ bool RangeCheck::AddOverflows(Limit& limit1, Limit& limit2)
     return IntAddOverflows(max1, max2);
 }
 
+// Get the limit's minimum possible value.
+bool RangeCheck::GetLimitMin(Limit& limit, int* pMin)
+{
+    if (limit.IsConstant())
+    {
+        *pMin = limit.GetConstant();
+        return true;
+    }
+
+    // "$bnd + cns" is at least "cns" when $bnd is never negative (and cns <= 0, so the addition doesn't wrap).
+    if (limit.IsBinOpArray() && (limit.GetConstant() <= 0) && m_compiler->vnStore->IsVNNeverNegative(limit.vn))
+    {
+        *pMin = limit.GetConstant();
+        return true;
+    }
+    return false;
+}
+
+// Check if the addition of values bounded below by the limits may underflow.
+bool RangeCheck::AddUnderflows(Limit& limit1, Limit& limit2)
+{
+    int  min1;
+    int  min2;
+    bool known1 = GetLimitMin(limit1, &min1);
+    bool known2 = GetLimitMin(limit2, &min2);
+
+    // Adding a non-negative value never underflows.
+    if ((known1 && (min1 >= 0)) || (known2 && (min2 >= 0)))
+    {
+        return false;
+    }
+    return !known1 || !known2 || IntAddOverflows(min1, min2);
+}
+
 // Check if the arithmetic overflows.
 bool RangeCheck::MultiplyOverflows(Limit& limit1, Limit& limit2)
 {
@@ -2108,7 +2142,14 @@ bool RangeCheck::DoesBinOpOverflow(BasicBlock* block, GenTreeOp* binop, const Ra
 
     if (binop->OperIs(GT_ADD))
     {
-        return AddOverflows(op1Range->UpperLimit(), op2Range->UpperLimit());
+        if (AddOverflows(op1Range->UpperLimit(), op2Range->UpperLimit()))
+        {
+            return true;
+        }
+
+        // Adding a never negative value can't underflow.
+        return !op1->IsNeverNegative(m_compiler) && !op2->IsNeverNegative(m_compiler) &&
+               AddUnderflows(op1Range->LowerLimit(), op2Range->LowerLimit());
     }
     if (binop->OperIs(GT_MUL))
     {
