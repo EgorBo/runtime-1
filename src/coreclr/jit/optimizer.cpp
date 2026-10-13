@@ -4984,103 +4984,137 @@ void Compiler::optHoistCandidate(
 
 bool Compiler::optVNIsLoopInvariant(ValueNum vn, FlowGraphNaturalLoop* loop, VNSet* loopVnInvariantCache)
 {
-    // If it is not a VN, is not loop-invariant.
-    if (vn == ValueNumStore::NoVN)
-    {
-        return false;
-    }
-
-    // We'll always short-circuit constants.
-    if (vnStore->IsVNConstant(vn) || vn == vnStore->VNForVoid())
-    {
-        return true;
-    }
-
-    // If we've done this query previously, don't repeat.
-    bool previousRes = false;
-    if (loopVnInvariantCache->Lookup(vn, &previousRes))
-    {
-        return previousRes;
-    }
-
-    bool           res = true;
-    VNFuncApp      funcApp;
-    VNPhiDef       phiDef;
-    VNMemoryPhiDef memoryPhiDef;
-    if (vnStore->GetVNFunc(vn, &funcApp))
-    {
-        if (funcApp.FuncIs(VNF_MemOpaque))
+    // Gets the result for a VN if it's known without looking at its args.
+    auto tryGetKnownResult = [this, loopVnInvariantCache](ValueNum vn, bool* pRes) {
+        // If it is not a VN, is not loop-invariant.
+        if (vn == ValueNumStore::NoVN)
         {
-            const unsigned loopIndex = funcApp.GetArg(0);
+            *pRes = false;
+            return true;
+        }
 
-            // Check for the special "ambiguous" loop index.
-            // This is considered variant in every loop.
-            //
-            if (loopIndex == ValueNumStore::UnknownLoop)
+        // We'll always short-circuit constants.
+        if (vnStore->IsVNConstant(vn) || (vn == vnStore->VNForVoid()))
+        {
+            *pRes = true;
+            return true;
+        }
+
+        // If we've done this query previously, don't repeat.
+        return loopVnInvariantCache->Lookup(vn, pRes);
+    };
+
+    bool res = false;
+    if (tryGetKnownResult(vn, &res))
+    {
+        return res;
+    }
+
+    // VN chains can be very deep, so use an explicit stack instead of recursion: a VN is
+    // evaluated once the results for the args it needs are cached.
+    ArrayStack<ValueNum> stack(getAllocator(CMK_LoopHoist));
+    stack.Push(vn);
+
+    while (!stack.Empty())
+    {
+        ValueNum       curVN        = stack.Top();
+        ValueNum       pendingArgVN = ValueNumStore::NoVN;
+        bool           curRes       = true;
+        VNFuncApp      funcApp;
+        VNPhiDef       phiDef;
+        VNMemoryPhiDef memoryPhiDef;
+        if (vnStore->GetVNFunc(curVN, &funcApp))
+        {
+            if (funcApp.FuncIs(VNF_MemOpaque))
             {
-                res = false;
-            }
-            else if (loopIndex == ValueNumStore::NoLoop)
-            {
-                res = true;
+                const unsigned loopIndex = funcApp.GetArg(0);
+
+                // Check for the special "ambiguous" loop index.
+                // This is considered variant in every loop.
+                //
+                if (loopIndex == ValueNumStore::UnknownLoop)
+                {
+                    curRes = false;
+                }
+                else if (loopIndex == ValueNumStore::NoLoop)
+                {
+                    curRes = true;
+                }
+                else
+                {
+                    FlowGraphNaturalLoop* otherLoop = m_loops->GetLoopByIndex(loopIndex);
+                    assert(otherLoop != nullptr);
+                    curRes = !loop->ContainsLoop(otherLoop);
+                }
             }
             else
             {
-                FlowGraphNaturalLoop* otherLoop = m_loops->GetLoopByIndex(loopIndex);
-                assert(otherLoop != nullptr);
-                res = !loop->ContainsLoop(otherLoop);
-            }
-        }
-        else
-        {
-            for (unsigned i = 0; i < funcApp.GetArity(); i++)
-            {
-                // 4th arg of mapStore identifies the loop where the store happens.
-                //
-                if (funcApp.FuncIs(VNF_MapStore))
+                for (unsigned i = 0; i < funcApp.GetArity(); i++)
                 {
-                    assert(funcApp.GetArity() == 4);
-
-                    if (i == 3)
+                    // 4th arg of mapStore identifies the loop where the store happens.
+                    //
+                    if (funcApp.FuncIs(VNF_MapStore))
                     {
-                        const unsigned loopIndex = funcApp.GetArg(3);
-                        assert((loopIndex == ValueNumStore::NoLoop) || (loopIndex < m_loops->NumLoops()));
-                        if (loopIndex == ValueNumStore::NoLoop)
+                        assert(funcApp.GetArity() == 4);
+
+                        if (i == 3)
                         {
-                            res = true;
+                            const unsigned loopIndex = funcApp.GetArg(3);
+                            assert((loopIndex == ValueNumStore::NoLoop) || (loopIndex < m_loops->NumLoops()));
+                            if (loopIndex == ValueNumStore::NoLoop)
+                            {
+                                curRes = true;
+                            }
+                            else
+                            {
+                                FlowGraphNaturalLoop* otherLoop = m_loops->GetLoopByIndex(loopIndex);
+                                curRes                          = !loop->ContainsLoop(otherLoop);
+                            }
+                            break;
                         }
-                        else
-                        {
-                            FlowGraphNaturalLoop* otherLoop = m_loops->GetLoopByIndex(loopIndex);
-                            res                             = !loop->ContainsLoop(otherLoop);
-                        }
+                    }
+
+                    // TODO-CQ: We need to either make sure that *all* VN functions
+                    // always take VN args, or else have a list of arg positions to exempt, as implicitly
+                    // constant.
+                    bool argRes;
+                    if (!tryGetKnownResult(funcApp.GetArg(i), &argRes))
+                    {
+                        pendingArgVN = funcApp.GetArg(i);
+                        break;
+                    }
+
+                    if (!argRes)
+                    {
+                        curRes = false;
                         break;
                     }
                 }
-
-                // TODO-CQ: We need to either make sure that *all* VN functions
-                // always take VN args, or else have a list of arg positions to exempt, as implicitly
-                // constant.
-                if (!optVNIsLoopInvariant(funcApp.GetArg(i), loop, loopVnInvariantCache))
-                {
-                    res = false;
-                    break;
-                }
             }
         }
-    }
-    else if (vnStore->GetPhiDef(vn, &phiDef))
-    {
-        // Is the definition within the loop?  If so, is not loop-invariant.
-        LclSsaVarDsc* ssaDef = lvaTable[phiDef.LclNum].GetPerSsaData(phiDef.SsaDef);
-        res                  = !loop->ContainsBlock(ssaDef->GetBlock());
-    }
-    else if (vnStore->GetMemoryPhiDef(vn, &memoryPhiDef))
-    {
-        res = !loop->ContainsBlock(memoryPhiDef.Block);
+        else if (vnStore->GetPhiDef(curVN, &phiDef))
+        {
+            // Is the definition within the loop?  If so, is not loop-invariant.
+            LclSsaVarDsc* ssaDef = lvaTable[phiDef.LclNum].GetPerSsaData(phiDef.SsaDef);
+            curRes               = !loop->ContainsBlock(ssaDef->GetBlock());
+        }
+        else if (vnStore->GetMemoryPhiDef(curVN, &memoryPhiDef))
+        {
+            curRes = !loop->ContainsBlock(memoryPhiDef.Block);
+        }
+
+        if (pendingArgVN != ValueNumStore::NoVN)
+        {
+            // Evaluate the arg first, then revisit curVN.
+            stack.Push(pendingArgVN);
+            continue;
+        }
+
+        loopVnInvariantCache->Set(curVN, curRes);
+        stack.Pop();
+        res = curRes;
     }
 
-    loopVnInvariantCache->Set(vn, res);
     return res;
 }
 
