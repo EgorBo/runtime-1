@@ -506,13 +506,21 @@ BasicBlockVisit BasicBlock::VisitEHEnclosedHandlerSecondPassSuccs(Compiler* comp
         // for the enclosed region's handler.
         if (isEnclosed)
         {
-            if (inTry)
-            {
-                EHblkDsc* enclosedHBtab = comp->ehGetDsc(index);
+            EHblkDsc* enclosedHBtab = comp->ehGetDsc(index);
 
-                if (enclosedHBtab->HasFinallyOrFaultHandler())
+            if (enclosedHBtab->HasFinallyOrFaultHandler())
+            {
+                // The try of the enclosed region must be nested in the try of the filter's region. This can't be
+                // inferred from the last hop above: e.g. a finally nested in a handler of a mutually protecting
+                // sibling is "enclosed" via the sibling's try link, but is not in the filter's try region.
+                for (unsigned tryIndex = comp->ehGetEnclosingTryIndex(index); tryIndex != EHblkDsc::NO_ENCLOSING_INDEX;
+                     tryIndex          = comp->ehGetEnclosingTryIndex(tryIndex))
                 {
-                    RETURN_ON_ABORT(func(enclosedHBtab->ebdHndBeg));
+                    if (tryIndex == thisHndIndex)
+                    {
+                        RETURN_ON_ABORT(func(enclosedHBtab->ebdHndBeg));
+                        break;
+                    }
                 }
             }
         }
