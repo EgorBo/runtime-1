@@ -42,12 +42,18 @@ bool IntegralRange::Contains(int64_t value) const
 //   block      - the BasicBlock in which "tree" is being evaluated.
 //   assertions - the set of assertions to consider when computing the range. Can be null.
 //   fast       - fast is when we only use VN and assertions. slow is when we perform an SSA walk to compute the range.
+//   preferredBoundVN - the symbolic bound to prefer during the SSA walk.
 //
 // Return Value:
 //    Range of possible values for "tree" based on the given assertions and block context.
 //    An unknown range if the range cannot be determined, or if the computation exceeds the visit budget.
 //
-static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_VALARG_TP assertions, bool fast = true)
+static Range GetRange(Compiler*        comp,
+                      GenTree*         tree,
+                      BasicBlock*      block,
+                      ASSERT_VALARG_TP assertions,
+                      bool             fast             = true,
+                      ValueNum         preferredBoundVN = ValueNumStore::NoVN)
 {
     assert(block != nullptr);
     assert(tree != nullptr);
@@ -73,7 +79,7 @@ static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_V
     }
 
     Range range = Limit(Limit::keUndef);
-    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range))
+    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range, preferredBoundVN))
     {
         return range;
     }
@@ -4617,11 +4623,32 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
             if (!relopRange.IsSingleValueConstant(&relopResult) &&
                 // The few checks below ensure this analysis
                 // is only performed when beneficial according to SPMI, keeping the TP impact low.
-                op1->TypeIs(TYP_INT) && op2->IsIntCnsFitsInI32() && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
+                op1->TypeIs(TYP_INT) && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT) &&
+                (op2->IsIntCnsFitsInI32() || (op2->TypeIs(TYP_INT) && vnStore->IsVNCheckedBound(op2VN))))
             {
-                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false);
-                Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false);
-                relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
+                if (op2->IsIntCnsFitsInI32())
+                {
+                    Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false);
+                    Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false);
+                    relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
+                }
+                else
+                {
+                    Range boundRange = GetRange(this, op2, block, assertions, /*fast*/ true);
+                    Range indexRange = GetRange(this, op1, block, assertions, /*fast*/ false, op2VN);
+                    if (boundRange.LowerLimit().IsConstant() && (boundRange.LowerLimit().GetConstant() >= 0) &&
+                        indexRange.LowerLimit().IsConstant() && (indexRange.LowerLimit().GetConstant() >= 0) &&
+                        indexRange.UpperLimit().IsBinOpArray() && (indexRange.UpperLimit().vn == op2VN) &&
+                        (indexRange.UpperLimit().GetConstant() > INT32_MIN) &&
+                        (indexRange.UpperLimit().GetConstant() <= 0))
+                    {
+                        // Nonnegative operands have the same signed and unsigned ordering.
+                        Range difference = Range(Limit(Limit::keConstant, -INT32_MAX),
+                                                 Limit(Limit::keConstant, indexRange.UpperLimit().GetConstant()));
+                        relopRange =
+                            RangeOps::EvalRelop(tree->OperGet(), false, difference, Range(Limit(Limit::keConstant, 0)));
+                    }
+                }
             }
 
             if (relopRange.IsSingleValueConstant(&relopResult))

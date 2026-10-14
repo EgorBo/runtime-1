@@ -297,8 +297,9 @@ void RangeCheck::Widen(BasicBlock* block, GenTree* tree, Range* pRange)
 
     Range& range = *pRange;
 
-    // Try to deduce the lower bound, if it is not known already.
-    if (range.LowerLimit().IsDependent() || range.LowerLimit().IsUnknown())
+    // Recover a nonnegative lower bound even if an exit-edge assertion replaced a dependent limit.
+    if (range.LowerLimit().IsDependent() || range.LowerLimit().IsUnknown() ||
+        (range.LowerLimit().IsConstant() && (range.LowerLimit().GetConstant() < 0)))
     {
         // To determine the lower bound, ask if the loop increases monotonically.
         bool increasing = IsMonotonicallyIncreasing(tree, false);
@@ -1309,12 +1310,51 @@ void RangeCheck::MergeEdgeAssertionsWorker(Compiler*                        comp
                 ((boundCns != 0) && comp->vnStore->IsVNBinFuncWithConst(normalLclVN, VNF_ADD, &addOp, &addCns) &&
                  (addOp == boundVN) && (addCns == boundCns));
 
-            // A bound checked on another path need not be nonnegative here.
-            if (canUseCheckedBounds && (normalLclVN == curAssertion.GetOp1().GetVN()) &&
-                (curAssertion.GetOp2().IsVNNeverNegative() || (boundVN == preferredBoundVN)))
+            if (normalLclVN == curAssertion.GetOp1().GetVN())
             {
+                ValueNum rangeBoundVN = boundVN;
+                if (canUseCheckedBounds && (preferredBoundVN != ValueNumStore::NoVN) && (boundVN != preferredBoundVN))
+                {
+                    BitVecOps::Iter equalIter(comp->apTraits, assertions);
+                    unsigned        equalIndex;
+                    while (equalIter.NextElem(&equalIndex))
+                    {
+                        const Compiler::AssertionDsc& equality = comp->optGetAssertion(GetAssertionIndex(equalIndex));
+                        if (equality.KindIs(Compiler::OAK_EQUAL) &&
+                            equality.GetOp2().KindIs(Compiler::O2K_VN_ADD_CNS) && (equality.GetOp2().GetCns() == 0) &&
+                            (((equality.GetOp1().GetVN() == boundVN) &&
+                              (equality.GetOp2().GetVN() == preferredBoundVN)) ||
+                             ((equality.GetOp2().GetVN() == boundVN) &&
+                              (equality.GetOp1().GetVN() == preferredBoundVN))))
+                        {
+                            rangeBoundVN = preferredBoundVN;
+                            break;
+                        }
+                    }
+                }
+
                 cmpOper = Compiler::AssertionDsc::ToCompareOper(curAssertion.GetKind(), &isUnsigned);
-                limit   = Limit(Limit::keBinOpArray, boundVN, boundCns);
+                // A bound checked on another path need not be nonnegative here.
+                if (canUseCheckedBounds &&
+                    (curAssertion.GetOp2().IsVNNeverNegative() || (rangeBoundVN == preferredBoundVN)))
+                {
+                    limit = Limit(Limit::keBinOpArray, rangeBoundVN, boundCns);
+                }
+                else if (budget > 0)
+                {
+                    Range boundRange    = GetRangeFromAssertionsWorker(comp, boundVN, assertions, --budget, visited);
+                    Range adjustedRange = RangeOps::Add(boundRange, Range(Limit(Limit::keConstant, boundCns)));
+                    if (!adjustedRange.IsConstantRange())
+                    {
+                        continue;
+                    }
+                    limit = (cmpOper == GT_LT || cmpOper == GT_LE) ? adjustedRange.UpperLimit()
+                                                                   : adjustedRange.LowerLimit();
+                }
+                else
+                {
+                    continue;
+                }
             }
             else if (normalLclVNMatchesOp2)
             {
@@ -2441,6 +2481,43 @@ bool RangeCheck::TryGetRange(BasicBlock* block, GenTree* expr, Range* pRange, Va
     {
         *pRange = Limit(Limit::keConstant, (int)expr->AsIntCon()->IconValue());
         return true;
+    }
+
+    // Recover the remaining length from a symbolic upper bound on the index.
+    ValueNum boundVN;
+    ValueNum indexVN;
+    if ((preferredBoundVN == ValueNumStore::NoVN) && expr->TypeIs(TYP_INT) &&
+        m_compiler->vnStore->IsVNBinFunc(m_compiler->optConservativeNormalVN(expr), VNF_SUB, &boundVN, &indexVN) &&
+        m_compiler->vnStore->IsVNCheckedBound(boundVN))
+    {
+        GenTree* sub = expr;
+        for (int depth = 0; sub->OperIs(GT_LCL_VAR) && (depth < MAX_SEARCH_DEPTH) && !IsOverBudget(); depth++)
+        {
+            m_nVisitBudget--;
+            LclSsaVarDsc* def = GetSsaDefStore(sub->AsLclVar());
+            if (def == nullptr)
+            {
+                break;
+            }
+            sub = def->GetDefNode()->Data();
+        }
+
+        if (sub->OperIs(GT_SUB) && sub->TypeIs(TYP_INT) &&
+            (m_compiler->optConservativeNormalVN(sub->gtGetOp1()) == boundVN) &&
+            (m_compiler->optConservativeNormalVN(sub->gtGetOp2()) == indexVN))
+        {
+            Range boundRange = GetRangeFromAssertions(m_compiler, boundVN, block->bbAssertionIn);
+            Range indexRange = Limit(Limit::keUnknown);
+            if (boundRange.LowerLimit().IsConstant() && (boundRange.LowerLimit().GetConstant() >= 0) &&
+                TryGetRange(block, sub->gtGetOp2(), &indexRange, boundVN) && indexRange.LowerLimit().IsConstant() &&
+                (indexRange.LowerLimit().GetConstant() >= 0) && indexRange.UpperLimit().IsBinOpArray() &&
+                (indexRange.UpperLimit().vn == boundVN) && (indexRange.UpperLimit().GetConstant() > INT32_MIN))
+            {
+                *pRange = Range(Limit(Limit::keConstant, -indexRange.UpperLimit().GetConstant()),
+                                Limit(Limit::keConstant, INT32_MAX));
+                return true;
+            }
+        }
     }
 
     m_preferredBound = preferredBoundVN;
