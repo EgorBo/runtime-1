@@ -47,7 +47,12 @@ bool IntegralRange::Contains(int64_t value) const
 //    Range of possible values for "tree" based on the given assertions and block context.
 //    An unknown range if the range cannot be determined, or if the computation exceeds the visit budget.
 //
-static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_VALARG_TP assertions, bool fast = true)
+static Range GetRange(Compiler*        comp,
+                      GenTree*         tree,
+                      BasicBlock*      block,
+                      ASSERT_VALARG_TP assertions,
+                      bool             fast             = true,
+                      ValueNum         preferredBoundVN = ValueNumStore::NoVN)
 {
     assert(block != nullptr);
     assert(tree != nullptr);
@@ -73,7 +78,7 @@ static Range GetRange(Compiler* comp, GenTree* tree, BasicBlock* block, ASSERT_V
     }
 
     Range range = Limit(Limit::keUndef);
-    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range))
+    if (comp->GetRangeCheck(budget)->TryGetRange(block, tree, &range, preferredBoundVN))
     {
         return range;
     }
@@ -4617,10 +4622,21 @@ GenTree* Compiler::optAssertionPropGlobal_RelOp(ASSERT_VALARG_TP assertions,
             if (!relopRange.IsSingleValueConstant(&relopResult) &&
                 // The few checks below ensure this analysis
                 // is only performed when beneficial according to SPMI, keeping the TP impact low.
-                op1->TypeIs(TYP_INT) && op2->IsIntCnsFitsInI32() && tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
+                op1->TypeIs(TYP_INT) && op2->TypeIs(TYP_INT) &&
+                (op2->IsIntCnsFitsInI32() || vnStore->IsVNCheckedBound(op2VN) || vnStore->IsVNCheckedBound(op1VN)) &&
+                tree->OperIs(GT_LE, GT_LT, GT_GE, GT_GT))
             {
-                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false);
-                Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false);
+                ValueNum preferredBoundVN = ValueNumStore::NoVN;
+                if (vnStore->IsVNCheckedBound(op2VN))
+                {
+                    preferredBoundVN = op2VN;
+                }
+                else if (vnStore->IsVNCheckedBound(op1VN))
+                {
+                    preferredBoundVN = op1VN;
+                }
+                Range op1Rng = GetRange(this, op1, block, assertions, /*fast*/ false, preferredBoundVN);
+                Range op2Rng = GetRange(this, op2, block, assertions, /*fast*/ false, preferredBoundVN);
                 relopRange   = RangeOps::EvalRelop(tree->OperGet(), tree->IsUnsigned(), op1Rng, op2Rng);
             }
 

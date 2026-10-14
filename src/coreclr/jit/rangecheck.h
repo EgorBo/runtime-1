@@ -379,8 +379,36 @@ struct RangeOps
             return Limit(Limit::keUnknown); // Give up on unsigned subtraction for now
         }
 
-        // Delegate to Add after negating the second operand. Possible overflows will be handled there.
-        return Add(r1, Negate(r2));
+        auto subLimit = [](const Limit& a, const Limit& b) -> Limit {
+            if (a.IsDependent() || b.IsDependent())
+            {
+                return Limit(Limit::keDependent);
+            }
+            if (a.IsConstantOrBinOp() && b.IsConstantOrBinOp())
+            {
+                if (!CheckedOps::SubOverflows(a.GetConstant(), b.GetConstant(), CheckedOps::Signed))
+                {
+                    if (a.IsConstant() && b.IsConstant())
+                    {
+                        return Limit(Limit::keConstant, a.GetConstant() - b.GetConstant());
+                    }
+                    if (a.IsBinOpArray() && b.IsConstant())
+                    {
+                        return Limit(Limit::keBinOpArray, a.vn, a.GetConstant() - b.GetConstant());
+                    }
+                    if (a.IsBinOpArray() && b.IsBinOpArray() && (a.vn == b.vn))
+                    {
+                        return Limit(Limit::keConstant, a.GetConstant() - b.GetConstant());
+                    }
+                }
+            }
+            return Limit(Limit::keUnknown);
+        };
+
+        Range result  = Limit(Limit::keUnknown);
+        result.lLimit = subLimit(r1.LowerLimit(), r2.UpperLimit());
+        result.uLimit = subLimit(r1.UpperLimit(), r2.LowerLimit());
+        return result;
     }
 
     static Range Multiply(const Range& r1, const Range& r2, bool unsignedMul = false)
@@ -754,6 +782,11 @@ struct RangeOps
     // Returns:
     //    Either [0..0] (AlwaysFalse), [1..1] (AlwaysTrue), or [0..1] (all relops are guaranteed to return 0 or 1)
     //
+    static bool AreComparable(const Limit& a, const Limit& b)
+    {
+        return (a.IsConstant() && b.IsConstant()) || (a.IsBinOpArray() && b.IsBinOpArray() && (a.vn == b.vn));
+    }
+
     static Range EvalRelop(const genTreeOps relop, bool isUnsigned, const Range& x, const Range& y)
     {
         assert(x.IsValid());
@@ -768,7 +801,7 @@ struct RangeOps
         // NOTE: it's not applicable for EQ and NE.
         if (isUnsigned && (relop != GT_EQ) && (relop != GT_NE))
         {
-            if (!xLower.IsConstant() || !yLower.IsConstant() || (xLower.GetConstant() < 0) ||
+            if (!xLower.IsConstantOrBinOp() || !yLower.IsConstantOrBinOp() || (xLower.GetConstant() < 0) ||
                 (yLower.GetConstant() < 0))
             {
                 // Relops always return either 0 or 1.
@@ -780,12 +813,12 @@ struct RangeOps
         {
             case GT_GE:
             case GT_LT:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() >= yUpper.GetConstant()))
+                if (AreComparable(xLower, yUpper) && (xLower.GetConstant() >= yUpper.GetConstant()))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant()))
+                if (AreComparable(xUpper, yLower) && (xUpper.GetConstant() < yLower.GetConstant()))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 0 : 1));
                 }
@@ -793,12 +826,12 @@ struct RangeOps
 
             case GT_GT:
             case GT_LE:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant()))
+                if (AreComparable(xLower, yUpper) && (xLower.GetConstant() > yUpper.GetConstant()))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() <= yLower.GetConstant()))
+                if (AreComparable(xUpper, yLower) && (xUpper.GetConstant() <= yLower.GetConstant()))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 0 : 1));
                 }
@@ -808,17 +841,16 @@ struct RangeOps
             case GT_NE:
                 // If the ranges do not overlap, then EQ is always false, NE is always true.
                 // Example: x = [6..10], y = [0..5] -> EQ is always false, NE is always true.
-                if ((xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant())) ||
-                    (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant())))
+                if ((AreComparable(xLower, yUpper) && (xLower.GetConstant() > yUpper.GetConstant())) ||
+                    (AreComparable(xUpper, yLower) && (xUpper.GetConstant() < yLower.GetConstant())))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_EQ ? 0 : 1));
                 }
 
                 // If both ranges are single constant and equal, then EQ is always true, NE is always false.
                 // Example: x = [5..5], y = [5..5] -> EQ is always true, NE is always false.
-                if (x.LowerLimit().IsConstant() && y.LowerLimit().IsConstant() &&
-                    x.LowerLimit().Equals(x.UpperLimit()) && y.LowerLimit().Equals(y.UpperLimit()) &&
-                    x.LowerLimit().GetConstant() == y.LowerLimit().GetConstant())
+                if (AreComparable(xLower, yLower) && xLower.Equals(xUpper) && yLower.Equals(yUpper) &&
+                    (xLower.GetConstant() == yLower.GetConstant()))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_EQ ? 1 : 0));
                 }
@@ -924,12 +956,18 @@ private:
                                           int                              budget,
                                           ValueNumStore::SmallValueNumSet* visited);
 
+    static bool     IsVNNonNegative(Compiler* comp, ValueNum vn, ASSERT_VALARG_TP assertions);
+    static ValueNum CanonicalizeCheckedBoundVN(Compiler* comp, ValueNum boundVN, ASSERT_VALARG_TP assertions);
+
     // The maximum possible value of the given "limit". If such a value could not be determined
     // return "false". For example: CORINFO_Array_MaxLength for array length.
     bool GetLimitMax(Limit& limit, int* pMax);
 
     // Does the addition of the two limits overflow?
     bool AddOverflows(Limit& limit1, Limit& limit2);
+
+    // Does the subtraction of the two ranges overflow?
+    bool SubtractOverflows(const Range& r1, const Range& r2);
 
     // Does the multiplication of the two limits overflow?
     bool MultiplyOverflows(Limit& limit1, Limit& limit2);
