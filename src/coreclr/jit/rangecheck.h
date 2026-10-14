@@ -379,8 +379,40 @@ struct RangeOps
             return Limit(Limit::keUnknown); // Give up on unsigned subtraction for now
         }
 
-        // Delegate to Add after negating the second operand. Possible overflows will be handled there.
-        return Add(r1, Negate(r2));
+        const Limit& r1lo = r1.LowerLimit();
+        const Limit& r1hi = r1.UpperLimit();
+        const Limit& r2lo = r2.LowerLimit();
+        const Limit& r2hi = r2.UpperLimit();
+
+        const auto subtractLimits = [](const Limit& left, const Limit& right) {
+            if (left.IsConstant() && right.IsConstant())
+            {
+                if (!CheckedOps::SubOverflows(left.GetConstant(), right.GetConstant(), CheckedOps::Signed))
+                {
+                    return Limit(Limit::keConstant, left.GetConstant() - right.GetConstant());
+                }
+            }
+            else if (left.IsBinOpArray() && right.IsBinOpArray() && (left.vn == right.vn))
+            {
+                if (!CheckedOps::SubOverflows(left.GetConstant(), right.GetConstant(), CheckedOps::Signed))
+                {
+                    return Limit(Limit::keConstant, left.GetConstant() - right.GetConstant());
+                }
+            }
+            else if (left.IsBinOpArray() && right.IsConstant() &&
+                     !CheckedOps::SubOverflows(left.GetConstant(), right.GetConstant(), CheckedOps::Signed))
+            {
+                const int offset = left.GetConstant() - right.GetConstant();
+                if (offset <= 0)
+                {
+                    return Limit(Limit::keBinOpArray, left.vn, offset);
+                }
+            }
+
+            return Limit(Limit::keUnknown);
+        };
+
+        return Range(subtractLimits(r1lo, r2hi), subtractLimits(r1hi, r2lo));
     }
 
     static Range Multiply(const Range& r1, const Range& r2, bool unsignedMul = false)
@@ -764,12 +796,36 @@ struct RangeOps
         const Limit& xUpper = x.UpperLimit();
         const Limit& yUpper = y.UpperLimit();
 
+        const auto isKnownNonNegative = [](const Limit& limit) {
+            return (limit.IsConstant() && (limit.GetConstant() >= 0)) ||
+                   (limit.IsBinOpArray() && (limit.GetConstant() == 0));
+        };
+
+        const auto isKnownLessThan = [](const Limit& left, const Limit& right) {
+            if (left.IsConstant() && right.IsConstant())
+            {
+                return left.GetConstant() < right.GetConstant();
+            }
+
+            return left.IsBinOpArray() && right.IsBinOpArray() && (left.vn == right.vn) && (left.GetConstant() <= 0) &&
+                   (right.GetConstant() <= 0) && (left.GetConstant() < right.GetConstant());
+        };
+
+        const auto isKnownLessThanOrEqual = [](const Limit& left, const Limit& right) {
+            if (left.IsConstant() && right.IsConstant())
+            {
+                return left.GetConstant() <= right.GetConstant();
+            }
+
+            return left.IsBinOpArray() && right.IsBinOpArray() && (left.vn == right.vn) && (left.GetConstant() <= 0) &&
+                   (right.GetConstant() <= 0) && (left.GetConstant() <= right.GetConstant());
+        };
+
         // For unsigned comparisons, we only support non-negative ranges.
         // NOTE: it's not applicable for EQ and NE.
         if (isUnsigned && (relop != GT_EQ) && (relop != GT_NE))
         {
-            if (!xLower.IsConstant() || !yLower.IsConstant() || (xLower.GetConstant() < 0) ||
-                (yLower.GetConstant() < 0))
+            if (!isKnownNonNegative(xLower) || !isKnownNonNegative(yLower))
             {
                 // Relops always return either 0 or 1.
                 return Range(Limit(Limit::keConstant, 0), Limit(Limit::keConstant, 1));
@@ -780,12 +836,12 @@ struct RangeOps
         {
             case GT_GE:
             case GT_LT:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() >= yUpper.GetConstant()))
+                if (isKnownLessThanOrEqual(yUpper, xLower))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant()))
+                if (isKnownLessThan(xUpper, yLower))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GE ? 0 : 1));
                 }
@@ -793,12 +849,12 @@ struct RangeOps
 
             case GT_GT:
             case GT_LE:
-                if (xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant()))
+                if (isKnownLessThan(yUpper, xLower))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 1 : 0));
                 }
 
-                if (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() <= yLower.GetConstant()))
+                if (isKnownLessThanOrEqual(xUpper, yLower))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_GT ? 0 : 1));
                 }
@@ -808,8 +864,7 @@ struct RangeOps
             case GT_NE:
                 // If the ranges do not overlap, then EQ is always false, NE is always true.
                 // Example: x = [6..10], y = [0..5] -> EQ is always false, NE is always true.
-                if ((xLower.IsConstant() && yUpper.IsConstant() && (xLower.GetConstant() > yUpper.GetConstant())) ||
-                    (xUpper.IsConstant() && yLower.IsConstant() && (xUpper.GetConstant() < yLower.GetConstant())))
+                if (isKnownLessThan(yUpper, xLower) || isKnownLessThan(xUpper, yLower))
                 {
                     return Range(Limit(Limit::keConstant, relop == GT_EQ ? 0 : 1));
                 }
