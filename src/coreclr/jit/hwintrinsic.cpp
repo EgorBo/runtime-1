@@ -1831,6 +1831,10 @@ GenTree* Compiler::addRangeCheckForHWIntrinsic(GenTree* immOp, int immLowerBound
     GenTreeBoundsChk* hwIntrinsicChk =
         new (this, GT_BOUNDS_CHECK) GenTreeBoundsChk(immOpDup, adjustedUpperBoundNode, SCK_ARG_RNG_EXCPN);
 
+    // The intrinsic consuming immOp is only safe to evaluate after this check (it may e.g. index memory
+    // or a jump table). Keep that dependency visible even if the check is later removed.
+    hwIntrinsicChk->SetHasOrderingSideEffect();
+
     return gtNewOperNode(GT_COMMA, immOp->TypeGet(), hwIntrinsicChk, immOp);
 }
 

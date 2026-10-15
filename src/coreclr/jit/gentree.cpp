@@ -9134,6 +9134,11 @@ bool GenTree::OperSupportsOrderingSideEffect() const
         case GT_PATCHPOINT_FORCED:
         case GT_NONLOCAL_JMP:
         case GT_SWIFT_ERROR:
+#ifdef FEATURE_HW_INTRINSICS
+        // HW intrinsics with a variable immediate (e.g. GetElement) stay pinned below their
+        // range check, see addRangeCheckForHWIntrinsic.
+        case GT_HWINTRINSIC:
+#endif
             return true;
         default:
             return false;

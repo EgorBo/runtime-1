@@ -1218,9 +1218,10 @@ bool OptBoolsDsc::optOptimizeBoolsChkTypeCostCond()
     if (varTypeIsSmall(m_c1->TypeGet()))
         return false;
 #endif
-    // The second condition must not contain side effects
+    // The second condition must not contain side effects. It will be evaluated unconditionally,
+    // so it must also not depend on the first one (GTF_ORDER_SIDEEFF), e.g. a removed bounds check.
     //
-    if (m_c2->gtFlags & GTF_GLOB_EFFECT)
+    if (m_c2->gtFlags & (GTF_GLOB_EFFECT | GTF_ORDER_SIDEEFF))
     {
         return false;
     }
