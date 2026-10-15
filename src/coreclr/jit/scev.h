@@ -229,6 +229,7 @@ class ScalarEvolutionContext
     Scev* CreateSimpleAddRec(GenTreePhi* headerPhi, ScevLocal* start, BasicBlock* stepDefBlock, GenTree* stepDefData);
     Scev* MakeAddRecFromRecursiveScev(Scev* start, Scev* scev, Scev* recursiveScev);
     Scev* CreateSimpleInvariantScev(GenTree* tree);
+    bool  DefBlockDominatesLoop(BasicBlock* defBlock);
     Scev* CreateScevForConstant(GenTreeIntConCommon* tree);
     void  ExtractAddOperands(ScevBinop* add, ArrayStack<Scev*>& operands);
 

@@ -471,13 +471,32 @@ Scev* ScalarEvolutionContext::CreateSimpleInvariantScev(GenTree* tree)
         LclVarDsc*    dsc    = m_compiler->lvaGetDesc(tree->AsLclVarCommon());
         LclSsaVarDsc* ssaDsc = dsc->GetPerSsaData(tree->AsLclVarCommon()->GetSsaNum());
 
-        if ((ssaDsc->GetBlock() == nullptr) || !m_loop->ContainsBlock(ssaDsc->GetBlock()))
+        if ((ssaDsc->GetBlock() == nullptr) ||
+            (!m_loop->ContainsBlock(ssaDsc->GetBlock()) && DefBlockDominatesLoop(ssaDsc->GetBlock())))
         {
             return NewLocal(tree->AsLclVarCommon()->GetLclNum(), tree->AsLclVarCommon()->GetSsaNum());
         }
     }
 
     return nullptr;
+}
+
+//------------------------------------------------------------------------
+// DefBlockDominatesLoop: Check if the block of an SSA def outside the loop
+// dominates the loop, so that the def can be treated as invariant.
+//
+// Parameters:
+//   defBlock - The block containing the def
+//
+// Returns:
+//   True if so. This holds for valid SSA, but RBO jump threading can leave stale
+//   SSA whose def no longer reaches the loop (e.g. it is in an unreachable block).
+//
+bool ScalarEvolutionContext::DefBlockDominatesLoop(BasicBlock* defBlock)
+{
+    FlowGraphDominatorTree* domTree = m_compiler->m_domTree;
+    assert((domTree != nullptr) && (domTree->GetDfsTree() == m_loop->GetDfsTree()));
+    return domTree->GetDfsTree()->Contains(defBlock) && domTree->Dominates(defBlock, m_loop->GetHeader());
 }
 
 //------------------------------------------------------------------------
@@ -546,6 +565,11 @@ Scev* ScalarEvolutionContext::AnalyzeNew(BasicBlock* block, GenTree* tree, int d
 
             if ((ssaDsc->GetBlock() == nullptr) || !m_loop->ContainsBlock(ssaDsc->GetBlock()))
             {
+                if ((ssaDsc->GetBlock() != nullptr) && !DefBlockDominatesLoop(ssaDsc->GetBlock()))
+                {
+                    return nullptr;
+                }
+
                 return NewLocal(tree->AsLclVarCommon()->GetLclNum(), tree->AsLclVarCommon()->GetSsaNum());
             }
 
