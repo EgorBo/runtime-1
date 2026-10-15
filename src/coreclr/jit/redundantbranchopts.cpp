@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #include "jitpch.h"
+#include "ssabuilder.h"
 
 //------------------------------------------------------------------------
 // optRedundantBranches: try and optimize redundant branches in the method
@@ -2520,6 +2521,81 @@ bool Compiler::optJumpThreadPhi(BasicBlock* block, GenTree* tree, ValueNum treeN
 }
 
 //------------------------------------------------------------------------
+// optJumpThreadAddPhiArgs: add phi args to target for a threaded edge from pred
+//
+// Arguments:
+//   block  - the block being bypassed
+//   pred   - the pred of block that now flows directly to target
+//   target - the successor of block that pred now targets
+//
+// Notes:
+//   Consumers like range check and assertion prop rely on each pred having a phi arg
+//   to pick the edge a value flows in on. The new arg carries the value that pred used
+//   to provide via block.
+//
+void Compiler::optJumpThreadAddPhiArgs(BasicBlock* block, BasicBlock* pred, BasicBlock* target)
+{
+    for (Statement* const stmt : target->Statements())
+    {
+        if (!stmt->IsPhiDefnStmt())
+        {
+            break;
+        }
+
+        GenTreeLclVar* const phiDef     = stmt->GetRootNode()->AsLclVar();
+        GenTreePhi* const    phi        = phiDef->Data()->AsPhi();
+        unsigned const       lclNum     = phiDef->GetLclNum();
+        GenTreePhiArg*       blockArg   = nullptr;
+        bool                 hasPredArg = false;
+
+        for (GenTreePhi::Use& use : phi->Uses())
+        {
+            GenTreePhiArg* const phiArg = use.GetNode()->AsPhiArg();
+            blockArg                    = (phiArg->gtPredBB == block) ? phiArg : blockArg;
+            hasPredArg |= (phiArg->gtPredBB == pred);
+        }
+
+        if ((blockArg == nullptr) || hasPredArg)
+        {
+            continue;
+        }
+
+        // If the value is defined by a phi in block, use that phi's input from pred.
+        //
+        unsigned            ssaNum = blockArg->GetSsaNum();
+        LclSsaVarDsc* const ssaDsc = lvaGetDesc(lclNum)->GetPerSsaData(ssaNum);
+
+        if (ssaDsc->GetBlock() == block)
+        {
+            GenTreeLclVarCommon* const defNode = ssaDsc->GetDefNode();
+            ssaNum                             = SsaConfig::RESERVED_SSA_NUM;
+
+            if ((defNode != nullptr) && defNode->IsPhiDefn())
+            {
+                for (GenTreePhi::Use& use : defNode->Data()->AsPhi()->Uses())
+                {
+                    if (use.GetNode()->AsPhiArg()->gtPredBB == pred)
+                    {
+                        ssaNum = use.GetNode()->AsPhiArg()->GetSsaNum();
+                        break;
+                    }
+                }
+            }
+
+            if (ssaNum == SsaConfig::RESERVED_SSA_NUM)
+            {
+                continue;
+            }
+        }
+
+        SsaBuilder::AddNewPhiArg(this, target, stmt, phi, lclNum, ssaNum, pred);
+        phi->gtUses->GetNode()->SetVNs(lvaGetDesc(lclNum)->GetPerSsaData(ssaNum)->m_vnPair);
+        JITDUMP("Added phi arg u:%u for V%02u from " FMT_BB " in " FMT_BB "\n", ssaNum, lclNum, pred->bbNum,
+                target->bbNum);
+    }
+}
+
+//------------------------------------------------------------------------
 // optJumpThreadCore: restructure block flow based on jump thread information
 //
 // Arguments:
@@ -2688,6 +2764,7 @@ bool Compiler::optJumpThreadCore(JumpThreadInfo& jti)
         }
 
         fgReplaceJumpTarget(predBlock, jti.m_block, newTarget);
+        optJumpThreadAddPhiArgs(jti.m_block, predBlock, newTarget);
 
         if (setNoCseIn && !newTarget->HasFlag(BBF_NO_CSE_IN))
         {

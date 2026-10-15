@@ -8443,6 +8443,7 @@ public:
     bool optFindPhiUsesInBlockAndSuccessors(BasicBlock* block, GenTreeLclVar* phiDef, JumpThreadInfo& jti);
     bool optCanRewritePhiUses(JumpThreadInfo& jti);
     bool optJumpThreadCore(JumpThreadInfo& jti);
+    void optJumpThreadAddPhiArgs(BasicBlock* block, BasicBlock* pred, BasicBlock* target);
 
     enum class ReachabilityResult
     {

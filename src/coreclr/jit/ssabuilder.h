@@ -53,14 +53,7 @@ public:
     // variable are stored in the "per SSA data" on the local descriptor.
     void Build();
 
-private:
-    // Insert a new GT_PHI statement.
-    static Statement* InsertPhi(Compiler* comp, BasicBlock* block, unsigned lclNum);
-
-    // Add a new GT_PHI_ARG node to an existing GT_PHI node
-    void AddPhiArg(
-        BasicBlock* block, Statement* stmt, GenTreePhi* phi, unsigned lclNum, unsigned ssaNum, BasicBlock* pred);
-
+    // Add a new GT_PHI_ARG node to an existing GT_PHI node, without checking for an existing arg
     static void AddNewPhiArg(Compiler*   comp,
                              BasicBlock* block,
                              Statement*  stmt,
@@ -68,6 +61,14 @@ private:
                              unsigned    lclNum,
                              unsigned    ssaNum,
                              BasicBlock* pred);
+
+private:
+    // Insert a new GT_PHI statement.
+    static Statement* InsertPhi(Compiler* comp, BasicBlock* block, unsigned lclNum);
+
+    // Add a new GT_PHI_ARG node to an existing GT_PHI node
+    void AddPhiArg(
+        BasicBlock* block, Statement* stmt, GenTreePhi* phi, unsigned lclNum, unsigned ssaNum, BasicBlock* pred);
 
     // Requires "postOrder" to hold the blocks of the flowgraph in topologically sorted order. Requires
     // count to be the valid entries in the "postOrder" array. Inserts GT_PHI nodes at the beginning
