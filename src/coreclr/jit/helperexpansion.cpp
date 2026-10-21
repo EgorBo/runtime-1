@@ -28,6 +28,50 @@ static void InheritFlags(BasicBlock* dst, const BasicBlock* flagSrc)
     }
 }
 
+static GenTree* NewWindowsThreadLocalStorage(Compiler* comp, const CORINFO_THREAD_STATIC_BLOCKS_INFO& tlsInfo)
+{
+    GenTree* tlsValue = comp->gtNewIconHandleNode(tlsInfo.offsetOfThreadLocalStoragePointer, GTF_ICON_TLS_HDL);
+    tlsValue          = comp->gtNewIndir(TYP_I_IMPL, tlsValue, GTF_IND_NONFAULTING | GTF_IND_INVARIANT);
+
+    const size_t tlsIndex = reinterpret_cast<size_t>(tlsInfo.tlsIndex.addr);
+    if (tlsIndex != 0)
+    {
+        GenTree* offset = comp->gtNewIconHandleNode(tlsIndex * TARGET_POINTER_SIZE, GTF_ICON_TLS_HDL);
+        tlsValue        = comp->gtNewOperNode(GT_ADD, TYP_I_IMPL, tlsValue, offset);
+    }
+
+    return comp->gtNewIndir(TYP_I_IMPL, tlsValue, GTF_IND_NONFAULTING | GTF_IND_INVARIANT);
+}
+
+// Expand branch-free Windows TLS accesses before CSE so invariant loads and offsets can be optimized.
+GenTree* Compiler::fgExpandThreadLocalAccessNoHelper(GenTreeCall* call)
+{
+    assert(call->IsHelperCall(CORINFO_HELP_GETDYNAMIC_NONGCTHREADSTATIC_BASE_NOCTOR_OPTIMIZED2));
+    assert(call->gtArgs.CountUserArgs() == 1);
+
+    if (!TargetOS::IsWindows || IsAot() || compIsAsync() || opts.OptimizationDisabled() || compCurBB->isRunRarely() ||
+        opts.jitFlags->IsSet(JitFlags::JIT_FLAG_SIZE_OPT))
+    {
+        return nullptr;
+    }
+
+    GenTree* index = call->gtArgs.GetUserArgByIndex(0)->GetNode();
+    if (!index->IsCnsIntOrI())
+    {
+        return nullptr;
+    }
+
+    CORINFO_THREAD_STATIC_BLOCKS_INFO tlsInfo = {};
+    info.compCompHnd->getThreadLocalStaticBlocksInfo(&tlsInfo);
+
+#ifdef TARGET_64BIT
+    index = gtNewCastNode(TYP_I_IMPL, index, true, TYP_I_IMPL);
+#endif
+    GenTree* offset =
+        gtNewOperNode(GT_ADD, TYP_I_IMPL, index, gtNewIconNode(tlsInfo.offsetOfBaseOfThreadLocalData, TYP_I_IMPL));
+    return gtNewOperNode(GT_ADD, call->TypeGet(), NewWindowsThreadLocalStorage(this, tlsInfo), offset);
+}
+
 //------------------------------------------------------------------------------
 // SplitAtTreeAndReplaceItWithLocal : Split block at the given tree and replace it with a local
 //    See comments in gtSplitTree and fgSplitBlockBeforeTree
@@ -914,25 +958,7 @@ bool Compiler::fgExpandThreadLocalAccessForCall(BasicBlock** pBlock, Statement* 
 
     if (TargetOS::IsWindows)
     {
-        size_t   tlsIndexValue = (size_t)threadStaticBlocksInfo.tlsIndex.addr;
-        GenTree* dllRef        = nullptr;
-        if (tlsIndexValue != 0)
-        {
-            dllRef = gtNewIconHandleNode(tlsIndexValue * TARGET_POINTER_SIZE, GTF_ICON_TLS_HDL);
-        }
-
-        // Mark this ICON as a TLS_HDL, codegen will use FS:[cns] or GS:[cns]
-        tlsValue = gtNewIconHandleNode(threadStaticBlocksInfo.offsetOfThreadLocalStoragePointer, GTF_ICON_TLS_HDL);
-        tlsValue = gtNewIndir(TYP_I_IMPL, tlsValue, GTF_IND_NONFAULTING | GTF_IND_INVARIANT);
-
-        if (dllRef != nullptr)
-        {
-            // Add the dllRef to produce thread local storage reference for coreclr
-            tlsValue = gtNewOperNode(GT_ADD, TYP_I_IMPL, tlsValue, dllRef);
-        }
-
-        // Base of coreclr's thread local storage
-        tlsValue = gtNewIndir(TYP_I_IMPL, tlsValue, GTF_IND_NONFAULTING | GTF_IND_INVARIANT);
+        tlsValue = NewWindowsThreadLocalStorage(this, threadStaticBlocksInfo);
     }
     else if (TargetOS::IsApplePlatform)
     {

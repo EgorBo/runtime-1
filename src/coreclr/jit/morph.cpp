@@ -6431,6 +6431,15 @@ GenTree* Compiler::fgMorphCall(GenTreeCall* call)
 
     if (fgGlobalMorph)
     {
+        if (call->IsHelperCall(CORINFO_HELP_GETDYNAMIC_NONGCTHREADSTATIC_BASE_NOCTOR_OPTIMIZED2))
+        {
+            GenTree* tlsAccess = fgExpandThreadLocalAccessNoHelper(call);
+            if (tlsAccess != nullptr)
+            {
+                return fgMorphTree(tlsAccess);
+            }
+        }
+
         if (IsStaticHelperEligibleForExpansion(call))
         {
             // Current method has potential candidates for fgExpandStaticInit phase

@@ -13153,7 +13153,9 @@ bool Compiler::fgGetStaticFieldSeqAndAddress(ValueNumStore* vnStore,
     //   ADD(ICON_STATIC, CNS_INT)                // nonGC-static base
     //   ADD(IND(ICON_STATIC_ADDR_PTR), CNS_INT)  // GC-static base
     // where CNS_INT has field sequence corresponding to field's offset
-    if (tree->OperIs(GT_ADD) && tree->gtGetOp2()->IsCnsIntOrI() && !tree->gtGetOp2()->IsIconHandle())
+    if (tree->OperIs(GT_ADD) && tree->gtGetOp2()->IsCnsIntOrI() && !tree->gtGetOp2()->IsIconHandle() &&
+        (tree->gtGetOp1()->IsIconHandle(GTF_ICON_STATIC_HDL) ||
+         (tree->gtGetOp1()->OperIs(GT_IND) && tree->gtGetOp1()->gtGetOp1()->IsIconHandle(GTF_ICON_STATIC_ADDR_PTR))))
     {
         GenTreeIntCon* cns2 = tree->gtGetOp2()->AsIntCon();
         if ((cns2->GetFieldSeq() != nullptr) && (cns2->GetFieldSeq()->GetKind() == FieldSeq::FieldKind::SimpleStatic))
