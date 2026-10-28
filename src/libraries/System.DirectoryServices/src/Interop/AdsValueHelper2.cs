@@ -38,7 +38,7 @@ namespace System.DirectoryServices
     /// <summary>
     /// Helper class for dealing with struct AdsValue.
     /// </summary>
-    internal sealed class AdsValueHelper
+    internal sealed class AdsValueHelper : IDisposable
     {
         public AdsValue adsvalue;
         private GCHandle _pinnedHandle;
@@ -69,7 +69,20 @@ namespace System.DirectoryServices
             }
         }
 
+        // The struct returned by GetStruct() points into memory pinned by this helper,
+        // so the helper must stay alive (and not be disposed) while that struct is in use.
+        public void Dispose()
+        {
+            Free();
+            GC.SuppressFinalize(this);
+        }
+
         ~AdsValueHelper()
+        {
+            Free();
+        }
+
+        private void Free()
         {
             if (_pinnedHandle.IsAllocated)
             {

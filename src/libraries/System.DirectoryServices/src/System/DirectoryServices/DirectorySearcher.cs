@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -659,6 +660,8 @@ namespace System.DirectoryServices
         private unsafe void SetSearchPreferences(UnsafeNativeMethods.IDirectorySearch adsSearch, bool findMoreThanOne)
         {
             ArrayList prefList = new ArrayList();
+            // Helpers that pin the memory the preference values point to; kept alive until the native call returns.
+            List<AdsValueHelper> pinnedValues = new List<AdsValueHelper>();
             AdsSearchPreferenceInfo info;
 
             // search scope
@@ -747,7 +750,7 @@ namespace System.DirectoryServices
             {
                 info = default;
                 info.dwSearchPref = (int)AdsSearchPreferences.ATTRIBUTE_QUERY;
-                info.vValue = new AdsValueHelper(AttributeScopeQuery, AdsType.ADSTYPE_CASE_IGNORE_STRING).GetStruct();
+                info.vValue = GetPinnedStruct(new AdsValueHelper(AttributeScopeQuery, AdsType.ADSTYPE_CASE_IGNORE_STRING));
                 prefList.Add(info);
             }
 
@@ -783,7 +786,7 @@ namespace System.DirectoryServices
             {
                 info = default;
                 info.dwSearchPref = (int)AdsSearchPreferences.DIRSYNC;
-                info.vValue = new AdsValueHelper(DirectorySynchronization!.GetDirectorySynchronizationCookie(), AdsType.ADSTYPE_PROV_SPECIFIC).GetStruct();
+                info.vValue = GetPinnedStruct(new AdsValueHelper(DirectorySynchronization!.GetDirectorySynchronizationCookie(), AdsType.ADSTYPE_PROV_SPECIFIC));
                 prefList.Add(info);
 
                 if (DirectorySynchronization.Option != DirectorySynchronizationOptions.None)
@@ -813,7 +816,7 @@ namespace System.DirectoryServices
                     sortKey.fReverseOrder = (Sort.Direction == SortDirection.Descending) ? -1 : 0;
                     byte[] sortKeyBytes = new byte[Marshal.SizeOf(sortKey)];
                     Marshal.Copy((INTPTR_INTPTRCAST)(&sortKey), sortKeyBytes, 0, sortKeyBytes.Length);
-                    info.vValue = new AdsValueHelper(sortKeyBytes, AdsType.ADSTYPE_PROV_SPECIFIC).GetStruct();
+                    info.vValue = GetPinnedStruct(new AdsValueHelper(sortKeyBytes, AdsType.ADSTYPE_PROV_SPECIFIC));
                     prefList.Add(info);
                 }
 
@@ -855,7 +858,7 @@ namespace System.DirectoryServices
                     {
                         Marshal.FreeHGlobal(vlvPtr);
                     }
-                    info.vValue = new AdsValueHelper(vlvBytes, AdsType.ADSTYPE_PROV_SPECIFIC).GetStruct();
+                    info.vValue = GetPinnedStruct(new AdsValueHelper(vlvBytes, AdsType.ADSTYPE_PROV_SPECIFIC));
                     prefList.Add(info);
                 }
 
@@ -889,6 +892,15 @@ namespace System.DirectoryServices
 
                 if (ptrVLVContexToFree != (IntPtr)0)
                     Marshal.FreeCoTaskMem(ptrVLVContexToFree);
+
+                foreach (AdsValueHelper pinnedValue in pinnedValues)
+                    pinnedValue.Dispose();
+            }
+
+            AdsValue GetPinnedStruct(AdsValueHelper helper)
+            {
+                pinnedValues.Add(helper);
+                return helper.GetStruct();
             }
         }
 
