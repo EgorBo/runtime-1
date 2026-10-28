@@ -51,6 +51,9 @@ namespace System.DirectoryServices.Protocols
         private bool _connected;
         internal QUERYCLIENTCERT _clientCertificateRoutine;
 
+        // The native layer keeps using the certificate context returned from the QueryClientCertificate callback
+        // after the callback returns, so the certificate must stay alive for the lifetime of the connection.
+        private X509Certificate _queriedClientCertificate;
         public LdapConnection(string server) : this(new LdapDirectoryIdentifier(server))
         {
         }
@@ -922,6 +925,7 @@ namespace System.DirectoryServices.Protocols
             }
 
             X509Certificate cert = SessionOptions._clientCertificateDelegate(this, certAuthorities);
+            _queriedClientCertificate = cert;
             if (cert != null)
             {
                 *certificate = cert.Handle;
