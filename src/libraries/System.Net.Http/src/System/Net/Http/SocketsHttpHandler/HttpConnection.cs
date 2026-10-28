@@ -1997,8 +1997,9 @@ namespace System.Net.Http
                             int desiredBufferSize = (int)Math.Min((ulong)bufferSize, length);
                             if (desiredBufferSize > currentCapacity)
                             {
-                                origReadBuffer = _readBuffer.DangerousGetUnderlyingBuffer();
+                                // Rent first: if it throws, origReadBuffer stays unset and the finally has nothing to return.
                                 byte[] pooledBuffer = ArrayPool<byte>.Shared.Rent(desiredBufferSize);
+                                origReadBuffer = _readBuffer.DangerousGetUnderlyingBuffer();
                                 _readBuffer = new ArrayBuffer(pooledBuffer);
                             }
                         }
