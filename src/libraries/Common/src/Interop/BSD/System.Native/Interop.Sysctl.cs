@@ -44,6 +44,7 @@ internal static partial class Interop
                     // previous contents, and proper checking of value returned
                     // will make code more complex.
                     NativeMemory.Free(value);
+                    value = null; // the caller also frees value, so it must not keep a freed pointer
                     if ((int)bytesLength == int.MaxValue)
                     {
                         throw new OutOfMemoryException();
@@ -65,6 +66,7 @@ internal static partial class Interop
                     if (autoSize)
                     {
                         NativeMemory.Free(value);
+                        value = null;
                     }
                     ThrowInvalidSysctlException(name, errno);
                 }
