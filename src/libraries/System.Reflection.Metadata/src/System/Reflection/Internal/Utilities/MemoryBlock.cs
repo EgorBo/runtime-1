@@ -470,6 +470,7 @@ namespace System.Reflection.Internal
             return true;
         }
 
+        // comparison stops at null terminator or end-of-block -- whichever comes first.
         internal int CompareUtf8NullTerminatedStringWithAsciiString(int offset, string asciiString)
         {
             // Assumes stringAscii only contains ASCII characters and no nil characters.
@@ -477,13 +478,13 @@ namespace System.Reflection.Internal
             CheckBounds(offset, 0);
 
             byte* p = Pointer + offset;
-            int limit = Length - offset;
+            byte* end = Pointer + Length;
 
             for (int i = 0; i < asciiString.Length; i++)
             {
                 Debug.Assert(asciiString[i] > 0 && asciiString[i] <= 0x7f);
 
-                if (i > limit)
+                if (p == end)
                 {
                     // Heap value is shorter.
                     return -1;
@@ -501,7 +502,7 @@ namespace System.Reflection.Internal
 
             // Either the heap value name matches exactly the given string or
             // it is longer so it is considered "greater".
-            return (*p == 0) ? 0 : +1;
+            return (p == end || *p == 0) ? 0 : +1;
         }
 
         internal byte[] PeekBytes(int offset, int byteCount)
