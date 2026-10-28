@@ -222,6 +222,7 @@ namespace System.Diagnostics
             PinnedGCHandle<byte[]> outputPin = default, errorPin = default;
             NativeOverlapped* outputOverlapped = null, errorOverlapped = null;
             EventWaitHandle? outputEvent = null, errorEvent = null;
+            bool outputDone = true, errorDone = true;
 
             try
             {
@@ -238,8 +239,8 @@ namespace System.Diagnostics
                 WaitHandle[] waitHandles = [errorEvent, outputEvent];
 
                 // Issue initial reads.
-                bool outputDone = !QueueRead(outputHandle, outputPin.GetAddressOfArrayData(), outputBuffer.Length, outputOverlapped, outputEvent);
-                bool errorDone = !QueueRead(errorHandle, errorPin.GetAddressOfArrayData(), errorBuffer.Length, errorOverlapped, errorEvent);
+                outputDone = !QueueRead(outputHandle, outputPin.GetAddressOfArrayData(), outputBuffer.Length, outputOverlapped, outputEvent);
+                errorDone = !QueueRead(errorHandle, errorPin.GetAddressOfArrayData(), errorBuffer.Length, errorOverlapped, errorEvent);
 
                 long deadline = timeoutMs >= 0
                     ? Environment.TickCount64 + timeoutMs
@@ -254,9 +255,6 @@ namespace System.Diagnostics
 
                     if (waitResult == WaitHandle.WaitTimeout)
                     {
-                        CancelPendingIOIfNeeded(outputHandle, outputDone, outputOverlapped);
-                        CancelPendingIOIfNeeded(errorHandle, errorDone, errorOverlapped);
-
                         throw new TimeoutException();
                     }
 
@@ -321,13 +319,17 @@ namespace System.Diagnostics
             }
             finally
             {
+                // Any exit (timeout, wait/IO failure, interrupt) must drain pending reads before the
+                // OVERLAPPED blocks are freed and the buffers are unpinned and returned to the pool.
                 if (outputOverlapped is not null)
                 {
+                    CancelPendingIOIfNeeded(outputHandle, outputDone, outputOverlapped);
                     NativeMemory.Free(outputOverlapped);
                 }
 
                 if (errorOverlapped is not null)
                 {
+                    CancelPendingIOIfNeeded(errorHandle, errorDone, errorOverlapped);
                     NativeMemory.Free(errorOverlapped);
                 }
 
