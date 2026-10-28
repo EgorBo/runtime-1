@@ -47,6 +47,12 @@ namespace Microsoft.Extensions.Primitives
                     throw new InvalidOperationException(SR.Capacity_CannotChangeAfterWriteStarted);
                 }
 
+                // An empty Append may already have allocated a backing string for the old capacity.
+                if (_value is not null && _value.Length != value)
+                {
+                    _value = null;
+                }
+
                 _capacity = value;
             }
         }
