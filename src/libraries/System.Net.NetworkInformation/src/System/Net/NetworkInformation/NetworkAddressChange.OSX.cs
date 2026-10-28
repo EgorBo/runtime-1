@@ -29,8 +29,10 @@ namespace System.Net.NetworkInformation
         // Listener thread that adds the RunLoopSource to its RunLoop.
         private static Thread? s_runLoopThread;
 
-        // The listener thread's CFRunLoop.
+        // The listener thread's CFRunLoop. It is retained while published here, and cleared (under
+        // s_runLoopLock) by the listener thread when its run loop ends.
         private static CFRunLoopRef s_runLoop;
+        private static readonly object s_runLoopLock = new object();
 
         // Use an event to try to prevent StartRaisingEvents from returning before the
         // RunLoop actually begins. This will mitigate a race condition where the watcher
@@ -195,9 +197,14 @@ namespace System.Net.NetworkInformation
         {
             Debug.Assert(s_runLoop == IntPtr.Zero);
 
-            s_runLoop = Interop.RunLoop.CFRunLoopGetCurrent();
+            CFRunLoopRef runLoop = Interop.RunLoop.CFRunLoopGetCurrent();
+            lock (s_runLoopLock)
+            {
+                s_runLoop = Interop.CoreFoundation.CFRetain(runLoop);
+            }
+
             Interop.RunLoop.CFRunLoopAddSource(
-                s_runLoop,
+                runLoop,
                 s_runLoopSource!.DangerousGetHandle(),
                 Interop.RunLoop.kCFRunLoopDefaultMode.DangerousGetHandle());
 
@@ -205,11 +212,16 @@ namespace System.Net.NetworkInformation
             Interop.RunLoop.CFRunLoopRun();
 
             Interop.RunLoop.CFRunLoopRemoveSource(
-                s_runLoop,
+                runLoop,
                 s_runLoopSource.DangerousGetHandle(),
                 Interop.RunLoop.kCFRunLoopDefaultMode.DangerousGetHandle());
 
-            s_runLoop = IntPtr.Zero;
+            lock (s_runLoopLock)
+            {
+                s_runLoop = IntPtr.Zero;
+            }
+
+            Interop.CoreFoundation.CFRelease(runLoop);
 
             s_runLoopSource.Dispose();
             s_runLoopSource = null;
@@ -222,7 +234,19 @@ namespace System.Net.NetworkInformation
 
         private static void StopRunLoop()
         {
-            if (s_runLoop == IntPtr.Zero)
+            // The listener thread can exit on its own at any time, so take a reference to its run loop
+            // that stays valid for as long as it is used here.
+            CFRunLoopRef runLoop;
+            lock (s_runLoopLock)
+            {
+                runLoop = s_runLoop;
+                if (runLoop != IntPtr.Zero)
+                {
+                    Interop.CoreFoundation.CFRetain(runLoop);
+                }
+            }
+
+            if (runLoop == IntPtr.Zero)
             {
                 // The listener thread already exited on its own: CFRunLoopRun() returns as soon as the
                 // SCDynamicStore run loop source is invalidated (e.g. configd restart, sleep/wake), and
@@ -235,13 +259,18 @@ namespace System.Net.NetworkInformation
                 return;
             }
 
-            Debug.Assert(s_runLoopSource != null);
-            Debug.Assert(s_dynamicStoreRef != null);
+            try
+            {
+                // Allow RunLoop to finish current processing, unless the listener thread exits on its own meanwhile.
+                SpinWait.SpinUntil(() => Interop.RunLoop.CFRunLoopIsWaiting(runLoop) || Volatile.Read(ref s_runLoop) == IntPtr.Zero);
 
-            // Allow RunLoop to finish current processing.
-            SpinWait.SpinUntil(() => Interop.RunLoop.CFRunLoopIsWaiting(s_runLoop));
+                Interop.RunLoop.CFRunLoopStop(runLoop);
+            }
+            finally
+            {
+                Interop.CoreFoundation.CFRelease(runLoop);
+            }
 
-            Interop.RunLoop.CFRunLoopStop(s_runLoop);
             s_runLoopEndedEvent.WaitOne();
         }
 
