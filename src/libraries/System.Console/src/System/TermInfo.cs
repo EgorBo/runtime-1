@@ -171,7 +171,7 @@ namespace System
                             {
                                 printfFormat = printfFormat.Remove(1, 1);
                             }
-                            output.Append(FormatPrintF(printfFormat, stack.Pop().Object)); // do the printf formatting and append its output
+                            output.Append(FormatPrintF(printfFormat, stack.Pop())); // do the printf formatting and append its output
                             break;
 
                         // Stack pushing operations
@@ -345,18 +345,27 @@ namespace System
             private static int AsInt(bool b) { return b ? 1 : 0; }
 
             /// <summary>Formats an argument into a printf-style format string.</summary>
-            /// <param name="format">The printf-style format string.</param>
-            /// <param name="arg">The argument to format.  This must be an Int32 or a String.</param>
+            /// <param name="format">The printf-style format string, of the form "%[flags][width][.precision](d|o|x|X|s)".</param>
+            /// <param name="arg">The argument to format.</param>
             /// <returns>The formatted string.</returns>
-            private static unsafe string FormatPrintF(string format, object arg)
+            private static unsafe string FormatPrintF(string format, FormatParam arg)
             {
-                Debug.Assert(arg is string || arg is int);
+                // The format is handed to the native snprintf together with a variadic argument, so it must
+                // consist of exactly one conversion with only flags, width and precision in front of it.
+                if (format.Length < 2 || format[0] != '%' || format.AsSpan(1, format.Length - 2).ContainsAnyExcept("-+ #.0123456789"))
+                {
+                    throw new InvalidOperationException(SR.IO_TermInfoInvalid);
+                }
+
+                // The conversion character, not the type of the stack value, determines how the native code
+                // reads the argument, so it also determines which one of the two is passed.
+                string? stringArg = format[^1] == 's' ? arg.String : null;
+                int intArg = arg.Int32;
 
                 // Determine how much space is needed to store the formatted string.
-                string? stringArg = arg as string;
                 int neededLength = stringArg != null ?
                     Interop.Sys.SNPrintF(null, 0, format, stringArg) :
-                    Interop.Sys.SNPrintF(null, 0, format, (int)arg);
+                    Interop.Sys.SNPrintF(null, 0, format, intArg);
                 if (neededLength == 0)
                 {
                     return string.Empty;
@@ -372,7 +381,7 @@ namespace System
                 {
                     int length = stringArg != null ?
                         Interop.Sys.SNPrintF(ptr, bytes.Length, format, stringArg) :
-                        Interop.Sys.SNPrintF(ptr, bytes.Length, format, (int)arg);
+                        Interop.Sys.SNPrintF(ptr, bytes.Length, format, intArg);
                     if (length != neededLength)
                     {
                         throw new InvalidOperationException(SR.InvalidOperation_PrintF);
