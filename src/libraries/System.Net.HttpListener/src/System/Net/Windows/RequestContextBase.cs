@@ -114,12 +114,15 @@ namespace System.Net
 
         protected void SetBuffer(int size)
         {
+            // Allocate before freeing, so the current buffer stays valid and owned if the allocation throws.
+            IntPtr newBuffer = size == 0 ? IntPtr.Zero : Marshal.AllocHGlobal(size);
+
             if (_backingBuffer != IntPtr.Zero)
             {
                 Marshal.FreeHGlobal(_backingBuffer);
             }
 
-            _backingBuffer = size == 0 ? IntPtr.Zero : Marshal.AllocHGlobal(size);
+            _backingBuffer = newBuffer;
             _backingBufferLength = size;
 
             // Zero out the contents of the buffer.
