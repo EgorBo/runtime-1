@@ -19,6 +19,11 @@ namespace System.Media
         private const int BlockSize = 1024;
         private const int DefaultLoadTimeout = 10000; // 10 secs
 
+        // PlaySound plays a single sound per process. With SND_MEMORY | SND_ASYNC the system keeps reading the buffer
+        // after PlaySound returns, so the buffer is kept pinned until another asynchronous sound replaces it or it is stopped.
+        private static readonly object s_asyncSoundLock = new object();
+        private static GCHandle s_asyncSoundData;
+
         private Uri? _uri;
         private string _soundLocation = string.Empty;
         private int _loadTimeout = DefaultLoadTimeout;
@@ -224,15 +229,71 @@ namespace System.Media
                 IsLoadCompleted = true;
 
                 ValidateSoundFile(localPath);
-                Interop.WinMM.PlaySound(localPath, IntPtr.Zero, Interop.WinMM.SND_NODEFAULT | flags);
+                if ((flags & Interop.WinMM.SND_ASYNC) != 0)
+                {
+                    lock (s_asyncSoundLock)
+                    {
+                        // A successful call replaced the previous sound, so its buffer is no longer in use.
+                        if (Interop.WinMM.PlaySound(localPath, IntPtr.Zero, Interop.WinMM.SND_NODEFAULT | flags))
+                        {
+                            ReplaceAsyncSoundData(default);
+                        }
+                    }
+                }
+                else
+                {
+                    Interop.WinMM.PlaySound(localPath, IntPtr.Zero, Interop.WinMM.SND_NODEFAULT | flags);
+                }
             }
             else
             {
                 LoadSync();
                 Debug.Assert(_streamData != null);
                 ValidateSoundData(_streamData);
-                Interop.WinMM.PlaySound(_streamData, IntPtr.Zero, Interop.WinMM.SND_MEMORY | Interop.WinMM.SND_NODEFAULT | flags);
+                PlayFromMemory(_streamData, flags);
             }
+        }
+
+        private static void PlayFromMemory(byte[] data, int flags)
+        {
+            int soundFlags = Interop.WinMM.SND_MEMORY | Interop.WinMM.SND_NODEFAULT | flags;
+            if ((flags & Interop.WinMM.SND_ASYNC) == 0)
+            {
+                Interop.WinMM.PlaySound(data, IntPtr.Zero, soundFlags);
+                return;
+            }
+
+            lock (s_asyncSoundLock)
+            {
+                GCHandle pinnedData = GCHandle.Alloc(data, GCHandleType.Pinned);
+                bool played = false;
+                try
+                {
+                    played = Interop.WinMM.PlaySound(data, IntPtr.Zero, soundFlags);
+                }
+                finally
+                {
+                    if (played)
+                    {
+                        ReplaceAsyncSoundData(pinnedData);
+                    }
+                    else
+                    {
+                        pinnedData.Free();
+                    }
+                }
+            }
+        }
+
+        // Must be called under s_asyncSoundLock, after the previously playing sound has been stopped or replaced.
+        private static void ReplaceAsyncSoundData(GCHandle newData)
+        {
+            if (s_asyncSoundData.IsAllocated)
+            {
+                s_asyncSoundData.Free();
+            }
+
+            s_asyncSoundData = newData;
         }
 
         private void CancelLoad()
@@ -425,7 +486,13 @@ namespace System.Media
 
         public void Stop()
         {
-            Interop.WinMM.PlaySound((byte[]?)null, IntPtr.Zero, Interop.WinMM.SND_PURGE);
+            lock (s_asyncSoundLock)
+            {
+                if (Interop.WinMM.PlaySound((byte[]?)null, IntPtr.Zero, Interop.WinMM.SND_PURGE))
+                {
+                    ReplaceAsyncSoundData(default);
+                }
+            }
         }
 
         public event AsyncCompletedEventHandler? LoadCompleted
