@@ -777,31 +777,47 @@ namespace System.IO.Ports
         private unsafe int ProcessRead(SerialStreamIORequest r)
         {
             SerialStreamReadRequest readRequest = (SerialStreamReadRequest)r;
-            Span<byte> buff = readRequest.Buffer.Span;
-            fixed (byte* bufPtr = buff)
+            int numBytes;
+            Interop.ErrorInfo lastError = default;
+
+            // Cancellation completes the request under the same lock, so the caller buffer
+            // is never accessed after the task has been completed.
+            lock (readRequest)
             {
-                // assumes dequeue-ing happens on a single thread
-                int numBytes = Interop.Serial.Read(_handle, bufPtr, buff.Length);
+                if (readRequest.IsCompleted)
+                {
+                    return 0;
+                }
+
+                Span<byte> buff = readRequest.Buffer.Span;
+                fixed (byte* bufPtr = buff)
+                {
+                    // assumes dequeue-ing happens on a single thread
+                    numBytes = Interop.Serial.Read(_handle, bufPtr, buff.Length);
+                }
 
                 if (numBytes < 0)
                 {
-                    Interop.ErrorInfo lastError = Interop.Sys.GetLastErrorInfo();
+                    lastError = Interop.Sys.GetLastErrorInfo();
+                }
+            }
 
-                    // ignore EWOULDBLOCK since we handle timeout elsewhere
-                    if (lastError.Error != Interop.Error.EWOULDBLOCK)
-                    {
-                        readRequest.Complete(Interop.GetIOException(lastError));
-                    }
-                }
-                else if (numBytes > 0)
+            if (numBytes < 0)
+            {
+                // ignore EWOULDBLOCK since we handle timeout elsewhere
+                if (lastError.Error != Interop.Error.EWOULDBLOCK)
                 {
-                    readRequest.Complete(numBytes);
-                    return numBytes;
+                    readRequest.Complete(Interop.GetIOException(lastError));
                 }
-                else // numBytes == 0
-                {
-                    RaiseDataReceivedEof();
-                }
+            }
+            else if (numBytes > 0)
+            {
+                readRequest.Complete(numBytes);
+                return numBytes;
+            }
+            else // numBytes == 0
+            {
+                RaiseDataReceivedEof();
             }
 
             return 0;
@@ -810,34 +826,49 @@ namespace System.IO.Ports
         private unsafe int ProcessWrite(SerialStreamIORequest r)
         {
             SerialStreamWriteRequest writeRequest = (SerialStreamWriteRequest)r;
-            ReadOnlySpan<byte> buff = writeRequest.Buffer.Span;
-            fixed (byte* bufPtr = buff)
+            int numBytes;
+            Interop.ErrorInfo lastError = default;
+
+            // See ProcessRead: cancellation takes the same lock before completing the request.
+            lock (writeRequest)
             {
-                // assumes dequeue-ing happens on a single thread
-                int numBytes = Interop.Serial.Write(_handle, bufPtr, buff.Length);
+                if (writeRequest.IsCompleted)
+                {
+                    return 0;
+                }
+
+                ReadOnlySpan<byte> buff = writeRequest.Buffer.Span;
+                fixed (byte* bufPtr = buff)
+                {
+                    // assumes dequeue-ing happens on a single thread
+                    numBytes = Interop.Serial.Write(_handle, bufPtr, buff.Length);
+                }
 
                 if (numBytes <= 0)
                 {
-                    Interop.ErrorInfo lastError = Interop.Sys.GetLastErrorInfo();
-
-                    // ignore EWOULDBLOCK since we handle timeout elsewhere
-                    // numBytes == 0 means that there might be an error
-                    if (lastError.Error != Interop.Error.SUCCESS && lastError.Error != Interop.Error.EWOULDBLOCK)
-                    {
-                        r.Complete(Interop.GetIOException(lastError));
-                    }
+                    lastError = Interop.Sys.GetLastErrorInfo();
                 }
-                else
+            }
+
+            if (numBytes <= 0)
+            {
+                // ignore EWOULDBLOCK since we handle timeout elsewhere
+                // numBytes == 0 means that there might be an error
+                if (lastError.Error != Interop.Error.SUCCESS && lastError.Error != Interop.Error.EWOULDBLOCK)
                 {
-                    writeRequest.ProcessBytes(numBytes);
-
-                    if (writeRequest.Buffer.Length == 0)
-                    {
-                        writeRequest.Complete();
-                    }
-
-                    return numBytes;
+                    r.Complete(Interop.GetIOException(lastError));
                 }
+            }
+            else
+            {
+                writeRequest.ProcessBytes(numBytes);
+
+                if (writeRequest.Buffer.Length == 0)
+                {
+                    writeRequest.Complete();
+                }
+
+                return numBytes;
             }
 
             return 0;
@@ -1087,7 +1118,13 @@ namespace System.IO.Ports
                 _cancellationTokenRegistration = ct.Register(s =>
                 {
                     var request = (SerialStreamIORequest)s;
-                    request.TrySetCanceled();
+
+                    // Wait for the IO loop to stop using the caller buffer before completing the task.
+                    lock (request)
+                    {
+                        request.TrySetCanceled();
+                    }
+
                     request._parent.HasCancelledTasksToProcess = true;
                 }, this);
             }
