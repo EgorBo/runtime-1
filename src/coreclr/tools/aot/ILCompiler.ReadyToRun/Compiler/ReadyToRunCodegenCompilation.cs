@@ -1085,6 +1085,7 @@ namespace ILCompiler
 
         private bool CompileMethodList(IReadOnlyList<DependencyNodeCore<NodeFactory>> methodList)
         {
+            _methodILCache.EnsureCapacity(checked(_methodILCache.Count + methodList.Count));
             _compilationSessionGeneratedColdCode = 0;
 
             NodeFactory.ManifestMetadataTable._mutableModule.DisableNewTokens = true;

@@ -170,6 +170,16 @@ namespace Internal.TypeSystem
         /// </summary>
         public int Count { get { return _count + (_entryInProcessOfWritingSentinel != null ? 1 : 0); } }
 
+        /// <summary>Ensures the table can hold the specified number of entries without resizing.</summary>
+        public void EnsureCapacity(int capacity)
+        {
+            Debug.Assert(capacity >= 0);
+            while (_resizeCount < capacity)
+            {
+                Expand(_hashtable, capacity);
+            }
+        }
+
         /// <summary>
         /// Gets the value associated with the specified key.
         /// </summary>
@@ -258,7 +268,7 @@ namespace Internal.TypeSystem
         /// Make the underlying array of the hashtable bigger. This function
         /// does not change the contents of the hashtable. This entire function locks.
         /// </summary>
-        private void Expand(TValue[] oldHashtable)
+        private void Expand(TValue[] oldHashtable, int minimumCapacity = 0)
         {
             lock (this)
             {
@@ -276,6 +286,11 @@ namespace Internal.TypeSystem
                 const int minimumUsefulSize = 16;
                 if (newSize < minimumUsefulSize)
                     newSize = minimumUsefulSize;
+
+                while (checked(newSize * _fillPercentageBeforeResize) / 100 < minimumCapacity)
+                {
+                    newSize = checked(newSize * 2);
+                }
 
                 // Work in a local variable to avoid lots of unnecessary volatile reads of _newHashTable since only this method can
                 // change it and we're under a lock

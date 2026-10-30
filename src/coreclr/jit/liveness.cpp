@@ -325,24 +325,24 @@ public:
 
         if (isFloat1 != isFloat2)
         {
-            if (!Compiler::fgProfileWeightsEqual(weight2, 0) && isFloat1)
+            if (isFloat1 && !Compiler::fgProfileWeightsEqual(weight2, 0))
             {
                 return false;
             }
 
-            if (!Compiler::fgProfileWeightsEqual(weight1, 0) && isFloat2)
+            if (isFloat2 && !Compiler::fgProfileWeightsEqual(weight1, 0))
             {
                 return true;
             }
         }
 #endif
 
-        if (!Compiler::fgProfileWeightsEqual(weight1, 0) && dsc1->lvIsRegArg)
+        if (dsc1->lvIsRegArg && !Compiler::fgProfileWeightsEqual(weight1, 0))
         {
             weight1 += 2 * BB_UNITY_WEIGHT;
         }
 
-        if (!Compiler::fgProfileWeightsEqual(weight2, 0) && dsc2->lvIsRegArg)
+        if (dsc2->lvIsRegArg && !Compiler::fgProfileWeightsEqual(weight2, 0))
         {
             weight2 += 2 * BB_UNITY_WEIGHT;
         }

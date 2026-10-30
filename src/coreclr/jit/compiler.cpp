@@ -6929,10 +6929,8 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         // Do the initial inline screen.
         impCanInlineIL(info.compMethodHnd, methodInfo, forceInline, &prejitResult);
 
-        // Temporarily install the prejitResult as the
-        // compInlineResult so it's available to fgFindJumpTargets
-        // and can accumulate more observations as the IL is
-        // scanned.
+        // For viable candidates, temporarily install prejitResult as
+        // compInlineResult to accumulate observations in fgFindJumpTargets.
         //
         // We don't pass prejitResult in as a parameter to avoid
         // potential aliasing confusion -- the other call to
@@ -6941,7 +6939,7 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         // member extensively.
         assert(compInlineResult == nullptr);
         assert(impInlineInfo == nullptr);
-        compInlineResult = &prejitResult;
+        compInlineResult = prejitResult.IsFailure() ? nullptr : &prejitResult;
 
         // Find the basic blocks. We must do this regardless of
         // inlineability, since we are prejitting this method.
@@ -6951,7 +6949,7 @@ int Compiler::compCompileHelper(CORINFO_MODULE_HANDLE classPtr,
         fgFindBasicBlocks();
 
         // Undo the temporary setup.
-        assert(compInlineResult == &prejitResult);
+        assert((compInlineResult == nullptr) || (compInlineResult == &prejitResult));
         compInlineResult = nullptr;
 
         // If still a viable, discretionary inline, assess

@@ -789,7 +789,7 @@ namespace Internal.JitInterface
             _methodILScopeToHandle.Clear();
         }
 
-        private Dictionary<object, IntPtr> _objectToHandle = new Dictionary<object, IntPtr>(new JitObjectComparer());
+        private Dictionary<object, IntPtr> _objectToHandle = new Dictionary<object, IntPtr>(ReferenceEqualityComparer.Instance);
         private Dictionary<MethodDesc, IntPtr> _methodILScopeToHandle = new Dictionary<MethodDesc, IntPtr>(new JitObjectComparer());
         private List<object> _handleToObject = new List<object>();
 
@@ -4037,11 +4037,17 @@ namespace Internal.JitInterface
             return (uint)HandleToObject(ftn).GetHashCode();
         }
 
+        private Dictionary<TypeDesc, SYSTEMV_AMD64_CORINFO_STRUCT_REG_PASSING_DESCRIPTOR> _systemVStructClassifications;
+
         private bool getSystemVAmd64PassStructInRegisterDescriptor(CORINFO_CLASS_STRUCT_* structHnd, SYSTEMV_AMD64_CORINFO_STRUCT_REG_PASSING_DESCRIPTOR* structPassInRegDescPtr)
         {
             TypeDesc typeDesc = HandleToObject(structHnd);
-
-            SystemVStructClassificator.GetSystemVAmd64PassStructInRegisterDescriptor(typeDesc, out *structPassInRegDescPtr);
+            _systemVStructClassifications ??= new(ReferenceEqualityComparer.Instance);
+            if (!_systemVStructClassifications.TryGetValue(typeDesc, out *structPassInRegDescPtr))
+            {
+                SystemVStructClassificator.GetSystemVAmd64PassStructInRegisterDescriptor(typeDesc, out *structPassInRegDescPtr);
+                _systemVStructClassifications.Add(typeDesc, *structPassInRegDescPtr);
+            }
             return true;
         }
 
