@@ -4719,8 +4719,9 @@ GenTree* Compiler::impFixupStructReturnType(GenTree* op)
         }
 
         // In contrast, we can only use multi-reg calls directly if they have the exact same ABI.
-        // Calling convention equality is a conservative approximation for that check.
-        if (op->IsCall() &&
+        // Equality of the return type and calling convention is a conservative approximation for that
+        // check. Note the call may return a different struct type, e.g. when forwarded by "Unsafe.BitCast".
+        if (op->IsCall() && (op->AsCall()->gtRetClsHnd == info.compMethodInfo->args.retTypeClass) &&
             (op->AsCall()->GetUnmanagedCallConv() == info.compCallConv)
 #if defined(TARGET_ARMARCH) || defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
             // TODO-Review: this seems unnecessary. Return ABI doesn't change under varargs.
