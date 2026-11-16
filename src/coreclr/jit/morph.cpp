@@ -2978,11 +2978,13 @@ GenTree* Compiler::fgMorphIndexAddr(GenTreeIndexAddr* indexAddr)
         // case some simple nodes for which CQ analysis shows it is a little better to do that here than
         // leaving them to CSE.
         //
-        // TODO-Bug: GLOB_REF is not yet set for all trees in pre-order morph.
+        // TODO-Bug: GLOB_REF is not yet set for all trees in pre-order morph, so check for
+        // address-exposed locals explicitly: the index side effects may modify them.
         //
         if (((arrRef->gtFlags & (GTF_ASG | GTF_CALL | GTF_GLOB_REF)) != 0) ||
             gtComplexityExceeds(arrRef, MAX_ARR_COMPLEXITY, countNode) || arrRef->OperIs(GT_LCL_FLD) ||
-            (arrRef->OperIs(GT_LCL_VAR) && lvaIsLocalImplicitlyAccessedByRef(arrRef->AsLclVar()->GetLclNum())))
+            (arrRef->OperIs(GT_LCL_VAR) && (lvaIsLocalImplicitlyAccessedByRef(arrRef->AsLclVar()->GetLclNum()) ||
+                                            lvaGetDesc(arrRef->AsLclVar())->IsAddressExposed())))
         {
             unsigned arrRefTmpNum = lvaGrabTemp(true DEBUGARG("arr expr"));
             arrRefDefn            = gtNewTempStore(arrRefTmpNum, arrRef);
@@ -15865,7 +15867,7 @@ bool Compiler::fgMorphArrayOpsStmt(MorphMDArrayTempCache* pTempCache, BasicBlock
             // indirecting using `a` (such as reading a dimension length or lower bound).
             //
             // First, we need to make temp copies of the index expressions that have side-effects. We
-            // always make a copy of the array object (below) so we can multi-use it.
+            // also make a copy of the array object (below) if it isn't a local that can be safely re-read.
             //
             GenTree* idxToUse[GT_ARR_MAX_RANK];
             unsigned idxToCopy[GT_ARR_MAX_RANK];
@@ -15899,7 +15901,9 @@ bool Compiler::fgMorphArrayOpsStmt(MorphMDArrayTempCache* pTempCache, BasicBlock
             unsigned rank      = arrElem->gtArrRank;
 
             // We are going to multiply reference the array object; create a new local var if necessary.
-            if (arrObj->OperIs(GT_LCL_VAR))
+            // An address-exposed local may be modified by the index side effects, which are evaluated before
+            // the expansion reads the array object.
+            if (arrObj->OperIs(GT_LCL_VAR) && !m_compiler->lvaGetDesc(arrObj->AsLclVar())->IsAddressExposed())
             {
                 arrLcl = arrObj->AsLclVar()->GetLclNum();
             }
