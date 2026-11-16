@@ -1253,13 +1253,17 @@ void Compiler::fgUnreachableBlock(BasicBlock* block)
 
     // Update bbRefs and bbPreds for this block's successors
     bool profileInconsistent = false;
+
+    // Snapshot the weight, as a self-edge decreases block's own weight in the loop below.
+    weight_t const blockWeight = block->bbWeight;
+
     for (BasicBlock* const succBlock : block->Succs())
     {
         FlowEdge* const succEdge = fgRemoveAllRefPreds(succBlock, block);
 
         if (block->hasProfileWeight() && succBlock->hasProfileWeight())
         {
-            succBlock->decreaseBBProfileWeight(succEdge->getLikelyWeight());
+            succBlock->decreaseBBProfileWeight(succEdge->getLikelihood() * blockWeight);
             profileInconsistent |= (succBlock->NumSucc() > 0);
         }
     }

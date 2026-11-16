@@ -13300,13 +13300,16 @@ Compiler::FoldResult Compiler::fgFoldConditional(BasicBlock* block)
 
             if (block->hasProfileWeight())
             {
+                // Snapshot the weight, as a self-edge decreases block's own weight in the loop below.
+                weight_t const blockWeight = block->bbWeight;
+
                 // Use unique successor edges, as duplicate jump table entries share an edge.
                 for (FlowEdge* const succEdge : block->SuccEdges())
                 {
                     BasicBlock* const targetBlock = succEdge->getDestinationBlock();
                     if (targetBlock->hasProfileWeight())
                     {
-                        targetBlock->decreaseBBProfileWeight(succEdge->getLikelyWeight());
+                        targetBlock->decreaseBBProfileWeight(succEdge->getLikelihood() * blockWeight);
                         profileInconsistent |= (targetBlock->NumSucc() > 0);
                     }
                 }
