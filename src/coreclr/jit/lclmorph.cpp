@@ -2310,7 +2310,11 @@ public:
         // But the pattern should at least subset the implicit byref cases that are
         // handled in fgCanFastTailCall and fgMakeOutgoingStructArgCopy.
         //
-        if ((node != nullptr) && node->OperIs(GT_LCL_VAR) && (user != nullptr) && user->IsCall())
+        // The total count above saturates, so stop counting call uses once they reach it to
+        // keep the call count a subset of the total.
+        //
+        if ((node != nullptr) && node->OperIs(GT_LCL_VAR) && (user != nullptr) && user->IsCall() &&
+            (varDsc->lvRefCntWtd(RCS_EARLY) < varDsc->lvRefCnt(RCS_EARLY)))
         {
             JITDUMP("LocalAddressVisitor incrementing weighted ref count from " FMT_WT " to " FMT_WT
                     " for implicit by-ref V%02d arg passed to call\n",
