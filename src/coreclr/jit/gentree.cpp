@@ -25221,7 +25221,7 @@ GenTree* Compiler::gtNewSimdCreateBroadcastNode(var_types type, GenTree* op1, va
 {
     NamedIntrinsic hwIntrinsicID = NI_Vector_Create;
 
-    if (op1->IsIntegralConst() || op1->IsCnsFltOrDbl())
+    if ((op1->IsIntegralConst() && !op1->IsIconHandle()) || op1->IsCnsFltOrDbl())
     {
 #if defined(TARGET_ARM64)
         if (type == TYP_SIMD)
@@ -25356,7 +25356,7 @@ GenTree* Compiler::gtNewSimdCreateScalarNode(var_types type, GenTree* op1, var_t
 {
     NamedIntrinsic hwIntrinsicID = NI_Vector_CreateScalar;
 
-    if (op1->IsIntegralConst() || op1->IsCnsFltOrDbl())
+    if ((op1->IsIntegralConst() && !op1->IsIconHandle()) || op1->IsCnsFltOrDbl())
     {
 #if defined(TARGET_ARM64)
         if (type == TYP_SIMD)
@@ -25481,7 +25481,7 @@ GenTree* Compiler::gtNewSimdCreateScalarUnsafeNode(var_types type,
 {
     NamedIntrinsic hwIntrinsicID = NI_Vector_CreateScalarUnsafe;
 
-    if (op1->IsIntegralConst() || op1->IsCnsFltOrDbl())
+    if ((op1->IsIntegralConst() && !op1->IsIconHandle()) || op1->IsCnsFltOrDbl())
     {
         // Since the upper bits are considered non-deterministic and we can therefore
         // set them to anything, we broadcast the value.
@@ -25637,6 +25637,10 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
     GenTree* result    = nullptr;
     bool     isPartial = true;
 
+    // Handles may need relocations, so their values aren't known at compile time.
+    const bool op1IsCns = op1->OperIsConst() && !op1->IsIconHandle();
+    const bool op2IsCns = op2->OperIsConst() && !op2->IsIconHandle();
+
 #if defined(TARGET_ARM64)
     if (type == TYP_SIMD)
     {
@@ -25644,7 +25648,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
         if (varTypeIsIntegral(simdBaseType))
         {
             // Optimize when both op1 and op2 are constant
-            if (op1->OperIsConst() && op2->OperIsConst())
+            if (op1IsCns && op2IsCns)
             {
                 GenTreeVecCon* scalableVecCon = gtNewSimdVconNode(type, simdBaseType, SimdScalableSequence, 0);
 
@@ -25678,7 +25682,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
     // When both op2 and op1 are constant we can fully fold this to a constant. Additionally,
     // if only op2 is a constant we can simplify the computation by a lot. However, if only op1
     // is constant than there isn't any real optimization we can do and we need the full computation.
-    if (op2->OperIsConst())
+    if (op2IsCns)
     {
         GenTreeVecCon* vcon       = gtNewVconNode(type);
         uint32_t       simdLength = getSIMDVectorLength(simdSize, simdBaseType);
@@ -25690,7 +25694,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 uint8_t start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsIntegralConst());
                     start     = static_cast<uint8_t>(op1->AsIntConCommon()->IntegralValue());
@@ -25712,7 +25716,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 uint16_t start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsIntegralConst());
                     start     = static_cast<uint16_t>(op1->AsIntConCommon()->IntegralValue());
@@ -25734,7 +25738,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 uint32_t start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsIntegralConst());
                     start     = static_cast<uint32_t>(op1->AsIntConCommon()->IntegralValue());
@@ -25756,7 +25760,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 uint64_t start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsIntegralConst());
                     start     = static_cast<uint64_t>(op1->AsIntConCommon()->IntegralValue());
@@ -25777,7 +25781,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 float start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsCnsFltOrDbl());
                     start     = static_cast<float>(op1->AsDblCon()->DconValue());
@@ -25798,7 +25802,7 @@ GenTree* Compiler::gtNewSimdCreateSequenceNode(
             {
                 double start = 0;
 
-                if (op1->OperIsConst())
+                if (op1IsCns)
                 {
                     assert(op1->IsCnsFltOrDbl());
                     start     = static_cast<double>(op1->AsDblCon()->DconValue());
@@ -36344,6 +36348,15 @@ GenTree* Compiler::gtFoldExprHWIntrinsic(GenTreeHWIntrinsic* tree)
     }
 #endif // TARGET_ARM64
 #endif // FEATURE_MASKED_HW_INTRINSICS
+
+    for (GenTree* op : tree->Operands())
+    {
+        // Handles may need relocations and the folds below update constants in place, keeping the handle flags.
+        if (op->IsIconHandle())
+        {
+            return tree;
+        }
+    }
 
     GenTree* cnsNode   = nullptr;
     GenTree* otherNode = nullptr;

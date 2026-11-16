@@ -4938,7 +4938,7 @@ bool ValueNumStore::VNEvalCanFoldBinaryFunc(var_types type, VNFunc func, ValueNu
             case GT_GE:
             case GT_LT:
             case GT_LE:
-                if (m_compiler->opts.compReloc && (IsVNHandle(arg0VN) || IsVNHandle(arg1VN)))
+                if (IsVNRelocatableHandle(arg0VN) || IsVNRelocatableHandle(arg1VN))
                 {
                     return false;
                 }
@@ -4967,7 +4967,7 @@ bool ValueNumStore::VNEvalCanFoldBinaryFunc(var_types type, VNFunc func, ValueNu
             case VNF_ADD_UN_OVF:
             case VNF_SUB_UN_OVF:
             case VNF_MUL_UN_OVF:
-                if (m_compiler->opts.compReloc && (IsVNHandle(arg0VN) || IsVNHandle(arg1VN)))
+                if (IsVNRelocatableHandle(arg0VN) || IsVNRelocatableHandle(arg1VN))
                 {
                     return false;
                 }
@@ -5035,7 +5035,7 @@ bool ValueNumStore::VNEvalCanFoldBinaryFunc(var_types type, VNFunc func, ValueNu
 //
 bool ValueNumStore::VNEvalCanFoldUnaryFunc(var_types typ, VNFunc func, ValueNum arg0VN)
 {
-    if (!IsVNConstant(arg0VN))
+    if (!IsVNConstant(arg0VN) || IsVNRelocatableHandle(arg0VN))
     {
         return false;
     }
@@ -7403,6 +7403,11 @@ bool ValueNumStore::IsVNHandle(ValueNum vn, GenTreeFlags flag)
     return IsVNHandle(vn) && (GetHandleFlags(vn) == flag);
 }
 
+bool ValueNumStore::IsVNRelocatableHandle(ValueNum vn)
+{
+    return m_compiler->opts.compReloc && IsVNHandle(vn);
+}
+
 bool ValueNumStore::IsVNObjHandle(ValueNum vn)
 {
     return IsVNHandle(vn, GTF_ICON_OBJ_HDL);
@@ -8468,7 +8473,7 @@ ValueNum ValueNumStore::EvalHWIntrinsicFunUnary(GenTreeHWIntrinsic* tree,
     unsigned       simdSize = tree->GetSimdSize();
     NamedIntrinsic ni       = tree->GetHWIntrinsicId();
 
-    if (IsVNConstant(arg0VN))
+    if (IsVNConstant(arg0VN) && !IsVNRelocatableHandle(arg0VN))
     {
         bool       isScalar = false;
         genTreeOps oper     = tree->GetOperForHWIntrinsicId(&isScalar);
@@ -9930,7 +9935,8 @@ ValueNum ValueNumStore::EvalHWIntrinsicFunTernary(
 
         case NI_Vector_WithElement:
         {
-            if (!IsVNConstant(arg0VN) || !IsVNConstant(arg1VN) || !IsVNConstant(arg2VN))
+            if (!IsVNConstant(arg0VN) || !IsVNConstant(arg1VN) || !IsVNConstant(arg2VN) ||
+                IsVNRelocatableHandle(arg2VN))
             {
                 break;
             }
@@ -10167,7 +10173,8 @@ ValueNum ValueNumStore::EvalMathFuncUnary(var_types typ, NamedIntrinsic gtMathFN
     // If the math intrinsic is not implemented by target-specific instructions, such as implemented
     // by user calls, then don't do constant folding on it during ReadyToRun. This minimizes precision loss.
 
-    if (IsVNConstant(arg0VN) && (!m_compiler->IsAot() || m_compiler->IsTargetIntrinsic(gtMathFN)))
+    if (IsVNConstant(arg0VN) && !IsVNRelocatableHandle(arg0VN) &&
+        (!m_compiler->IsAot() || m_compiler->IsTargetIntrinsic(gtMathFN)))
     {
         if (typ == TYP_DOUBLE)
         {
@@ -10615,8 +10622,8 @@ ValueNum ValueNumStore::EvalMathFuncBinary(var_types typ, NamedIntrinsic gtMathF
     // If the math intrinsic is not implemented by target-specific instructions, such as implemented
     // by user calls, then don't do constant folding on it during ReadyToRun. This minimizes precision loss.
 
-    if (IsVNConstant(arg0VN) && IsVNConstant(arg1VN) &&
-        (!m_compiler->IsAot() || m_compiler->IsTargetIntrinsic(gtMathFN)))
+    if (IsVNConstant(arg0VN) && IsVNConstant(arg1VN) && !IsVNRelocatableHandle(arg0VN) &&
+        !IsVNRelocatableHandle(arg1VN) && (!m_compiler->IsAot() || m_compiler->IsTargetIntrinsic(gtMathFN)))
     {
         if (typ == TYP_DOUBLE)
         {

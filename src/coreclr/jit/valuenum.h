@@ -1216,6 +1216,9 @@ public:
     // Returns true iff the VN represents a specific handle constant.
     bool IsVNHandle(ValueNum vn, GenTreeFlags flag);
 
+    // Returns true iff the VN represents a handle constant whose value is only known after relocation.
+    bool IsVNRelocatableHandle(ValueNum vn);
+
     // Returns true iff the VN represents an object handle constant.
     bool IsVNObjHandle(ValueNum vn);
 

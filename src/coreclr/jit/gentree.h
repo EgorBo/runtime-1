@@ -7010,6 +7010,12 @@ struct GenTreeVecCon : public GenTree
     template <typename simdTypename>
     static bool HandleArgForHWIntrinsicCreate(GenTree* arg, int argIdx, simdTypename& simdVal, var_types baseType)
     {
+        // Handles may need relocations, so their values aren't known at compile time.
+        if (arg->IsIconHandle())
+        {
+            return false;
+        }
+
         switch (baseType)
         {
             case TYP_BYTE:
