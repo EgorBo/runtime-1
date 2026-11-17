@@ -2631,6 +2631,12 @@ bool Compiler::optExtractArrIndex(GenTree* tree, ArrIndex* result, unsigned lhsN
 
     unsigned indLcl = arrBndsChk->GetIndex()->AsLclVarCommon()->GetLclNum();
 
+    // The cloning conditions use the whole local, so give up on a narrowing use of a long local.
+    if (!genActualTypeIsInt(lvaGetDesc(indLcl)))
+    {
+        return false;
+    }
+
     if (lhsNum == BAD_VAR_NUM)
     {
         result->arrLcl  = arrLcl;
@@ -2680,8 +2686,17 @@ bool Compiler::optExtractSpanIndex(GenTree* tree, SpanIndex* result)
         return false;
     }
 
-    result->lenLcl   = arrBndsChk->GetArrayLength()->AsLclVarCommon()->GetLclNum();
-    result->indLcl   = arrBndsChk->GetIndex()->AsLclVarCommon()->GetLclNum();
+    const unsigned lenLcl = arrBndsChk->GetArrayLength()->AsLclVarCommon()->GetLclNum();
+    const unsigned indLcl = arrBndsChk->GetIndex()->AsLclVarCommon()->GetLclNum();
+
+    // The cloning conditions use the whole locals, so give up on narrowing uses of long locals.
+    if (!genActualTypeIsInt(lvaGetDesc(lenLcl)) || !genActualTypeIsInt(lvaGetDesc(indLcl)))
+    {
+        return false;
+    }
+
+    result->lenLcl   = lenLcl;
+    result->indLcl   = indLcl;
     result->bndsChk  = tree;
     result->useBlock = compCurBB;
     return true;
