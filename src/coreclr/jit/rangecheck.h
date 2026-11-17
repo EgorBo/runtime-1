@@ -914,6 +914,12 @@ private:
     // Requires "pRange" to contain range that is computed partially.
     void MergeAssertion(BasicBlock* block, GenTree* phiArg, Range* pRange DEBUGARG(int indent));
 
+    // Drop the symbolic limits of a phi argument range that don't hold after the loop back edge.
+    void DropLoopVariantLimits(BasicBlock* block, BasicBlock* pred, Range* pRange);
+
+    // Get the natural loops of the current flow graph.
+    FlowGraphNaturalLoops* GetLoops();
+
     // Inspect the "assertions" and extract assertions about the given "phiArg" and
     // refine the "pRange" value.
     void MergeEdgeAssertions(GenTreeLclVarCommon* lcl, ASSERT_VALARG_TP assertions, Range* pRange);
@@ -998,6 +1004,8 @@ private:
 
     Compiler*     m_compiler;
     CompAllocator m_alloc;
+
+    FlowGraphNaturalLoops* m_loops;
 
     // The number of nodes for which range is computed throughout the current method.
     // When this limit is zero, we have exhausted all the budget to walk the ud-chain.

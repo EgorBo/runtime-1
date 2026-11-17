@@ -52,6 +52,7 @@ RangeCheck::RangeCheck(Compiler* pCompiler)
     , m_pSearchPath(nullptr)
     , m_compiler(pCompiler)
     , m_alloc(pCompiler->getAllocator(CMK_RangeCheck))
+    , m_loops(nullptr)
     , m_nVisitBudget(MAX_VISIT_BUDGET)
     , m_updateStmt(false)
 {
@@ -1980,6 +1981,70 @@ void RangeCheck::MergeAssertion(BasicBlock* block, GenTree* op, Range* pRange DE
     }
 }
 
+//------------------------------------------------------------------------
+// DropLoopVariantLimits: Drop the "$bnd + cns" limits of a phi argument range when the phi argument
+//    flows around a loop back edge and "$bnd" is not loop invariant.
+//
+// Arguments:
+//    block  - the block containing the phi
+//    pred   - the predecessor the phi argument comes from
+//    pRange - [in, out] the range of the phi argument
+//
+// Notes:
+//    The phi argument range holds at the end of "pred", where "$bnd" has its value of the current
+//    iteration. A loop variant "$bnd" can have a different value in the next iteration.
+//
+void RangeCheck::DropLoopVariantLimits(BasicBlock* block, BasicBlock* pred, Range* pRange)
+{
+    if (!pRange->LowerLimit().IsBinOpArray() && !pRange->UpperLimit().IsBinOpArray())
+    {
+        return;
+    }
+
+    FlowGraphNaturalLoop* loop = GetLoops()->GetLoopByHeader(block);
+    if ((loop == nullptr) || !loop->ContainsBlock(pred))
+    {
+        return;
+    }
+
+    Compiler::VNSet invariantCache(m_alloc);
+    if (pRange->LowerLimit().IsBinOpArray() &&
+        !m_compiler->optVNIsLoopInvariant(pRange->LowerLimit().vn, loop, &invariantCache))
+    {
+        JITDUMP("Dropping loop variant lower limit " FMT_VN " of phi arg from " FMT_BB "\n", pRange->LowerLimit().vn,
+                pred->bbNum);
+        pRange->lLimit = Limit(Limit::keUnknown);
+    }
+    if (pRange->UpperLimit().IsBinOpArray() &&
+        !m_compiler->optVNIsLoopInvariant(pRange->UpperLimit().vn, loop, &invariantCache))
+    {
+        JITDUMP("Dropping loop variant upper limit " FMT_VN " of phi arg from " FMT_BB "\n", pRange->UpperLimit().vn,
+                pred->bbNum);
+        pRange->uLimit = Limit(Limit::keUnknown);
+    }
+}
+
+//------------------------------------------------------------------------
+// GetLoops: Get the natural loops of the current flow graph.
+//
+// Return Value:
+//    The loops, computed on demand as earlier phases may have invalidated them.
+//
+FlowGraphNaturalLoops* RangeCheck::GetLoops()
+{
+    if (m_compiler->m_dfsTree == nullptr)
+    {
+        m_compiler->m_dfsTree = m_compiler->fgComputeDfs();
+    }
+
+    if ((m_loops == nullptr) || (m_loops->GetDfsTree() != m_compiler->m_dfsTree))
+    {
+        m_loops = FlowGraphNaturalLoops::Find(m_compiler->m_dfsTree);
+    }
+
+    return m_loops;
+}
+
 // Compute the range for a binary operation.
 Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool monIncreasing DEBUGARG(int indent))
 {
@@ -2538,6 +2603,7 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
             assert(!argRange.LowerLimit().IsUndef());
             assert(!argRange.UpperLimit().IsUndef());
             MergeAssertion(block, use.GetNode(), &argRange DEBUGARG(indent + 1));
+            DropLoopVariantLimits(block, use.GetNode()->AsPhiArg()->gtPredBB, &argRange);
             JITDUMP("Merging ranges %s %s:", range.ToString(m_compiler), argRange.ToString(m_compiler));
             range = RangeOps::Merge(range, argRange, monIncreasing);
             JITDUMP("%s\n", range.ToString(m_compiler));

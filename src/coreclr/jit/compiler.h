@@ -2665,6 +2665,11 @@ class BlockToNaturalLoopMap
 public:
     FlowGraphNaturalLoop* GetLoop(BasicBlock* block);
 
+    FlowGraphNaturalLoops* GetLoops() const
+    {
+        return m_loops;
+    }
+
     static BlockToNaturalLoopMap* Build(FlowGraphNaturalLoops* loops);
 
 #ifdef DEBUG
@@ -2917,6 +2922,7 @@ class Compiler
     friend class Promotion;
     friend class ReplaceVisitor;
     friend class FlowGraphNaturalLoop;
+    friend class RangeCheck;
 
 #ifdef FEATURE_HW_INTRINSICS
     friend struct GenTreeHWIntrinsic;
