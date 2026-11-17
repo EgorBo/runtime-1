@@ -331,7 +331,8 @@ bool LC_Condition::Evaluates(bool* pResult)
 //
 // Operation:
 //      Check if both conditions are equal. If so, return just 1 of them.
-//      Reverse their operators and check if their reversed operands match. If so, return either of them.
+//      Check if one condition is "a < b" (or "a > b") and the other one is the implied "b >= a"
+//      (or "b <= a"). If so, return the former.
 //
 // Notes:
 //      This is not a full-fledged expression optimizer, it is supposed
@@ -341,6 +342,11 @@ bool LC_Condition::Evaluates(bool* pResult)
 //      would be: "beg >= 0, end <= a.len, inc > 0"
 bool LC_Condition::Combines(const LC_Condition& cond, LC_Condition* newCond)
 {
+    if (compareUnsigned != cond.compareUnsigned)
+    {
+        return false;
+    }
+
     if (oper == cond.oper && op1 == cond.op1 && op2 == cond.op2)
     {
         *newCond = *this;
@@ -349,7 +355,8 @@ bool LC_Condition::Combines(const LC_Condition& cond, LC_Condition* newCond)
     else if ((oper == GT_LT || oper == GT_LE || oper == GT_GT || oper == GT_GE) &&
              GenTree::ReverseRelop(oper) == cond.oper && op1 == cond.op2 && op2 == cond.op1)
     {
-        *newCond = *this;
+        // "a < b" implies "b >= a" but not vice versa, so keep the strict condition.
+        *newCond = (oper == GT_LT || oper == GT_GT) ? *this : cond;
         return true;
     }
     return false;
