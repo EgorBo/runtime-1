@@ -7477,7 +7477,8 @@ public:
     GenTree* fgMorphTree(GenTree* tree);
 
 private:
-    void fgAssertionGen(GenTree* tree);
+    void     fgAssertionGen(GenTree* tree);
+    GenTree* fgAssertionProp(GenTree* tree);
     void fgKillDependentAssertionsSingle(unsigned lclNum DEBUGARG(GenTree* tree));
     void fgKillDependentAssertions(unsigned lclNum DEBUGARG(GenTree* tree));
     void fgMorphTreeDone(GenTree* tree);
@@ -8517,7 +8518,6 @@ public:
     BitVecTraits* apTraits;
     ASSERT_TP     apFull;
     ASSERT_TP     apLocal;
-    ASSERT_TP     apLocalPostorder;
     ASSERT_TP     apLocalIfTrue;
 
     enum optAssertionKind : uint8_t

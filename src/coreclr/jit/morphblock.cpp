@@ -1154,32 +1154,6 @@ GenTree* MorphCopyBlockHelper::CopyFieldByField()
         // TODO: assertion prop?
     }
 
-    auto postOrderAssertionProp = [=](GenTree* tree) {
-        if (m_compiler->fgGlobalMorph && m_compiler->optLocalAssertionProp && (m_compiler->optAssertionCount > 0))
-        {
-            GenTree* optimizedTree = tree;
-            bool     again         = JitConfig.JitEnablePostorderLocalAssertionProp() > 0;
-            bool     didOptimize   = false;
-
-            while (again)
-            {
-                tree          = optimizedTree;
-                optimizedTree = m_compiler->optAssertionProp(m_compiler->apLocalPostorder, tree, nullptr, nullptr);
-                again         = (optimizedTree != nullptr);
-                didOptimize |= again;
-            }
-
-            assert(tree != nullptr);
-
-            if (didOptimize)
-            {
-                m_compiler->gtUpdateNodeSideEffects(tree);
-            }
-        }
-
-        return tree;
-    };
-
     auto getCopyIndirFlags = [](var_types type, GenTreeFlags indirFlags) {
         // These accesses are pieces of a whole struct copy, so non-GC accesses do not need to be atomic.
         return (indirFlags & GTF_IND_COPYABLE_FLAGS) | (varTypeIsGC(type) ? GTF_EMPTY : GTF_IND_ALLOW_NON_ATOMIC);
@@ -1351,7 +1325,12 @@ GenTree* MorphCopyBlockHelper::CopyFieldByField()
         }
         assert(srcFld != nullptr);
 
-        srcFld = postOrderAssertionProp(srcFld);
+        // Indirections inherit their non-faulting state from the original block op, whose own
+        // assertions can't be used to optimize its expansion.
+        if (srcFld->OperIsLocalRead())
+        {
+            srcFld = m_compiler->fgAssertionProp(srcFld);
+        }
 
         GenTree* dstFldStore;
         if (m_dstDoFldStore)
@@ -1417,7 +1396,10 @@ GenTree* MorphCopyBlockHelper::CopyFieldByField()
             assert(srcFld->IsIntegralConst());
         }
 
-        dstFldStore = postOrderAssertionProp(dstFldStore);
+        if (dstFldStore->OperIsLocalStore())
+        {
+            dstFldStore = m_compiler->fgAssertionProp(dstFldStore);
+        }
 
         if (m_compiler->optLocalAssertionProp)
         {

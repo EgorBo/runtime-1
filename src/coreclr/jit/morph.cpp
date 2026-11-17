@@ -7011,7 +7011,6 @@ GenTree* Compiler::fgMorphSmpOp(GenTree* tree, bool* optAssertionPropDone)
             if (optLocalAssertionProp)
             {
                 isQmarkColon = true;
-                BitVecOps::ClearD(apTraits, apLocalPostorder);
             }
             break;
 
@@ -7643,39 +7642,7 @@ DONE_MORPHING_CHILDREN:
         qmarkOp2 = oldTree->AsOp()->gtOp2->AsOp()->gtOp2;
     }
 
-    // During global morph, give assertion prop another shot at this tree.
-    //
-    // We need to use the "postorder" assertion set here, because apLocal
-    // may reflect results from subtrees that have since been reordered.
-    //
-    // apLocalPostorder only includes live assertions from prior statements.
-    //
-    if (fgGlobalMorph && optLocalAssertionProp && (optAssertionCount > 0))
-    {
-        GenTree* optimizedTree = tree;
-        bool     again         = JitConfig.JitEnablePostorderLocalAssertionProp() > 0;
-        bool     didOptimize   = false;
-
-        if (!again)
-        {
-            JITDUMP("*** Postorder assertion prop disabled by config\n");
-        }
-
-        while (again)
-        {
-            tree          = optimizedTree;
-            optimizedTree = optAssertionProp(apLocalPostorder, tree, nullptr, nullptr);
-            again         = (optimizedTree != nullptr);
-            didOptimize |= again;
-        }
-
-        assert(tree != nullptr);
-
-        if (didOptimize)
-        {
-            gtUpdateNodeSideEffects(tree);
-        }
-    }
+    tree = fgAssertionProp(tree);
 
     // Try to fold it, maybe we get lucky,
     tree = gtFoldExpr(tree);
@@ -12670,26 +12637,11 @@ GenTree* Compiler::fgMorphTree(GenTree* tree)
     }
 #endif // DEBUG
 
-    if (fgGlobalMorph)
+    // Leaves have no operands, so propagate into them now. Other nodes are handled once their
+    // operands are morphed, so that assertions generated or killed by the operands are accounted for.
+    if (tree->OperIsLeaf())
     {
-        /* Before morphing the tree, we try to propagate any active assertions */
-        if (optLocalAssertionProp)
-        {
-            /* Do we have any active assertions? */
-
-            if (optAssertionCount > 0)
-            {
-                GenTree* newTree = tree;
-                while (newTree != nullptr)
-                {
-                    tree = newTree;
-                    /* newTree is non-Null if we propagated an assertion */
-                    newTree = optAssertionProp(apLocal, tree, nullptr, nullptr);
-                }
-                assert(tree != nullptr);
-            }
-        }
-        assert(tree != nullptr);
+        tree = fgAssertionProp(tree);
     }
 
     /* Figure out what kind of a node we have */
@@ -12734,6 +12686,10 @@ GenTree* Compiler::fgMorphTree(GenTree* tree)
                 tree->gtFlags &= ~GTF_EXCEPT;
             }
             tree = fgMorphCall(tree->AsCall());
+            if (tree->IsCall())
+            {
+                tree = fgAssertionProp(tree);
+            }
             break;
 
 #if defined(FEATURE_HW_INTRINSICS)
@@ -12871,7 +12827,6 @@ void Compiler::fgKillDependentAssertionsSingle(unsigned lclNum DEBUGARG(GenTree*
 #endif
 
     BitVecOps::DiffD(apTraits, apLocal, killed);
-    BitVecOps::DiffD(apTraits, apLocalPostorder, killed);
 }
 
 //------------------------------------------------------------------------
@@ -12888,7 +12843,7 @@ void Compiler::fgKillDependentAssertionsSingle(unsigned lclNum DEBUGARG(GenTree*
 //
 void Compiler::fgKillDependentAssertions(unsigned lclNum DEBUGARG(GenTree* tree))
 {
-    if (BitVecOps::IsEmpty(apTraits, apLocal) && BitVecOps::IsEmpty(apTraits, apLocalPostorder))
+    if (BitVecOps::IsEmpty(apTraits, apLocal))
     {
         return;
     }
@@ -12920,6 +12875,38 @@ void Compiler::fgKillDependentAssertions(unsigned lclNum DEBUGARG(GenTree* tree)
     {
         fgKillDependentAssertionsSingle(lclNum DEBUGARG(tree));
     }
+}
+
+//------------------------------------------------------------------------
+// fgAssertionProp: optimize a tree via live local assertions during global morph
+//
+// Arguments:
+//   tree - tree to optimize; its operands (if any) must already be morphed
+//
+// Returns:
+//   The optimized tree, or the original tree if no assertions were propagated.
+//
+GenTree* Compiler::fgAssertionProp(GenTree* tree)
+{
+    if (!fgGlobalMorph || !optLocalAssertionProp || (optAssertionCount == 0))
+    {
+        return tree;
+    }
+
+    bool didOptimize = false;
+    for (GenTree* newTree = optAssertionProp(apLocal, tree, nullptr, nullptr); newTree != nullptr;
+         newTree          = optAssertionProp(apLocal, tree, nullptr, nullptr))
+    {
+        tree        = newTree;
+        didOptimize = true;
+    }
+
+    if (didOptimize)
+    {
+        gtUpdateNodeSideEffects(tree);
+    }
+
+    return tree;
 }
 
 //------------------------------------------------------------------------
@@ -13579,11 +13566,6 @@ void Compiler::fgMorphStmts(BasicBlock* block)
         compCurStmt      = stmt;
         GenTree* oldTree = stmt->GetRootNode();
 
-        if (optLocalAssertionProp)
-        {
-            BitVecOps::Assign(apTraits, apLocalPostorder, apLocal);
-        }
-
 #ifdef DEBUG
 
         unsigned oldHash = verbose ? gtHashValue(oldTree) : DUMMY_INIT(~0);
@@ -13804,7 +13786,6 @@ void Compiler::fgMorphBlock(BasicBlock* block, MorphUnreachableInfo* unreachable
             //
             optAssertionReset();
             BitVecOps::ClearD(apTraits, apLocal);
-            BitVecOps::ClearD(apTraits, apLocalPostorder);
         }
         else
         {
@@ -13942,8 +13923,6 @@ void Compiler::fgMorphBlock(BasicBlock* block, MorphUnreachableInfo* unreachable
                 apLocal = BitVecOps::MakeEmpty(apTraits);
             }
 
-            BitVecOps::Assign(apTraits, apLocalPostorder, apLocal);
-
             JITDUMPEXEC(optDumpAssertionIndices("Assertions in: ", apLocal));
         }
     }
@@ -14012,8 +13991,7 @@ PhaseStatus Compiler::fgMorphBlocks()
         // Local assertion prop is enabled if we are optimizing.
         //
         optAssertionInit(/* isLocalProp*/ true);
-        apLocal          = BitVecOps::MakeEmpty(apTraits);
-        apLocalPostorder = BitVecOps::MakeEmpty(apTraits);
+        apLocal = BitVecOps::MakeEmpty(apTraits);
     }
     else
     {
