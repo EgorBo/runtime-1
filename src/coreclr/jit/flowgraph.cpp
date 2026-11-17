@@ -5686,6 +5686,13 @@ bool FlowGraphNaturalLoop::AnalyzeIteration(NaturalLoopIterInfo* info, bool allo
             continue;
         }
 
+        // The test has to decide between exiting and staying in the loop.
+        if (!ContainsBlock(cond->GetTrueTarget()) && !ContainsBlock(cond->GetFalseTarget()))
+        {
+            JITDUMP("    Both successors exit the loop\n");
+            continue;
+        }
+
         GenTree* iterTree = nullptr;
         if (!comp->optExtractTestIncr(cond, &test, &iterTree))
         {
