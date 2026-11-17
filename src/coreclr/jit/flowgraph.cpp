@@ -5990,6 +5990,7 @@ bool FlowGraphNaturalLoop::MatchLimit(unsigned iterVar, GenTree* test, NaturalLo
 //
 bool FlowGraphNaturalLoop::FindConstInit(BasicBlock* preheader, NaturalLoopIterInfo* info)
 {
+    Compiler*   comp     = GetDfsTree()->GetCompiler();
     BasicBlock* curBlock = preheader;
     do
     {
@@ -6012,7 +6013,7 @@ bool FlowGraphNaturalLoop::FindConstInit(BasicBlock* preheader, NaturalLoopIterI
                     }
                 }
 
-                if (GetDfsTree()->GetCompiler()->gtTreeHasLocalStore(tree, info->IterVar))
+                if (comp->gtTreeHasLocalStore(tree, info->IterVar))
                 {
                     return false;
                 }
@@ -6026,7 +6027,13 @@ bool FlowGraphNaturalLoop::FindConstInit(BasicBlock* preheader, NaturalLoopIterI
             }
         }
 
-        curBlock = curBlock->GetUniquePred(GetDfsTree()->GetCompiler());
+        // A handler (or filter) can be entered from exception dispatch, bypassing its flow predecessor.
+        if (comp->bbIsHandlerBeg(curBlock))
+        {
+            return false;
+        }
+
+        curBlock = curBlock->GetUniquePred(comp);
     } while (curBlock != nullptr);
 
     return false;
@@ -6153,7 +6160,14 @@ bool FlowGraphNaturalLoop::HasZeroTripTest(BasicBlock* preheader, NaturalLoopIte
         }
 
         BasicBlock* prevBlock = curBlock;
-        curBlock              = curBlock->GetUniquePred(comp);
+
+        // A handler (or filter) can be entered from exception dispatch, bypassing its flow predecessor.
+        if (comp->bbIsHandlerBeg(curBlock))
+        {
+            return false;
+        }
+
+        curBlock = curBlock->GetUniquePred(comp);
 
         if (curBlock == nullptr)
         {
