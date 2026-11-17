@@ -1263,7 +1263,7 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
     // increment is at most `limit + s` (LE) or `limit + s - 1` (LT), so a
     // limit near INT32_MAX would wrap the IV and let the bounds-check-
     // stripped fast clone access memory past the array/span. Bound the limit
-    // base accordingly. Decreasing loops are safe via the existing `limit
+    // accordingly. Decreasing loops are safe via the existing `limit
     // >= 0` condition (post-step IV >= -stride > INT_MIN for any non-absurd
     // stride).
     if ((stride > 1) && isIncreasingLoop && needsOverflowGuard)
@@ -1285,38 +1285,34 @@ bool Compiler::optDeriveLoopCloningConditions(FlowGraphNaturalLoop* loop, LoopCl
         }
         else if (iterInfo->HasInvariantLocalLimit)
         {
-            if (maxLimitBase64 >= INT32_MAX)
+            const unsigned limitLcl = iterInfo->VarLimit();
+            if (!genActualTypeIsInt(lvaGetDesc(limitLcl)))
+            {
+                JITDUMP("> Stride %d: limit var V%02u not TYP_INT-compatible\n", stride, limitLcl);
+                return false;
+            }
+
+            // The limit is "base + offset" computed with wraparound, which can only be ruled out for a never
+            // negative base and a non-positive offset. Otherwise, bound the wrapped limit rather than the base.
+            if ((offset <= 0) && lvaGetDesc(limitLcl)->IsNeverNegative() && (maxLimitBase64 >= INT32_MAX))
             {
                 JITDUMP("Stride>1 overflow guard trivially holds (offset %d)\n", offset);
             }
-            else if (maxLimitBase64 < 0)
-            {
-                JITDUMP("> Stride %d, offset %d: overflow guard unsatisfiable\n", stride, offset);
-                return false;
-            }
             else
             {
-                const unsigned limitLcl = iterInfo->VarLimit();
-                if (!genActualTypeIsInt(lvaGetDesc(limitLcl)))
-                {
-                    JITDUMP("> Stride %d: limit var V%02u not TYP_INT-compatible\n", stride, limitLcl);
-                    return false;
-                }
-
-                const int    maxLimit      = (int)maxLimitBase64;
-                LC_Ident     limitVarIdent = LC_Ident::CreateVar(limitLcl, iterInfo->LimitBase()->TypeGet());
+                const int    maxLimit      = INT32_MAX - stride + 1 - adjustForLE;
+                LC_Ident     limitIdent    = LC_Ident::CreateVar(limitLcl, iterInfo->LimitBase()->TypeGet(), offset);
                 LC_Ident     maxConstIdent = LC_Ident::CreateConst(static_cast<unsigned>(maxLimit));
-                LC_Condition overflowGuard(GT_LE, LC_Expr(limitVarIdent), LC_Expr(maxConstIdent));
+                LC_Condition overflowGuard(GT_LE, LC_Expr(limitIdent), LC_Expr(maxConstIdent));
                 context->EnsureConditions(loop->GetIndex())->Push(overflowGuard);
-                JITDUMP("Added stride>1 overflow guard: V%02u <= %d\n", limitLcl, maxLimit);
+                JITDUMP("Added stride>1 overflow guard: V%02u%+d <= %d\n", limitLcl, offset, maxLimit);
             }
         }
-        else if (iterInfo->HasArrayLengthLimit && largeStride)
+        else if (iterInfo->HasArrayLengthLimit)
         {
-            // For stride <= 57 the implicit Array.MaxLength bound suffices;
-            // we fall through with no extra check. For wider strides emit a
-            // runtime guard on arr.Length so the fast clone only runs when
-            // the array is short enough that the post-step IV stays in int.
+            // arr.Length + offset can only wrap for a positive offset, which the "limit >= 0" condition
+            // rejects. With array accesses only and stride <= 57 the per-access "limit <= arr.Length"
+            // condition suffices, but span accesses need this guard on arr.Length.
             assert(limitArrIndex != nullptr);
             if (maxLimitBase64 >= CORINFO_Array_MaxLength)
             {
