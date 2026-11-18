@@ -2627,28 +2627,20 @@ namespace Internal.JitInterface
             return (uint)CompilerTypeSystemContext.GetClassAlignmentRequirementStatic(type);
         }
 
-        private int MarkGcField(byte* gcPtrs, CorInfoGCType gcType)
+        private static void MarkGcField(byte* gcPtrs, CorInfoGCType gcType)
         {
-            // Ensure that if we have multiple fields with the same offset,
-            // that we don't double count the data in the gc layout.
-            if (*gcPtrs == (byte)CorInfoGCType.TYPE_GC_NONE)
-            {
-                *gcPtrs = (byte)gcType;
-                return 1;
-            }
-            else
-            {
-                Debug.Assert(*gcPtrs == (byte)gcType);
-                return 0;
-            }
+            // Fields with the same offset must agree on the GC type.
+            Debug.Assert(*gcPtrs == (byte)CorInfoGCType.TYPE_GC_NONE || *gcPtrs == (byte)gcType);
+            *gcPtrs = (byte)gcType;
         }
 
-        private int GatherClassGCLayout(MetadataType type, byte* gcPtrs)
+        // Returns true if the layout of the type has any GC slots.
+        private bool GatherClassGCLayout(MetadataType type, byte* gcPtrs)
         {
-            int result = 0;
+            bool hasGcSlots = false;
 
             if (type.BaseType is { ContainsGCPointers: true } baseType)
-                result += GatherClassGCLayout(baseType, gcPtrs);
+                hasGcSlots |= GatherClassGCLayout(baseType, gcPtrs);
 
             bool isInlineArray = type.IsInlineArray;
 
@@ -2684,27 +2676,29 @@ namespace Internal.JitInterface
                 Debug.Assert(field.Offset.AsInt % PointerSize == 0);
                 byte* fieldGcPtrs = gcPtrs + field.Offset.AsInt / PointerSize;
 
+                bool fieldHasGcSlots;
                 if (gcType == CorInfoGCType.TYPE_GC_OTHER)
                 {
-                    result += GatherClassGCLayout((MetadataType)fieldType, fieldGcPtrs);
+                    fieldHasGcSlots = GatherClassGCLayout((MetadataType)fieldType, fieldGcPtrs);
                 }
                 else
                 {
-                    result += MarkGcField(fieldGcPtrs, gcType);
+                    MarkGcField(fieldGcPtrs, gcType);
+                    fieldHasGcSlots = true;
                 }
+
+                hasGcSlots |= fieldHasGcSlots;
 
                 if (isInlineArray)
                 {
-                    if (result > 0)
+                    if (fieldHasGcSlots)
                     {
                         Debug.Assert(field.Offset.AsInt == 0);
                         int totalLayoutSize = type.GetElementSize().AsInt / PointerSize;
                         int elementLayoutSize = fieldType.GetElementSize().AsInt / PointerSize;
-                        int gcPointersInElement = result;
                         for (int offset = elementLayoutSize; offset < totalLayoutSize; offset += elementLayoutSize)
                         {
                             Buffer.MemoryCopy(gcPtrs, gcPtrs + offset, elementLayoutSize, elementLayoutSize);
-                            result += gcPointersInElement;
                         }
                     }
 
@@ -2712,7 +2706,7 @@ namespace Internal.JitInterface
                     break;
                 }
             }
-            return result;
+            return hasGcSlots;
         }
 
         private uint getClassGClayout(CORINFO_CLASS_STRUCT_* cls, byte* gcPtrs)
@@ -2721,11 +2715,19 @@ namespace Internal.JitInterface
 
             MetadataType type = (MetadataType)HandleToObject(cls);
             uint size = type.IsValueType ? getClassSize(cls) : getHeapClassSize(cls);
-            new Span<byte>(gcPtrs, (int)((size + PointerSize - 1) / PointerSize)).Clear();
+            int numSlots = (int)((size + PointerSize - 1) / PointerSize);
+            new Span<byte>(gcPtrs, numSlots).Clear();
 
             if (type.ContainsGCPointers || type.IsByRefLike)
             {
-                result = (uint)GatherClassGCLayout(type, gcPtrs);
+                GatherClassGCLayout(type, gcPtrs);
+
+                // Overlapping fields can mark the same slot more than once, so count the marked slots.
+                for (int i = 0; i < numSlots; i++)
+                {
+                    if (gcPtrs[i] != (byte)CorInfoGCType.TYPE_GC_NONE)
+                        result++;
+                }
             }
             return result;
         }

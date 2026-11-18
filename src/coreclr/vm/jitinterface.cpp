@@ -2258,64 +2258,62 @@ bool CEEInfo::checkMethodModifier(CORINFO_METHOD_HANDLE hMethod,
     return result;
 }
 
-static unsigned MarkGCField(BYTE* gcPtrs, CorInfoGCType type)
+static void MarkGCField(BYTE* gcPtrs, CorInfoGCType type)
 {
     STANDARD_VM_CONTRACT;
 
-    // Ensure that if we have multiple fields with the same offset,
-    // that we don't double count the data in the gc layout.
-    if (*gcPtrs == TYPE_GC_NONE)
-    {
-        *gcPtrs = (BYTE)type;
-        return 1;
-    }
-    else if (*gcPtrs != type)
+    // Fields with the same offset must agree on the GC type.
+    if ((*gcPtrs != TYPE_GC_NONE) && (*gcPtrs != type))
     {
         COMPlusThrowHR(COR_E_BADIMAGEFORMAT);
     }
 
-    return 0;
+    *gcPtrs = (BYTE)type;
 }
 
-static unsigned ComputeGCLayout(MethodTable* pMT, BYTE* gcPtrs)
+// Returns true if the layout of the value type has any GC slots.
+static bool ComputeGCLayout(MethodTable* pMT, BYTE* gcPtrs)
 {
     STANDARD_VM_CONTRACT;
 
     _ASSERTE(pMT->IsValueType());
 
-    unsigned result = 0;
+    bool hasGCSlots = false;
     bool isInlineArray = pMT->GetClass()->IsInlineArray();
     ApproxFieldDescIterator fieldIterator(pMT, ApproxFieldDescIterator::INSTANCE_FIELDS);
     for (FieldDesc *pFD = fieldIterator.Next(); pFD != NULL; pFD = fieldIterator.Next())
     {
         int fieldStartIndex = pFD->GetOffset() / TARGET_POINTER_SIZE;
 
+        bool fieldHasGCSlots = false;
         if (pFD->GetFieldType() == ELEMENT_TYPE_VALUETYPE)
         {
             MethodTable* pFieldMT = pFD->GetApproxFieldTypeHandleThrowing().AsMethodTable();
-            result += ComputeGCLayout(pFieldMT, gcPtrs + fieldStartIndex);
+            fieldHasGCSlots = ComputeGCLayout(pFieldMT, gcPtrs + fieldStartIndex);
         }
         else if (pFD->IsObjRef())
         {
-            result += MarkGCField(gcPtrs + fieldStartIndex, TYPE_GC_REF);
+            MarkGCField(gcPtrs + fieldStartIndex, TYPE_GC_REF);
+            fieldHasGCSlots = true;
         }
         else if (pFD->IsByRef())
         {
-            result += MarkGCField(gcPtrs + fieldStartIndex, TYPE_GC_BYREF);
+            MarkGCField(gcPtrs + fieldStartIndex, TYPE_GC_BYREF);
+            fieldHasGCSlots = true;
         }
+
+        hasGCSlots |= fieldHasGCSlots;
 
         if (isInlineArray)
         {
-            if (result > 0)
+            if (fieldHasGCSlots)
             {
                 _ASSERTE(pFD->GetOffset() == 0);
                 DWORD totalLayoutSize = pMT->GetNumInstanceFieldBytes() / TARGET_POINTER_SIZE;
                 DWORD elementLayoutSize = pFD->GetSize() / TARGET_POINTER_SIZE;
-                DWORD gcPointersInElement = result;
                 for (DWORD offset = elementLayoutSize; offset < totalLayoutSize; offset += elementLayoutSize)
                 {
                     memcpy(gcPtrs + offset, gcPtrs, elementLayoutSize);
-                    result += gcPointersInElement;
                 }
             }
 
@@ -2323,7 +2321,7 @@ static unsigned ComputeGCLayout(MethodTable* pMT, BYTE* gcPtrs)
             break;
         }
     }
-    return result;
+    return hasGCSlots;
 }
 
 unsigned CEEInfo::getClassGClayout (CORINFO_CLASS_HANDLE clsHnd, BYTE* gcPtrs)
@@ -2359,10 +2357,19 @@ unsigned CEEInfo::getClassGClayoutStatic(TypeHandle VMClsHnd, BYTE* gcPtrs)
     }
     else if (pMT->IsByRefLike())
     {
-        memset(gcPtrs, TYPE_GC_NONE,
-            (VMClsHnd.GetSize() + TARGET_POINTER_SIZE - 1) / TARGET_POINTER_SIZE);
+        unsigned numSlots = (VMClsHnd.GetSize() + TARGET_POINTER_SIZE - 1) / TARGET_POINTER_SIZE;
+        memset(gcPtrs, TYPE_GC_NONE, numSlots);
         // ByRefLike structs can contain byref fields or other ByRefLike structs
-        result = ComputeGCLayout(VMClsHnd.AsMethodTable(), gcPtrs);
+        ComputeGCLayout(VMClsHnd.AsMethodTable(), gcPtrs);
+
+        // Overlapping fields can mark the same slot more than once, so count the marked slots.
+        for (unsigned i = 0; i < numSlots; i++)
+        {
+            if (gcPtrs[i] != TYPE_GC_NONE)
+            {
+                result++;
+            }
+        }
     }
     else
     {
