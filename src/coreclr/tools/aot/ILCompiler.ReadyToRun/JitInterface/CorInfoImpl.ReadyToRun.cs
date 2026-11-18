@@ -2235,9 +2235,9 @@ namespace Internal.JitInterface
                     resolvedConstraint = true;
                     pResult->thisTransform = CORINFO_THIS_TRANSFORM.CORINFO_NO_THIS_TRANSFORM;
 
-                    exactType = (isStaticVirtual && dimResolution == DefaultInterfaceMethodResolution.DefaultImplementation)
-                        ? directMethod.OwningType
-                        : constrainedType;
+                    // A static virtual method can be resolved to a method declared on a base type (or to a default
+                    // interface method), which then needs the generic context of its exact owning type.
+                    exactType = isStaticVirtual ? directMethod.OwningType : constrainedType;
                     if (isStaticVirtual)
                     {
                         pResolvedToken.tokenType = CorInfoTokenKind.CORINFO_TOKENKIND_ResolvedStaticVirtualMethod;
