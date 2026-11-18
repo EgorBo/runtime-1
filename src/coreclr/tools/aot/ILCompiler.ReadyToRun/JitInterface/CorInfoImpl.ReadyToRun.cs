@@ -1813,8 +1813,19 @@ namespace Internal.JitInterface
             pHasSideEffects = type.HasFinalizer;
 
             // If the type isn't within the version bubble, it could gain a finalizer. Always treat it as if it has a finalizer
-            if (!pHasSideEffects && !_compilation.NodeFactory.CompilationModuleGroup.VersionsWithType(type))
+            CompilationModuleGroup moduleGroup = _compilation.NodeFactory.CompilationModuleGroup;
+            if (!pHasSideEffects && !moduleGroup.VersionsWithType(type))
                 pHasSideEffects = true;
+
+            // Finalizers are inherited, so the same applies to the base types of a class.
+            if (!type.IsValueType)
+            {
+                for (TypeDesc baseType = type.BaseType; !pHasSideEffects && baseType is not null && !baseType.IsObject; baseType = baseType.BaseType)
+                {
+                    if (!moduleGroup.VersionsWithType(baseType.GetTypeDefinition()))
+                        pHasSideEffects = true;
+                }
+            }
 
             return CorInfoHelpFunc.CORINFO_HELP_NEWFAST;
         }
