@@ -44,6 +44,8 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
             // 2. If the declMethod is an interface method, the full implementation type (including any generic type arguments)
             //    must version with the application, as external type arguments can alter variant interface dispatch.
             // 3. Additionally, the exact implementation type must be representable within the R2R image (this is checked via VersionsWithTypeReference)
+            // 4. If the declMethod is a method on a variant interface, the result of variant interface dispatch must not
+            //    depend on cast results that may change when types outside the version bubble change.
             //
             // Result method checking
             // 1. Ensure that the resolved result versions with the code, or is the decl method
@@ -134,6 +136,13 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
                         }
                     }
                 }
+            }
+
+            if (declMethod.OwningType.IsInterface && declMethod.OwningType.HasVariance &&
+                !_compilationModuleGroup.IsVariantInterfaceDispatchVersionResilient(implType, (DefType)declMethod.OwningType))
+            {
+                devirtualizationDetail = CORINFO_DEVIRTUALIZATION_DETAIL.CORINFO_DEVIRTUALIZATION_FAILED_BUBBLE;
+                return null;
             }
 
 

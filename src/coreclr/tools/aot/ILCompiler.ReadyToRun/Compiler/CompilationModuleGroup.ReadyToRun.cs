@@ -118,5 +118,112 @@ namespace ILCompiler
         /// List of input modules to use for the compilation.
         /// </summary>
         public abstract IEnumerable<EcmaModule> CompilationModuleSet { get; }
+
+        /// <summary>
+        /// Returns true if a cast from an object of exact type <paramref name="fromType"/> to
+        /// <paramref name="toType"/> that fails now also fails in every later version of its dependencies.
+        /// </summary>
+        public bool IsNegativeCastResultVersionResilient(TypeDesc fromType, TypeDesc toType)
+        {
+            if (fromType.HasTypeEquivalence || toType.HasTypeEquivalence)
+                return false;
+
+            // A value type can gain interfaces, but its other cast targets are fixed.
+            if (fromType.IsValueType && !toType.IsInterface)
+                return true;
+
+            // Otherwise every type that decides the cast must version with this code. Array and variant casts
+            // also depend on element types and generic arguments, and COM objects can be cast to interfaces
+            // through QueryInterface.
+            if (fromType is not DefType || toType is not DefType || toType.HasVariance)
+                return false;
+
+            if (!VersionsWithType(toType))
+                return false;
+
+            for (TypeDesc type = fromType; type is not null; type = type.BaseType)
+            {
+                if (type.IsComImport || !VersionsWithType(type))
+                    return false;
+            }
+
+            foreach (DefType iface in fromType.RuntimeInterfaces)
+            {
+                if (!VersionsWithType(iface))
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true if a call to a method on the variant interface <paramref name="declInterface"/> on an object
+        /// of exact type <paramref name="implType"/> resolves to the same implementation in every later version of
+        /// its dependencies.
+        /// </summary>
+        public bool IsVariantInterfaceDispatchVersionResilient(TypeDesc implType, DefType declInterface)
+        {
+            Debug.Assert(declInterface.IsInterface && declInterface.HasVariance);
+
+            // Variant dispatch picks the first interface on implType that is castable to declInterface. A positive
+            // cast result can't change across versions, but a negative one can.
+            bool implementsDeclInterface = false;
+            foreach (DefType iface in implType.RuntimeInterfaces)
+            {
+                if (iface == declInterface)
+                {
+                    implementsDeclInterface = true;
+                    continue;
+                }
+
+                if (iface.HasSameTypeDefinition(declInterface) && !iface.CanCastTo(declInterface) &&
+                    !IsNegativeVariantCastVersionResilient(iface, declInterface))
+                {
+                    return false;
+                }
+            }
+
+            if (implementsDeclInterface || implType.IsValueType)
+                return true;
+
+            // A base type outside the version bubble can gain a matching interface.
+            for (TypeDesc type = implType.BaseType; type is not null && !type.IsObject; type = type.BaseType)
+            {
+                if (!VersionsWithType(type.GetTypeDefinition()))
+                    return false;
+            }
+
+            return true;
+        }
+
+        // Returns true if the failing cast from iface to declInterface (instantiations of the same variant
+        // interface) also fails in every later version: some type argument has to mismatch in a stable way.
+        private bool IsNegativeVariantCastVersionResilient(DefType iface, DefType declInterface)
+        {
+            Instantiation typicalInstantiation = iface.GetTypeDefinition().Instantiation;
+            for (int i = 0; i < typicalInstantiation.Length; i++)
+            {
+                TypeDesc fromArg = iface.Instantiation[i];
+                TypeDesc toArg = declInterface.Instantiation[i];
+                if (fromArg == toArg)
+                    continue;
+
+                GenericVariance variance = ((GenericParameterDesc)typicalInstantiation[i]).Variance;
+                if (variance == GenericVariance.None)
+                    return true;
+
+                // Variance only applies to reference types.
+                if (fromArg.IsValueType || toArg.IsValueType)
+                    return true;
+
+                if (variance == GenericVariance.Contravariant)
+                    (fromArg, toArg) = (toArg, fromArg);
+
+                if (!fromArg.CanCastTo(toArg) && IsNegativeCastResultVersionResilient(fromArg, toArg))
+                    return true;
+            }
+
+            return false;
+        }
     }
 }

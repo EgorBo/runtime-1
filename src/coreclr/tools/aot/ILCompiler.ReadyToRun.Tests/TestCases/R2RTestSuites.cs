@@ -1231,6 +1231,46 @@ public class R2RTestSuites
         }
     }
 
+    [Fact]
+    public void VariantInterfaceDispatchRespectsVersionBubble()
+    {
+        var variantLib = new CompiledAssembly
+        {
+            AssemblyName = "VariantDispatchLib",
+            SourceResourceNames = ["VariantDispatch/Dependencies/VariantDispatchLib.cs"],
+        };
+        var testAssembly = new CompiledAssembly
+        {
+            AssemblyName = nameof(VariantInterfaceDispatchRespectsVersionBubble),
+            SourceResourceNames = ["VariantDispatch/VariantDispatch.cs"],
+            References = [variantLib],
+        };
+
+        new R2RTestRunner(_output).Run(new R2RTestCase(
+            nameof(VariantInterfaceDispatchRespectsVersionBubble),
+            [
+                new(nameof(VariantInterfaceDispatchRespectsVersionBubble),
+                    [
+                        new CrossgenAssembly(variantLib)
+                        {
+                            Kind = Crossgen2InputKind.Reference,
+                        },
+                        new CrossgenAssembly(testAssembly),
+                    ])
+                {
+                    Options = [Crossgen2Option.Optimize],
+                    Validate = Validate,
+                },
+            ]));
+
+        static void Validate(ReadyToRunReader reader)
+        {
+            Assert.False(R2RAssert.HasInlinedMethod(reader, "CallTwoProducers", "Get", out string diag), diag);
+            Assert.False(R2RAssert.HasInlinedMethod(reader, "CallTwoStaticProducers", "Get", out diag), diag);
+            Assert.True(R2RAssert.HasInlinedMethod(reader, "CallOneProducer", "Get", out diag), diag);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

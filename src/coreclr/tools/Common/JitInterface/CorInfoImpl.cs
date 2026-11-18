@@ -3251,7 +3251,7 @@ namespace Internal.JitInterface
             // cast to become negative, but not for a previously negative
             // cast to become positive. So in R2R a negative result is
             // reported back as May, unless it can't change across versions.
-            if (result == TypeCompareState.MustNot && !IsNegativeCastResultVersionResilient(fromType, toType))
+            if (result == TypeCompareState.MustNot && !_compilation.CompilationModuleGroup.IsNegativeCastResultVersionResilient(fromType, toType))
             {
                 result = TypeCompareState.May;
             }
