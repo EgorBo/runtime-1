@@ -485,6 +485,13 @@ namespace ILCompiler
                     return null;
                 }
 
+                // Callers find the runtime determined form of a shared result via the constrained type, which
+                // doesn't work if the method is declared elsewhere (e.g. on a base type or as a default interface method).
+                if (result.OwningType != constrainedType && result.OwningType.IsCanonicalSubtype(CanonicalFormKind.Any))
+                {
+                    return null;
+                }
+
                 if (methodInstantiation.Length != 0)
                     result = result.MakeInstantiatedMethod(methodInstantiation);
 
@@ -630,16 +637,6 @@ namespace ILCompiler
             if (methodInstantiation.Length != 0)
             {
                 method = method.MakeInstantiatedMethod(methodInstantiation);
-            }
-
-            // It's difficult to discern what runtime determined form the interface method
-            // is on later so fail the resolution if this would be that.
-            // This is pretty conservative and can be narrowed down.
-            if (method.IsCanonicalMethod(CanonicalFormKind.Any)
-                && !method.OwningType.IsValueType)
-            {
-                Debug.Assert(method.Signature.IsStatic);
-                return null;
             }
 
             Debug.Assert(method != null);
