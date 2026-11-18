@@ -700,6 +700,11 @@ namespace ILCompiler
                     return !metadataType.IsAbstract;
                 }
 
+                // Array covariance lets e.g. an int[] reference point to a uint[] or an enum array,
+                // whose generic interface methods dispatch to a different Array<T> instantiation.
+                if (_context.IsArrayVariantCastable(type))
+                    return false;
+
                 // Everything else can be considered sealed.
                 return true;
             }

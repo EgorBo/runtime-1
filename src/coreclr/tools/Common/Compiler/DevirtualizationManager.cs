@@ -22,8 +22,15 @@ namespace ILCompiler
         {
             switch (type.Category)
             {
-                case TypeFlags.Array:
                 case TypeFlags.SzArray:
+#if !READYTORUN
+                    // Array covariance lets e.g. an int[] reference point to a uint[] or an enum array,
+                    // whose generic interface methods dispatch to a different Array<T> instantiation.
+                    return !((CompilerTypeSystemContext)type.Context).IsArrayVariantCastable(type);
+#else
+                    return true;
+#endif
+                case TypeFlags.Array:
                 case TypeFlags.ByRef:
                 case TypeFlags.Pointer:
                 case TypeFlags.FunctionPointer:
