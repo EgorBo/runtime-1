@@ -8123,8 +8123,14 @@ void Lowering::ContainCheckDivOrMod(GenTreeOp* node)
     }
 #endif
 
-    // divisor can be an r/m, but the memory indirection must be of the same size as the divide
-    if (IsContainableMemoryOp(divisor) && (divisor->TypeGet() == node->TypeGet()) && IsInvariantInRange(divisor, node))
+    // divisor can be an r/m, but the memory operand must be of the same size as the divide.
+    // This also applies to a reg-optional divisor, which may be used directly from its stack home.
+    if (!IsContainableMemoryOpSize(node, divisor))
+    {
+        return;
+    }
+
+    if (IsContainableMemoryOp(divisor) && IsInvariantInRange(divisor, node))
     {
         MakeSrcContained(node, divisor);
     }
