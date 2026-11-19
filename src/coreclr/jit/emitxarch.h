@@ -212,6 +212,7 @@ bool hasVexPrefix(code_t code)
 code_t AddVexPrefix(instruction ins, code_t code, emitAttr attr);
 
 static insTupleType insTupleTypeInfo(instruction ins);
+static unsigned     insDstNarrowingFactor(instruction ins);
 
 // 2-byte REX2 prefix starts with byte 0xD5
 #define REX2_PREFIX_MASK_2BYTE 0xFF0000000000ULL

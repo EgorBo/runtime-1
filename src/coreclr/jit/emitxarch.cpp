@@ -12455,18 +12455,17 @@ void emitter::emitDispConstant(const instrDesc* id, bool skipComma) const
 }
 
 //------------------------------------------------------------------------
-// GetNarrowedDstAttr: Get the size to display for the destination of an
-// instruction that writes fewer bytes than it reads, such as the packed
-// double to single converts.
+// insDstNarrowingFactor: Get the factor by which the destination of an
+// instruction is narrower than its source, such as the packed double to
+// single converts.
 //
 // Arguments:
-//    ins     - the instruction
-//    srcAttr - the size of the source operand
+//    ins - the instruction
 //
 // Return Value:
-//    The size of the destination, or srcAttr when the two match.
+//    The narrowing factor, or 1 if the destination is as wide as the source.
 //
-static emitAttr GetNarrowedDstAttr(instruction ins, emitAttr srcAttr)
+unsigned emitter::insDstNarrowingFactor(instruction ins)
 {
     switch (ins)
     {
@@ -12484,21 +12483,43 @@ static emitAttr GetNarrowedDstAttr(instruction ins, emitAttr srcAttr)
         case INS_vcvtudq2ph:
         case INS_vcvtuqq2ps:
         {
-            return std::max(EA_16BYTE, EA_ATTR(EA_SIZE_IN_BYTES(srcAttr) / 2));
+            return 2;
         }
 
         case INS_vcvtpd2ph:
         case INS_vcvtqq2ph:
         case INS_vcvtuqq2ph:
         {
-            return std::max(EA_16BYTE, EA_ATTR(EA_SIZE_IN_BYTES(srcAttr) / 4));
+            return 4;
         }
 
         default:
         {
-            return srcAttr;
+            return 1;
         }
     }
+}
+
+//------------------------------------------------------------------------
+// GetNarrowedDstAttr: Get the size to display for the destination of an
+// instruction that writes fewer bytes than it reads.
+//
+// Arguments:
+//    ins     - the instruction
+//    srcAttr - the size of the source operand
+//
+// Return Value:
+//    The size of the destination, or srcAttr when the two match.
+//
+static emitAttr GetNarrowedDstAttr(instruction ins, emitAttr srcAttr)
+{
+    unsigned factor = emitter::insDstNarrowingFactor(ins);
+
+    if (factor == 1)
+    {
+        return srcAttr;
+    }
+    return std::max(EA_16BYTE, EA_ATTR(EA_SIZE_IN_BYTES(srcAttr) / factor));
 }
 
 //--------------------------------------------------------------------

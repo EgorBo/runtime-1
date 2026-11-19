@@ -23306,6 +23306,13 @@ bool GenTree::isEmbeddedMaskingCompatible(Compiler*  comp,
     unsigned    maskBaseSize    = CodeGenInterface::instKMaskBaseSize(ins);
     unsigned    tgtMaskBaseSize = tgtMaskSize / (genTypeSize(simdType) / 16);
 
+    if (emitter::insDstNarrowingFactor(ins) != 1)
+    {
+        // The write mask applies to the narrower destination elements (and not to the zeroed upper ones),
+        // so it doesn't line up with a mask over elements of the mask base size.
+        return false;
+    }
+
     tgtSimdBaseType = TYP_UNDEF;
 
     if (maskBaseSize != tgtMaskBaseSize)
