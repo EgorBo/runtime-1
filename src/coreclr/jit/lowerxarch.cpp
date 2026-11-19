@@ -2710,70 +2710,78 @@ GenTree* Lowering::LowerHWIntrinsic(GenTreeHWIntrinsic* node)
             break;
         }
 
-        case NI_Vector_ToVector256Unsafe:
-        case NI_Vector_ToVector512Unsafe:
-        case NI_Vector_GetLower:
-        case NI_Vector_GetLower128:
-        {
-            // ToVector*Unsafe widens a narrower vector into a wider one where the upper bits are
-            // undefined; GetLower/GetLower128 narrows a wider vector by reading only its low bits.
-            // At the register level both are a no-op: the value already occupies the low bits of a
-            // register, so the node can be removed and the consumer read op1 directly, avoiding a
-            // register-to-register copy when the source is still live.
-            //
-            // This is only valid when the consumer is another GenTreeHWIntrinsic. Such a consumer
-            // reads op1 as a register operand at the intrinsic's own size (the widening case relies
-            // on the upper bits being undefined, which is exactly the contract of these nodes), and
-            // containment performs its own size check (operandSize >= expectedSize) so op1 can never
-            // be read from an undersized contained memory operand. Any other consumer (a store,
-            // return, or call argument) materializes a value of the node's own type and size via the
-            // ABI, so removing the node there would corrupt the copy size; keep the node for those.
-            //
-            // The one exception is an AVX2 gather index: the VSIB encoding (xmm vs ymm) is selected
-            // from the index operand's own width rather than the gather's size, so a width-changing
-            // reinterpret feeding it is load-bearing and must be kept.
-
-            LIR::Use use;
-            if (BlockRange().TryGetUse(node, &use) && use.User()->OperIsHWIntrinsic())
-            {
-                GenTreeHWIntrinsic* user        = use.User()->AsHWIntrinsic();
-                GenTree*            gatherIndex = nullptr;
-
-                switch (user->GetHWIntrinsicId())
-                {
-                    case NI_AVX2_GatherVector128:
-                    case NI_AVX2_GatherVector256:
-                        gatherIndex = user->Op(2);
-                        break;
-
-                    case NI_AVX2_GatherMaskVector128:
-                    case NI_AVX2_GatherMaskVector256:
-                        gatherIndex = user->Op(3);
-                        break;
-
-                    default:
-                        break;
-                }
-
-                if (gatherIndex != node)
-                {
-                    GenTree* op1  = node->Op(1);
-                    GenTree* next = node->gtNext;
-
-                    use.ReplaceWith(op1);
-                    BlockRange().Remove(node);
-                    return next;
-                }
-            }
-            break;
-        }
-
         default:
             break;
     }
 
     ContainCheckHWIntrinsic(node);
     return node->gtNext;
+}
+
+//----------------------------------------------------------------------------------------------
+// Lowering::RemoveSimdReinterpretOperands: Remove width-changing SIMD reinterprets that feed
+//    the given hardware intrinsic node.
+//
+//  Arguments:
+//     node - The hardware intrinsic node consuming the operands.
+//
+//  Notes:
+//     These reinterprets are no-ops at the register level, so a hwintrinsic consumer can read the
+//     operand directly at its own size. This must only happen after the consumer's own lowering, whose
+//     transforms rely on its operands having the expected types. Other consumers (stores, returns, call
+//     args) keep the node, as do AVX2 gather indices whose VSIB encoding depends on the operand width.
+//
+void Lowering::RemoveSimdReinterpretOperands(GenTreeHWIntrinsic* node)
+{
+    GenTree* gatherIndex = nullptr;
+
+    switch (node->GetHWIntrinsicId())
+    {
+        case NI_AVX2_GatherVector128:
+        case NI_AVX2_GatherVector256:
+            gatherIndex = node->Op(2);
+            break;
+
+        case NI_AVX2_GatherMaskVector128:
+        case NI_AVX2_GatherMaskVector256:
+            gatherIndex = node->Op(3);
+            break;
+
+        default:
+            break;
+    }
+
+    for (GenTree** use : node->UseEdges())
+    {
+        GenTree* op = *use;
+
+        if ((op == gatherIndex) || !op->OperIsHWIntrinsic())
+        {
+            continue;
+        }
+
+        switch (op->AsHWIntrinsic()->GetHWIntrinsicId())
+        {
+            case NI_Vector_ToVector256Unsafe:
+            case NI_Vector_ToVector512Unsafe:
+            case NI_Vector_GetLower:
+            case NI_Vector_GetLower128:
+            {
+                GenTree* src = op->AsHWIntrinsic()->Op(1);
+
+                // The reinterpret may have contained its operand; let the consumer decide instead.
+                src->ClearContained();
+                src->ClearRegOptional();
+
+                *use = src;
+                BlockRange().Remove(op);
+                break;
+            }
+
+            default:
+                break;
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------------------
@@ -9588,6 +9596,8 @@ void Lowering::ContainCheckHWIntrinsicAddr(GenTreeHWIntrinsic* node, GenTree* ad
 //
 void Lowering::ContainCheckHWIntrinsic(GenTreeHWIntrinsic* node)
 {
+    RemoveSimdReinterpretOperands(node);
+
     NamedIntrinsic      intrinsicId  = node->GetHWIntrinsicId();
     HWIntrinsicCategory category     = HWIntrinsicInfo::lookupCategory(intrinsicId);
     size_t              numArgs      = node->GetOperandCount();
