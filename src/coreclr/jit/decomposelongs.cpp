@@ -2340,7 +2340,8 @@ GenTree* DecomposeLongs::StoreNodeToVar(LIR::Use& use)
 //
 GenTree* DecomposeLongs::RepresentOpAsLocalVar(GenTree* op, GenTree* user, GenTree** edge)
 {
-    if (op->OperIs(GT_LCL_VAR))
+    // An address-exposed local may be redefined before the user, so callers can't re-read it.
+    if (op->OperIs(GT_LCL_VAR) && !m_compiler->lvaGetDesc(op->AsLclVar())->IsAddressExposed())
     {
         return op;
     }

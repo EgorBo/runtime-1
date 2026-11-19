@@ -265,7 +265,9 @@ private:
     GenTreeLclVar* ReplaceWithLclVar(LIR::Use& use, unsigned tempNum = BAD_VAR_NUM)
     {
         GenTree* oldUseNode = use.Def();
-        if (!oldUseNode->OperIs(GT_LCL_VAR) || (tempNum != BAD_VAR_NUM))
+        // An existing local is only reused if it can't be redefined before the user, i.e. it is not address exposed.
+        if (!oldUseNode->OperIs(GT_LCL_VAR) || m_compiler->lvaGetDesc(oldUseNode->AsLclVar())->IsAddressExposed() ||
+            (tempNum != BAD_VAR_NUM))
         {
             GenTree* store;
             use.ReplaceWithLclVar(m_compiler, tempNum, &store);

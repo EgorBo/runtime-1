@@ -3576,8 +3576,8 @@ GenTree* Lowering::LowerHWIntrinsicCndSel(GenTreeHWIntrinsic* node)
         // We cannot optimize, so produce unoptimized instructions
         assert(simdSize != 64);
 
-        // We'll need the mask twice
-        if (!op1->OperIs(GT_LCL_VAR))
+        // We'll need the mask twice, and the clone is evaluated after op2 and op3
+        if (!op1->OperIs(GT_LCL_VAR) || m_compiler->lvaGetDesc(op1->AsLclVar())->IsAddressExposed())
         {
             LIR::Use op1Use;
             LIR::Use::MakeDummyUse(newNodes, op1, &op1Use);
@@ -4850,7 +4850,9 @@ GenTree* Lowering::LowerHWIntrinsicGetElement(GenTreeHWIntrinsic* node)
     uint32_t elemSize = genTypeSize(simdBaseType);
     uint32_t count    = simdSize / elemSize;
 
-    if (op1->OperIs(GT_IND))
+    // The indir is evaluated at the GetElement, so nothing in between may write the memory it reads.
+    // Exception ordering is handled below.
+    if (op1->OperIs(GT_IND) && IsInvariantInRange(op1, node, GTF_EXCEPT))
     {
         // We want to optimize GetElement down to an Indir where possible as
         // this unlocks additional containment opportunities for various nodes
@@ -5034,7 +5036,7 @@ GenTree* Lowering::LowerHWIntrinsicGetElement(GenTreeHWIntrinsic* node)
     {
         // We will specially handle GetElement when op1 is already in memory
 
-        if (op1->OperIs(GT_LCL_VAR, GT_LCL_FLD))
+        if (op1->OperIs(GT_LCL_VAR, GT_LCL_FLD) && IsInvariantInRange(op1, node))
         {
             // We want to optimize GetElement down to a LclFld where possible as
             // this unlocks additional containment opportunities for various nodes
@@ -6262,7 +6264,10 @@ GenTree* Lowering::LowerHWIntrinsicToScalar(GenTreeHWIntrinsic* node)
 
     GenTree* op1 = node->Op(1);
 
-    if (IsContainableMemoryOp(op1) && (!varTypeIsLong(simdBaseType) || TargetArchitecture::Is64Bit))
+    // The fold below evaluates op1 at the ToScalar, which is not necessarily adjacent to it (e.g. for GetElement(op1,
+    // 0)).
+    if (IsContainableMemoryOp(op1) && (!varTypeIsLong(simdBaseType) || TargetArchitecture::Is64Bit) &&
+        IsInvariantInRange(op1, node))
     {
         // If op1 is already in memory, we'd like the consumer of ToScalar to be able to look
         // through to the memory directly. Early folding is preferable, as it unlocks additional
