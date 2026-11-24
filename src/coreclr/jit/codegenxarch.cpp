@@ -2214,6 +2214,10 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
             genFtnEntry(treeNode);
             break;
 
+        case GT_TLS_BASE:
+            genTlsBase(treeNode->AsVal());
+            break;
+
         case GT_NONLOCAL_JMP:
             genNonLocalJmp(treeNode->AsUnOp());
             break;
@@ -4203,6 +4207,28 @@ void CodeGen::genFtnEntry(GenTree* treeNode)
 {
     GetEmitter()->emitIns_R_L(INS_lea, EA_PTR_DSP_RELOC, GetEmitter()->emitGetFirstPrologIG(), treeNode->GetRegNum());
     genProduceReg(treeNode);
+}
+
+//------------------------------------------------------------------------
+// genTlsBase: Load thread-local storage base address into target register.
+//
+void CodeGen::genTlsBase(GenTreeVal* treeNode)
+{
+    if (TargetOS::IsWindows)
+    {
+#if TARGET_64BIT
+        GetEmitter()->emitIns_R_C(ins_Load(TYP_I_IMPL), EA_PTRSIZE, treeNode->GetRegNum(), FLD_GLOBAL_GS,
+                                  static_cast<int>(treeNode->gtVal1));
+#else
+        GetEmitter()->emitIns_R_C(ins_Load(TYP_I_IMPL), EA_PTRSIZE, treeNode->GetRegNum(), FLD_GLOBAL_FS,
+                                  static_cast<int>(treeNode->gtVal1));
+#endif
+        genProduceReg(treeNode);
+    }
+    else
+    {
+        unreached();
+    }
 }
 
 //------------------------------------------------------------------------

@@ -2769,6 +2769,195 @@ bool Lowering::LowerCallMemcmp(GenTreeCall* call, GenTree** next)
     return false;
 }
 
+#ifdef TARGET_ARM64
+//------------------------------------------------------------------------
+// TryPrepareAllocExpansion: Check if an allocation helper call can be
+// expanded inline in codegen, emit IR to materialize its alloc-context base,
+// and record compile-time sizing metadata.
+//
+GenTree* Lowering::TryPrepareAllocExpansion(GenTreeCall* call)
+{
+    if ((JitConfig.JitExpandAllocators() == 0) || m_compiler->IsAot() || !m_compiler->opts.OptimizationEnabled() ||
+        (m_compiler->compCodeOpt() == Compiler::SMALL_CODE) || call->IsTailCall() || !call->IsHelperCall())
+    {
+        return nullptr;
+    }
+
+    Compiler::AllocExpandInfo existingInfo;
+    if (m_compiler->TryGetAllocExpandInfo(call, &existingInfo))
+    {
+        return nullptr;
+    }
+
+    const CorInfoHelpFunc helper = call->GetHelperNum();
+    if ((helper != CORINFO_HELP_NEWSFAST) && (helper != CORINFO_HELP_NEWARR_1_PTR) &&
+        (helper != CORINFO_HELP_NEWARR_1_VC))
+    {
+        return nullptr;
+    }
+
+    const CORINFO_ALLOC_CONTEXT_INFO* acInfo = m_compiler->eeGetAllocContextInfo();
+    if (acInfo == nullptr)
+    {
+        return nullptr;
+    }
+
+    constexpr uint32_t LargeObjectSize = 85000;
+    constexpr uint32_t ObjHeaderSize   = TARGET_POINTER_SIZE;
+    constexpr uint32_t ObjectBaseSize  = ObjHeaderSize + SIZEOF__CORINFO_Object;
+    constexpr uint32_t MinObjectSize   = 3 * TARGET_POINTER_SIZE;
+    constexpr uint32_t SzArrayBaseSize = ObjHeaderSize + OFFSETOF__CORINFO_Array__data;
+
+    Compiler::AllocExpandInfo info = {};
+
+    if (helper == CORINFO_HELP_NEWSFAST)
+    {
+        if (call->gtArgs.CountUserArgs() != 1)
+        {
+            return nullptr;
+        }
+
+        info.slowHelper = CORINFO_HELP_NEWFAST;
+        info.isArray    = false;
+
+        CORINFO_CLASS_HANDLE clsHnd = (CORINFO_CLASS_HANDLE)call->compileTimeHelperArgumentHandle;
+        if (clsHnd != NO_CLASS_HANDLE)
+        {
+            uint32_t rawSize = 0;
+            if (m_compiler->info.compCompHnd->isValueClass(clsHnd))
+            {
+                rawSize = m_compiler->info.compCompHnd->getClassSize(clsHnd) + ObjectBaseSize;
+            }
+            else
+            {
+                rawSize = m_compiler->info.compCompHnd->getHeapClassSize(clsHnd) + ObjHeaderSize;
+            }
+
+            uint32_t baseSize = roundUp(max(rawSize, MinObjectSize), TARGET_POINTER_SIZE);
+            if (baseSize >= LargeObjectSize)
+            {
+                return nullptr;
+            }
+            info.constTotalSize = baseSize;
+        }
+    }
+    else
+    {
+        if (call->gtArgs.CountUserArgs() != 2)
+        {
+            return nullptr;
+        }
+
+        info.slowHelper = CORINFO_HELP_NEWARR_1_DIRECT;
+        info.isArray    = true;
+
+        if (helper == CORINFO_HELP_NEWARR_1_PTR)
+        {
+            info.componentSize = TARGET_POINTER_SIZE;
+        }
+        else
+        {
+            CORINFO_CLASS_HANDLE arrayClsHnd = (CORINFO_CLASS_HANDLE)call->compileTimeHelperArgumentHandle;
+            if (arrayClsHnd != NO_CLASS_HANDLE)
+            {
+                CORINFO_CLASS_HANDLE elemClsHnd  = NO_CLASS_HANDLE;
+                CorInfoType          elemCorType = m_compiler->info.compCompHnd->getChildType(arrayClsHnd, &elemClsHnd);
+                var_types            elemType    = JITtype2varType(elemCorType);
+                if (elemType == TYP_STRUCT)
+                {
+                    if (elemClsHnd != NO_CLASS_HANDLE)
+                    {
+                        info.componentSize = m_compiler->info.compCompHnd->getClassSize(elemClsHnd);
+                    }
+                }
+                else if (elemType != TYP_UNDEF)
+                {
+                    info.componentSize = genTypeSize(elemType);
+                }
+            }
+        }
+
+        if ((info.componentSize == 0) || (info.componentSize > 0xFFFF))
+        {
+            return nullptr;
+        }
+
+        GenTree* lengthNode = call->gtArgs.GetUserArgByIndex(1)->GetNode();
+        if (lengthNode->IsCnsIntOrI() && !lengthNode->IsIconHandle())
+        {
+            const ssize_t len = lengthNode->AsIntCon()->IconValue();
+            if ((len < 0) ||
+                (static_cast<uint64_t>(len) > (LargeObjectSize - SzArrayBaseSize - 8) / info.componentSize))
+            {
+                return nullptr;
+            }
+
+            const uint32_t totalSize =
+                roundUp(SzArrayBaseSize + static_cast<uint32_t>(len) * info.componentSize, TARGET_POINTER_SIZE);
+            if (totalSize >= LargeObjectSize)
+            {
+                return nullptr;
+            }
+            info.constTotalSize = totalSize;
+        }
+    }
+
+    // Build IR for the thread-local alloc-context base address using GT_TLS_BASE.
+    GenTree* acExpr = new (m_compiler, GT_TLS_BASE)
+        GenTreeVal(GT_TLS_BASE, TYP_I_IMPL, TargetOS::IsWindows ? acInfo->offsetOfThreadLocalStoragePointer : 0);
+
+    if (TargetOS::IsWindows)
+    {
+        GenTree* slotAddr = acExpr;
+        if (acInfo->tlsIndex != 0)
+        {
+            GenTree* slotOff =
+                m_compiler->gtNewIconNode(static_cast<ssize_t>(acInfo->tlsIndex) * TARGET_POINTER_SIZE, TYP_I_IMPL);
+            slotAddr = m_compiler->gtNewOperNode(GT_ADD, TYP_I_IMPL, slotAddr, slotOff);
+        }
+        acExpr = m_compiler->gtNewIndir(TYP_I_IMPL, slotAddr, GTF_IND_NONFAULTING | GTF_IND_INVARIANT);
+    }
+
+    const bool canFoldAcOffset =
+        emitter::emitIns_valid_imm_for_ldst_offset(static_cast<ssize_t>(acInfo->offsetOfAllocContext) +
+                                                       acInfo->offsetOfCombinedLimit,
+                                                   EA_8BYTE) &&
+        emitter::emitIns_valid_imm_for_ldst_offset(static_cast<ssize_t>(acInfo->offsetOfAllocContext) +
+                                                       acInfo->offsetOfAllocPtr,
+                                                   EA_8BYTE);
+
+    if (canFoldAcOffset)
+    {
+        info.acFieldBaseOffset = acInfo->offsetOfAllocContext;
+    }
+    else
+    {
+        if (acInfo->offsetOfAllocContext != 0)
+        {
+            GenTree* acOff = m_compiler->gtNewIconNode(static_cast<ssize_t>(acInfo->offsetOfAllocContext), TYP_I_IMPL);
+            acExpr         = m_compiler->gtNewOperNode(GT_ADD, TYP_I_IMPL, acExpr, acOff);
+        }
+        info.acFieldBaseOffset = 0;
+    }
+
+    LIR::Range acRange   = LIR::SeqTree(m_compiler, acExpr);
+    GenTree*   firstNode = acRange.FirstNode();
+    BlockRange().InsertBefore(call, std::move(acRange));
+
+    NewCallArg allocCtxNewArg = NewCallArg::Primitive(acExpr).WellKnown(WellKnownArg::AllocContext);
+    CallArg*   allocCtxArg    = call->gtArgs.PushBack(m_compiler, allocCtxNewArg);
+    allocCtxArg->SetEarlyNode(nullptr);
+    allocCtxArg->SetLateNode(acExpr);
+    call->gtArgs.PushLateBack(allocCtxArg);
+    allocCtxArg->AbiInfo =
+        ABIPassingInformation::FromSegmentByValue(m_compiler, ABIPassingSegment::InRegister(REG_ALLOC_CONTEXT, 0,
+                                                                                            TARGET_POINTER_SIZE));
+
+    m_compiler->GetAllocExpandInfoMap()->Set(call, info);
+    return firstNode;
+}
+#endif // TARGET_ARM64
+
 // do lowering steps for a call
 // this includes:
 //   - adding the placement nodes (either stack or register variety) for arguments
@@ -2858,6 +3047,13 @@ GenTree* Lowering::LowerCall(GenTree* node)
     if (call->IsHelperCall(CORINFO_HELP_MEMSET) && LowerCallMemset(call, &nextNode))
     {
         return nextNode;
+    }
+#endif
+
+#ifdef TARGET_ARM64
+    if (GenTree* newNode = TryPrepareAllocExpansion(call))
+    {
+        return newNode;
     }
 #endif
 
@@ -6363,6 +6559,14 @@ GenTree* Lowering::LowerDirectCall(GenTreeCall* call)
         if (call->IsHelperCall())
     {
         noway_assert(helperNum != CORINFO_HELP_UNDEF);
+
+#ifdef TARGET_ARM64
+        Compiler::AllocExpandInfo expandInfo;
+        if (m_compiler->TryGetAllocExpandInfo(call, &expandInfo))
+        {
+            helperNum = expandInfo.slowHelper;
+        }
+#endif
 
         CORINFO_CONST_LOOKUP addrInfo = m_compiler->compGetHelperFtn(helperNum);
         addr                          = addrInfo.addr;

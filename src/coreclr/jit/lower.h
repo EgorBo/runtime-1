@@ -152,7 +152,10 @@ private:
     bool     LowerCallMemmove(GenTreeCall* call, GenTree** next);
     bool     LowerCallMemcmp(GenTreeCall* call, GenTree** next);
     bool     LowerCallMemset(GenTreeCall* call, GenTree** next);
-    void     LowerCFGCall(GenTreeCall* call);
+#ifdef TARGET_ARM64
+    GenTree* TryPrepareAllocExpansion(GenTreeCall* call);
+#endif
+    void LowerCFGCall(GenTreeCall* call);
 #ifdef TARGET_WASM
     void AddWasmPortableEntryPointArg(GenTreeCall* call, GenTree* value);
     void LowerPEPCall(GenTreeCall* call);

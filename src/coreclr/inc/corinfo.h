@@ -1707,6 +1707,15 @@ struct CORINFO_THREAD_STATIC_INFO_NATIVEAOT
     CORINFO_CONST_LOOKUP tlsGetAddrFtnPtr;
 };
 
+struct CORINFO_ALLOC_CONTEXT_INFO
+{
+    uint32_t tlsIndex;                          // windows specific
+    uint32_t offsetOfThreadLocalStoragePointer; // windows specific
+    uint32_t offsetOfAllocContext;
+    uint32_t offsetOfAllocPtr;
+    uint32_t offsetOfCombinedLimit;
+};
+
 //----------------------------------------------------------------------------
 // Exception handling
 
@@ -2975,6 +2984,11 @@ public:
 
     CORINFO_VIRTUAL void getThreadLocalStaticInfo_NativeAOT(
             CORINFO_THREAD_STATIC_INFO_NATIVEAOT* pInfo
+            ) CORINFO_PURE;
+
+    // Returns thread-local allocation context offsets for inline allocator expansion, or false if unsupported.
+    CORINFO_VIRTUAL bool getAllocContextInfo(
+            CORINFO_ALLOC_CONTEXT_INFO* pInfo
             ) CORINFO_PURE;
 
     // Returns true iff "fldHnd" represents a static field.

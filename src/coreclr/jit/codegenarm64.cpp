@@ -3203,6 +3203,24 @@ void CodeGen::genFtnEntry(GenTree* treeNode)
 }
 
 //------------------------------------------------------------------------
+// genTlsBase: Load thread-local storage base address into target register.
+//
+void CodeGen::genTlsBase(GenTreeVal* treeNode)
+{
+    if (TargetOS::IsWindows)
+    {
+        GetEmitter()->emitIns_R_R_I(INS_ldr, EA_8BYTE, treeNode->GetRegNum(), REG_R18,
+                                    static_cast<ssize_t>(treeNode->gtVal1));
+    }
+    else
+    {
+        assert(treeNode->gtVal1 == 0);
+        GetEmitter()->emitIns_R(INS_mrs_tpid0, EA_8BYTE, treeNode->GetRegNum());
+    }
+    genProduceReg(treeNode);
+}
+
+//------------------------------------------------------------------------
 // genNonLocalJmp: Emit jump to the specified address.
 //
 // Parameters:
@@ -5566,6 +5584,206 @@ void CodeGen::genPoisonUnknownSizeVariable(int varNum, char poisonVal)
         // str p4, [x19, $index MUL VL]
         GetEmitter()->emitIns_S_R(INS_sve_str, EA_SCALABLE, REG_SCRATCH_P, varNum, 0);
     }
+}
+
+//------------------------------------------------------------------------
+// genExpandAllocatorCall: Emit inline fast-path allocation sequence wrapped
+// in a NoGC region, falling back to the slow helper on overflow or full AC.
+//
+void CodeGen::genExpandAllocatorCall(GenTreeCall*                     call,
+                                     EmitCallParams&                  params,
+                                     const Compiler::AllocExpandInfo& expandInfo)
+{
+    assert(params.callType == EC_FUNC_TOKEN);
+    assert(!params.isJump);
+    assert(genPendingCallLabel == nullptr);
+
+    const CORINFO_ALLOC_CONTEXT_INFO* acInfo = m_compiler->eeGetAllocContextInfo();
+    assert(acInfo != nullptr);
+
+    params.methHnd = m_compiler->eeFindHelper(expandInfo.slowHelper);
+
+    emitter*    emit      = GetEmitter();
+    BasicBlock* slowLabel = genCreateTempLabel();
+    BasicBlock* doneLabel = genCreateTempLabel();
+
+    // Defer slow path out-of-line when there are no EH regions or hot/cold split.
+    const bool deferSlowPath = (m_compiler->compHndBBtabCount == 0) && (m_compiler->fgFirstColdBlock == nullptr);
+
+    const regNumber regAc       = REG_ALLOC_CONTEXT;
+    const regNumber regLimit    = REG_R13;
+    const regNumber regAllocPtr = REG_R14;
+    const regNumber regNewPtr   = REG_R15;
+
+    constexpr uint32_t LargeObjectSize = 85000;
+    constexpr uint32_t SzArrayBaseSize = TARGET_POINTER_SIZE + OFFSETOF__CORINFO_Array__data;
+
+    // Bounds-check dynamic array length before entering the NoGC region.
+    if (expandInfo.isArray && (expandInfo.constTotalSize == 0))
+    {
+        assert(expandInfo.componentSize > 0);
+        uint32_t maxFastLen = (LargeObjectSize - SzArrayBaseSize - 8) / expandInfo.componentSize;
+        if (maxFastLen > 4095)
+        {
+            maxFastLen &= ~0xFFFu;
+        }
+        assert(emitter::emitIns_valid_imm_for_add(maxFastLen, EA_8BYTE));
+
+        emit->emitIns_R_I(INS_cmp, EA_8BYTE, REG_R1, static_cast<ssize_t>(maxFastLen));
+        emit->emitIns_J(INS_bhi, slowLabel);
+    }
+
+    // Fast path must be non-interruptible until alloc_ptr is published and x0 holds the new object.
+    emit->emitDisableGC();
+
+    const ssize_t acFieldBaseOffset = static_cast<ssize_t>(expandInfo.acFieldBaseOffset);
+
+    // Use separate 64-bit loads (with peephole disabled so they don't merge into 128-bit ldp,
+    // which causes store-to-load forwarding stalls against the 64-bit str to alloc_ptr).
+    emit->emitIns_R_R_I(INS_ldr, EA_8BYTE, regAllocPtr, regAc, acFieldBaseOffset + acInfo->offsetOfAllocPtr,
+                        INS_OPTS_NONE, INS_SCALABLE_OPTS_NONE, /* canPeephole */ false);
+    emit->emitIns_R_R_I(INS_ldr, EA_8BYTE, regLimit, regAc, acFieldBaseOffset + acInfo->offsetOfCombinedLimit,
+                        INS_OPTS_NONE, INS_SCALABLE_OPTS_NONE, /* canPeephole */ false);
+
+    if (expandInfo.constTotalSize != 0)
+    {
+        genInstrWithConstant(INS_add, EA_8BYTE, regNewPtr, regAllocPtr, static_cast<ssize_t>(expandInfo.constTotalSize),
+                             regNewPtr);
+    }
+    else if (!expandInfo.isArray)
+    {
+        // Dynamic MethodTable: load m_uBaseSize from [x0 + 4].
+        emit->emitIns_R_R_I(INS_ldr, EA_4BYTE, regNewPtr, REG_R0, 4);
+        emit->emitIns_R_R_R(INS_add, EA_8BYTE, regNewPtr, regAllocPtr, regNewPtr);
+    }
+    else
+    {
+        const uint32_t compSize = expandInfo.componentSize;
+        assert(compSize > 0);
+
+        if (isPow2(compSize))
+        {
+            const unsigned shift = genLog2(compSize);
+            if ((compSize % TARGET_POINTER_SIZE) == 0)
+            {
+                emit->emitIns_R_R_I(INS_lsl, EA_8BYTE, regNewPtr, REG_R1, shift);
+                emit->emitIns_R_R_I(INS_add, EA_8BYTE, regNewPtr, regNewPtr, SzArrayBaseSize);
+                emit->emitIns_R_R_R(INS_add, EA_8BYTE, regNewPtr, regAllocPtr, regNewPtr);
+            }
+            else
+            {
+                if (shift > 0)
+                {
+                    emit->emitIns_R_R_I(INS_lsl, EA_8BYTE, regNewPtr, REG_R1, shift);
+                    emit->emitIns_R_R_I(INS_add, EA_8BYTE, regNewPtr, regNewPtr, SzArrayBaseSize + 7);
+                }
+                else
+                {
+                    emit->emitIns_R_R_I(INS_add, EA_8BYTE, regNewPtr, REG_R1, SzArrayBaseSize + 7);
+                }
+                emit->emitIns_R_R_I(INS_and, EA_8BYTE, regNewPtr, regNewPtr, -8);
+                emit->emitIns_R_R_R(INS_add, EA_8BYTE, regNewPtr, regAllocPtr, regNewPtr);
+            }
+        }
+        else
+        {
+            instGen_Set_Reg_To_Imm(EA_4BYTE, regNewPtr, static_cast<ssize_t>(compSize));
+            emit->emitIns_R_R_R(INS_mul, EA_8BYTE, regNewPtr, REG_R1, regNewPtr);
+            if ((compSize % TARGET_POINTER_SIZE) == 0)
+            {
+                emit->emitIns_R_R_I(INS_add, EA_8BYTE, regNewPtr, regNewPtr, SzArrayBaseSize);
+            }
+            else
+            {
+                emit->emitIns_R_R_I(INS_add, EA_8BYTE, regNewPtr, regNewPtr, SzArrayBaseSize + 7);
+                emit->emitIns_R_R_I(INS_and, EA_8BYTE, regNewPtr, regNewPtr, -8);
+            }
+            emit->emitIns_R_R_R(INS_add, EA_8BYTE, regNewPtr, regAllocPtr, regNewPtr);
+        }
+    }
+
+    emit->emitIns_R_R(INS_cmp, EA_8BYTE, regNewPtr, regLimit);
+    emit->emitIns_J(INS_bhi, slowLabel);
+
+    // Publish alloc_ptr first (still inside NoGC) to shorten the loop-carried dependency on alloc_ptr.
+    emit->emitIns_R_R_I(INS_str, EA_8BYTE, regNewPtr, regAc, acFieldBaseOffset + acInfo->offsetOfAllocPtr);
+
+    emit->emitIns_R_R_I(INS_str, EA_8BYTE, REG_R0, regAllocPtr, 0);
+    if (expandInfo.isArray)
+    {
+        // m_NumComponents is 32-bit and the upper 32-bit padding in the zeroed AC is already zero.
+        emit->emitIns_R_R_I(INS_str, EA_4BYTE, REG_R1, regAllocPtr, OFFSETOF__CORINFO_Array__length);
+    }
+
+    emit->emitIns_Mov(INS_mov, EA_8BYTE, REG_INTRET, regAllocPtr, /* canSkip */ false);
+
+    if (deferSlowPath)
+    {
+        emit->emitEnableGC();
+
+        AllocSlowPathStub* stub          = new (m_compiler, CMK_Codegen) AllocSlowPathStub();
+        stub->next                       = nullptr;
+        stub->slowLabel                  = slowLabel;
+        stub->doneLabel                  = doneLabel;
+        stub->callParams                 = params;
+        stub->callParams.returnValueCall = nullptr;
+        VarSetOps::AssignNoCopy(m_compiler, stub->ptrVars, VarSetOps::UninitVal());
+        VarSetOps::Assign(m_compiler, stub->ptrVars, gcInfo.gcVarPtrSetCur);
+        stub->gcrefRegs = gcInfo.gcRegGCrefSetCur;
+        stub->byrefRegs = gcInfo.gcRegByrefSetCur;
+
+        if (m_allocSlowPathStubsTail == nullptr)
+        {
+            m_allocSlowPathStubsHead = stub;
+            m_allocSlowPathStubsTail = stub;
+        }
+        else
+        {
+            m_allocSlowPathStubsTail->next = stub;
+            m_allocSlowPathStubsTail       = stub;
+        }
+
+        regMaskTP doneGcrefRegs = gcInfo.gcRegGCrefSetCur;
+        if (!call->IsUnusedValue())
+        {
+            doneGcrefRegs |= RBM_INTRET;
+        }
+        genLogLabel(doneLabel);
+        doneLabel->bbEmitCookie = emit->emitAddLabel(gcInfo.gcVarPtrSetCur, doneGcrefRegs, gcInfo.gcRegByrefSetCur);
+    }
+    else
+    {
+        inst_JMP(EJ_jmp, doneLabel);
+        emit->emitEnableGC();
+
+        genDefineTempLabel(slowLabel);
+        genEmitCallWithCurrentGC(params);
+        genDefineInlineTempLabel(doneLabel);
+    }
+}
+
+//------------------------------------------------------------------------
+// genEmitDeferredAllocSlowPaths: Emit out-of-line slow-path call stubs
+// deferred by genExpandAllocatorCall.
+//
+void CodeGen::genEmitDeferredAllocSlowPaths()
+{
+    emitter* emit = GetEmitter();
+    for (AllocSlowPathStub* stub = m_allocSlowPathStubsHead; stub != nullptr; stub = stub->next)
+    {
+        stub->slowLabel->bbWeight = BB_ZERO_WEIGHT;
+        m_compiler->compCurBB     = stub->slowLabel;
+        genLogLabel(stub->slowLabel);
+        stub->slowLabel->bbEmitCookie = emit->emitAddLabel(stub->ptrVars, stub->gcrefRegs, stub->byrefRegs);
+        stub->callParams.ptrVars      = stub->ptrVars;
+        stub->callParams.gcrefRegs    = stub->gcrefRegs;
+        stub->callParams.byrefRegs    = stub->byrefRegs;
+        emit->emitIns_Call(stub->callParams);
+        inst_JMP(EJ_jmp, stub->doneLabel);
+    }
+    m_compiler->compCurBB    = nullptr;
+    m_allocSlowPathStubsHead = nullptr;
+    m_allocSlowPathStubsTail = nullptr;
 }
 
 #endif // TARGET_ARM64

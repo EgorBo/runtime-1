@@ -1282,6 +1282,9 @@ static void* GetTlsIndexObjectAddress()
 #elif !defined(TARGET_ANDROID) && defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
 
 extern "C" size_t GetThreadStaticsVariableOffset();
+#if defined(TARGET_ARM64) && !defined(TARGET_APPLE)
+extern "C" size_t GetRuntimeThreadLocalsVariableOffset();
+#endif
 
 #endif // !TARGET_ANDROID && TARGET_ARM64 || TARGET_LOONGARCH64 || TARGET_RISCV64
 #endif // TARGET_WINDOWS
@@ -1333,6 +1336,46 @@ void GetThreadLocalStaticBlocksInfo(CORINFO_THREAD_STATIC_BLOCKS_INFO* pInfo)
     pInfo->offsetOfThreadStaticBlocks = (uint32_t)(threadStaticBaseOffset + offsetof(ThreadLocalData, pNonCollectibleTlsArrayData));
     pInfo->offsetOfBaseOfThreadLocalData = (uint32_t)threadStaticBaseOffset;
 #endif // !TARGET_ANDROID
+}
+
+bool GetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    STANDARD_VM_CONTRACT;
+
+    memset(pInfo, 0, sizeof(*pInfo));
+
+#if defined(TARGET_ARM64) && (defined(TARGET_WINDOWS) || (defined(TARGET_UNIX) && !defined(TARGET_APPLE) && !defined(TARGET_ANDROID)))
+    if (!CanJITOptimizeTLSAccess())
+    {
+        return false;
+    }
+
+    size_t allocContextOffset = 0;
+#if defined(TARGET_WINDOWS)
+    pInfo->tlsIndex = _tls_index;
+    pInfo->offsetOfThreadLocalStoragePointer = offsetof(_TEB, ThreadLocalStoragePointer);
+    allocContextOffset = ThreadLocalOffset(&t_runtime_thread_locals) + offsetof(RuntimeThreadLocals, alloc_context);
+#else
+    allocContextOffset = GetRuntimeThreadLocalsVariableOffset() + offsetof(RuntimeThreadLocals, alloc_context);
+#ifdef _DEBUG
+    uint8_t* tp = nullptr;
+    __asm__("mrs %0, tpidr_el0" : "=r"(tp));
+    _ASSERTE(tp + allocContextOffset == reinterpret_cast<uint8_t*>(&t_runtime_thread_locals.alloc_context));
+#endif // _DEBUG
+#endif // TARGET_WINDOWS
+
+    if (allocContextOffset > UINT32_MAX)
+    {
+        return false;
+    }
+
+    pInfo->offsetOfAllocContext = static_cast<uint32_t>(allocContextOffset);
+    pInfo->offsetOfAllocPtr = static_cast<uint32_t>(offsetof(ee_alloc_context, m_GCAllocContext) + offsetof(gc_alloc_context, alloc_ptr));
+    pInfo->offsetOfCombinedLimit = static_cast<uint32_t>(offsetof(ee_alloc_context, m_CombinedLimit));
+    return true;
+#else
+    return false;
+#endif
 }
 #endif // !DACCESS_COMPILE
 

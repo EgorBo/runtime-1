@@ -3501,6 +3501,14 @@ namespace Internal.JitInterface
             // Implemented for JIT only for now.
         }
 
+#pragma warning disable CA1822 // Mark members as static
+        private bool getAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+#pragma warning restore CA1822 // Mark members as static
+        {
+            // Implemented for JIT only for now.
+            return false;
+        }
+
         private CORINFO_CLASS_STRUCT_* getFieldClass(CORINFO_FIELD_STRUCT_* field)
         {
             var fieldDesc = HandleToObject(field);

@@ -536,6 +536,10 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
             genFtnEntry(treeNode);
             break;
 
+        case GT_TLS_BASE:
+            genTlsBase(treeNode->AsVal());
+            break;
+
         case GT_NONLOCAL_JMP:
             genNonLocalJmp(treeNode->AsUnOp());
             break;
@@ -3541,7 +3545,17 @@ void CodeGen::genCallInstruction(GenTreeCall* call)
 #endif // TARGET_ARM
             {
                 params.callType = EC_FUNC_TOKEN;
-                genEmitCallWithCurrentGC(params);
+#ifdef TARGET_ARM64
+                Compiler::AllocExpandInfo expandInfo;
+                if (m_compiler->TryGetAllocExpandInfo(call, &expandInfo))
+                {
+                    genExpandAllocatorCall(call, params, expandInfo);
+                }
+                else
+#endif // TARGET_ARM64
+                {
+                    genEmitCallWithCurrentGC(params);
+                }
             }
         }
     }

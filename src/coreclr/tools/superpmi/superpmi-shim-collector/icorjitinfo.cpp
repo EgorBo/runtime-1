@@ -1124,6 +1124,14 @@ void interceptor_ICJI::getThreadLocalStaticInfo_NativeAOT(CORINFO_THREAD_STATIC_
     mc->recGetThreadLocalStaticInfo_NativeAOT(pInfo);
 }
 
+bool interceptor_ICJI::getAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    mc->cr->AddCall("getAllocContextInfo");
+    bool result = original_ICorJitInfo->getAllocContextInfo(pInfo);
+    mc->recGetAllocContextInfo(pInfo, result);
+    return result;
+}
+
 // Returns true iff "fldHnd" represents a static field.
 bool interceptor_ICJI::isFieldStatic(CORINFO_FIELD_HANDLE fldHnd)
 {

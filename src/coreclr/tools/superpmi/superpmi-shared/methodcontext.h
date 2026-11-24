@@ -500,6 +500,10 @@ public:
     void dmpGetThreadLocalStaticInfo_NativeAOT(DWORDLONG key, const Agnostic_GetThreadStaticInfo_NativeAOT& value);
     void repGetThreadLocalStaticInfo_NativeAOT(CORINFO_THREAD_STATIC_INFO_NATIVEAOT* pInfo);
 
+    void recGetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo, bool result);
+    void dmpGetAllocContextInfo(DWORD key, const Agnostic_GetAllocContextInfo& value);
+    bool repGetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo);
+
     void recEmbedMethodHandle(CORINFO_METHOD_HANDLE handle, void** ppIndirection, CORINFO_METHOD_HANDLE result);
     void dmpEmbedMethodHandle(DWORDLONG key, DLDL value);
     CORINFO_METHOD_HANDLE repEmbedMethodHandle(CORINFO_METHOD_HANDLE handle, void** ppIndirection);
@@ -1250,6 +1254,7 @@ enum mcPackets
     Packet_GetAwaitAwaiterInContinuationCall = 242,
     Packet_IsByRefLike = 243,
     Packet_IsSharedInst = 244,
+    Packet_GetAllocContextInfo = 245,
 };
 
 void SetDebugDumpVariables();

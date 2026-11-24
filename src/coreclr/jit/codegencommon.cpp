@@ -4801,8 +4801,12 @@ void CodeGen::genReserveEpilog(BasicBlock* block)
 
     JITDUMP("Reserving epilog IG for block " FMT_BB "\n", block->bbNum);
 
+    bool isLast = block->IsLast();
+#if defined(TARGET_ARM64)
+    isLast = isLast && !hasDeferredAllocSlowPaths();
+#endif
     GetEmitter()->emitCreatePlaceholderIG(IGPT_EPILOG, block, VarSetOps::MakeEmpty(m_compiler), gcInfo.gcRegGCrefSetCur,
-                                          gcInfo.gcRegByrefSetCur, block->IsLast());
+                                          gcInfo.gcRegByrefSetCur, isLast);
 }
 
 /*****************************************************************************

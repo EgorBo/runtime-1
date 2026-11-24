@@ -194,6 +194,10 @@
 #define REG_R2R_INDIRECT_PARAM          REG_R11
 #define RBM_R2R_INDIRECT_PARAM          RBM_R11
 
+// Expanded allocator TLS/alloc-context base pointer register
+#define REG_ALLOC_CONTEXT               REG_R12
+#define RBM_ALLOC_CONTEXT               RBM_R12
+
 // JMP Indirect call register
 #define REG_INDIRECT_CALL_TARGET_REG    REG_IP0
 

@@ -628,6 +628,9 @@ OPT_CONFIG_STRING(JitAsyncPreservedValueAnalysisRange, "JitAsyncPreservedValueAn
 // awaits.
 RELEASE_CONFIG_INTEGER(JitAsyncInlining, "JitAsyncInlining", 1)
 
+// Expand fast-path object and array allocators inline on Arm64.
+RELEASE_CONFIG_INTEGER(JitExpandAllocators, "JitExpandAllocators", 1)
+
 RELEASE_CONFIG_INTEGER(JitEnableOptRepeat, "JitEnableOptRepeat", 1) // If zero, do not allow JitOptRepeat
 RELEASE_CONFIG_METHODSET(JitOptRepeat, "JitOptRepeat")            // Runs optimizer multiple times on specified methods
 RELEASE_CONFIG_INTEGER(JitOptRepeatCount, "JitOptRepeatCount", 2) // Number of times to repeat opts when repeating

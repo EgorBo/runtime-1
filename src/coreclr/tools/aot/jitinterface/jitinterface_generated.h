@@ -112,6 +112,7 @@ struct JitInterfaceCallbacks
     uint32_t (* getThreadLocalFieldInfo)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_FIELD_HANDLE field, bool isGCtype);
     void (* getThreadLocalStaticBlocksInfo)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_THREAD_STATIC_BLOCKS_INFO* pInfo);
     void (* getThreadLocalStaticInfo_NativeAOT)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_THREAD_STATIC_INFO_NATIVEAOT* pInfo);
+    bool (* getAllocContextInfo)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_ALLOC_CONTEXT_INFO* pInfo);
     bool (* isFieldStatic)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_FIELD_HANDLE fldHnd);
     int (* getArrayOrStringLength)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_OBJECT_HANDLE objHnd);
     void (* getBoundaries)(void * thisHandle, CorInfoExceptionClass** ppException, CORINFO_METHOD_HANDLE ftn, unsigned int* cILOffsets, uint32_t** pILOffsets, ICorDebugInfo::BoundaryTypes* implicitBoundaries);
@@ -1191,6 +1192,15 @@ public:
     CorInfoExceptionClass* pException = nullptr;
     _callbacks->getThreadLocalStaticInfo_NativeAOT(_thisHandle, &pException, pInfo);
     if (pException != nullptr) throw pException;
+}
+
+    virtual bool getAllocContextInfo(
+          CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    CorInfoExceptionClass* pException = nullptr;
+    bool temp = _callbacks->getAllocContextInfo(_thisHandle, &pException, pInfo);
+    if (pException != nullptr) throw pException;
+    return temp;
 }
 
     virtual bool isFieldStatic(

@@ -523,6 +523,22 @@ LEAF_END GetThreadStaticsVariableOffset, _TEXT
 // ------------------------------------------------------------------
 
 // ------------------------------------------------------------------
+// size_t GetRuntimeThreadLocalsVariableOffset()
+
+// Helper to calculate the offset of native thread local variable `t_runtime_thread_locals` in TCB.
+LEAF_ENTRY GetRuntimeThreadLocalsVariableOffset, _TEXT
+        PROLOG_SAVE_REG_PAIR_INDEXED   fp, lr, -32
+        adrp    x0,     :tlsdesc:t_runtime_thread_locals
+        ldr     x1,     [x0, #:tlsdesc_lo12:t_runtime_thread_locals]
+        add     x0,     x0, :tlsdesc_lo12:t_runtime_thread_locals
+        .tlsdesccall    t_runtime_thread_locals
+        blr     x1
+        EPILOG_RESTORE_REG_PAIR_INDEXED fp, lr, 32
+        EPILOG_RETURN
+LEAF_END GetRuntimeThreadLocalsVariableOffset, _TEXT
+// ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
 // size_t GetTLSResolverAddress()
 
 // Helper to get the TLS resolver address. This will be then used to determine if we have a static or dynamic resolver.

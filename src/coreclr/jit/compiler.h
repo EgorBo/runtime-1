@@ -9742,6 +9742,40 @@ public:
 
     CORINFO_ASYNC_INFO* eeGetAsyncInfo();
 
+#if defined(TARGET_ARM64)
+    CORINFO_ALLOC_CONTEXT_INFO allocContextInfo;
+    bool                       allocContextInfoInitialized = false;
+    bool                       allocContextInfoValid       = false;
+
+    const CORINFO_ALLOC_CONTEXT_INFO* eeGetAllocContextInfo();
+
+    struct AllocExpandInfo
+    {
+        CorInfoHelpFunc slowHelper;
+        uint32_t        constTotalSize;
+        uint32_t        componentSize;
+        uint32_t        acFieldBaseOffset;
+        bool            isArray;
+    };
+
+    typedef JitHashTable<GenTreeCall*, JitPtrKeyFuncs<GenTreeCall>, AllocExpandInfo> AllocExpandInfoMap;
+    AllocExpandInfoMap*                                                              m_allocExpandInfoMap = nullptr;
+
+    AllocExpandInfoMap* GetAllocExpandInfoMap()
+    {
+        if (m_allocExpandInfoMap == nullptr)
+        {
+            m_allocExpandInfoMap = new (getAllocator(CMK_Codegen)) AllocExpandInfoMap(getAllocator(CMK_Codegen));
+        }
+        return m_allocExpandInfoMap;
+    }
+
+    bool TryGetAllocExpandInfo(GenTreeCall* call, AllocExpandInfo* pInfo) const
+    {
+        return (m_allocExpandInfoMap != nullptr) && m_allocExpandInfoMap->Lookup(call, pInfo);
+    }
+#endif // defined(TARGET_ARM64)
+
 #if defined(TARGET_WASM)
     CORINFO_WASM_WELLKNOWN_GLOBALS wasmWellKnownGlobals;
     bool                           wasmWellKnownGlobalsInitialized = false;

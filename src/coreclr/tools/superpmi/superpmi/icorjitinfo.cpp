@@ -917,6 +917,12 @@ void MyICJI::getThreadLocalStaticInfo_NativeAOT(CORINFO_THREAD_STATIC_INFO_NATIV
     jitInstance->mc->repGetThreadLocalStaticInfo_NativeAOT(pInfo);
 }
 
+bool MyICJI::getAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    jitInstance->mc->cr->AddCall("getAllocContextInfo");
+    return jitInstance->mc->repGetAllocContextInfo(pInfo);
+}
+
 // Returns true iff "fldHnd" represents a static field.
 bool MyICJI::isFieldStatic(CORINFO_FIELD_HANDLE fldHnd)
 {

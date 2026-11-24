@@ -376,6 +376,7 @@ void FreeTLSIndicesForLoaderAllocator(LoaderAllocator *pLoaderAllocator);
 void CleanupRetiredTLSIndices();
 void* GetThreadLocalStaticBase(TLSIndex index);
 void GetThreadLocalStaticBlocksInfo (CORINFO_THREAD_STATIC_BLOCKS_INFO* pInfo);
+bool GetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo);
 bool CanJITOptimizeTLSAccess();
 #else
 void EnumThreadMemoryRegions(ThreadLocalData* pThreadLocalData, CLRDataEnumMemoryFlags flags);

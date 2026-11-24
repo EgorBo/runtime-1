@@ -176,6 +176,19 @@ inline CORINFO_EE_INFO* Compiler::eeGetEEInfo()
     return &eeInfo;
 }
 
+#if defined(TARGET_ARM64)
+inline const CORINFO_ALLOC_CONTEXT_INFO* Compiler::eeGetAllocContextInfo()
+{
+    if (!allocContextInfoInitialized)
+    {
+        allocContextInfoValid       = info.compCompHnd->getAllocContextInfo(&allocContextInfo);
+        allocContextInfoInitialized = true;
+    }
+
+    return allocContextInfoValid ? &allocContextInfo : nullptr;
+}
+#endif // defined(TARGET_ARM64)
+
 inline CORINFO_ASYNC_INFO* Compiler::eeGetAsyncInfo()
 {
     if (!asyncInfoInitialized)

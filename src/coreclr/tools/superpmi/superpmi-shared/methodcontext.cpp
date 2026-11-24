@@ -3714,6 +3714,48 @@ void MethodContext::repGetThreadLocalStaticBlocksInfo(CORINFO_THREAD_STATIC_BLOC
     pInfo->offsetOfBaseOfThreadLocalData        = value.offsetOfBaseOfThreadLocalData;
 }
 
+void MethodContext::recGetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo, bool result)
+{
+    if (GetAllocContextInfo == nullptr)
+        GetAllocContextInfo = new LightWeightMap<DWORD, Agnostic_GetAllocContextInfo>();
+
+    Agnostic_GetAllocContextInfo value;
+    ZeroMemory(&value, sizeof(value));
+
+    value.tlsIndex                          = pInfo->tlsIndex;
+    value.offsetOfThreadLocalStoragePointer = pInfo->offsetOfThreadLocalStoragePointer;
+    value.offsetOfAllocContext              = pInfo->offsetOfAllocContext;
+    value.offsetOfAllocPtr                  = pInfo->offsetOfAllocPtr;
+    value.offsetOfCombinedLimit             = pInfo->offsetOfCombinedLimit;
+    value.result                            = result ? 1 : 0;
+
+    DWORD key = 0;
+    GetAllocContextInfo->Add(key, value);
+    DEBUG_REC(dmpGetAllocContextInfo(key, value));
+}
+
+void MethodContext::dmpGetAllocContextInfo(DWORD key, const Agnostic_GetAllocContextInfo& value)
+{
+    printf("GetAllocContextInfo key %u, tlsIndex-%u, offsetOfTLS-%u, offsetOfAC-%u, offsetOfPtr-%u, offsetOfLimit-%u, res-%u",
+           key, value.tlsIndex, value.offsetOfThreadLocalStoragePointer, value.offsetOfAllocContext,
+           value.offsetOfAllocPtr, value.offsetOfCombinedLimit, value.result);
+}
+
+bool MethodContext::repGetAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    DWORD                        key   = 0;
+    Agnostic_GetAllocContextInfo value = LookupByKeyOrMiss(GetAllocContextInfo, key, ": key %u", key);
+
+    DEBUG_REP(dmpGetAllocContextInfo(key, value));
+
+    pInfo->tlsIndex                          = value.tlsIndex;
+    pInfo->offsetOfThreadLocalStoragePointer = value.offsetOfThreadLocalStoragePointer;
+    pInfo->offsetOfAllocContext              = value.offsetOfAllocContext;
+    pInfo->offsetOfAllocPtr                  = value.offsetOfAllocPtr;
+    pInfo->offsetOfCombinedLimit             = value.offsetOfCombinedLimit;
+    return value.result != 0;
+}
+
 void MethodContext::recGetThreadLocalStaticInfo_NativeAOT(CORINFO_THREAD_STATIC_INFO_NATIVEAOT* pInfo)
 {
     if (GetThreadLocalStaticInfo_NativeAOT == nullptr)

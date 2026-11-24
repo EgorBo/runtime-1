@@ -693,6 +693,7 @@ int LinearScan::BuildNode(GenTree* tree)
         case GT_IL_OFFSET:
         case GT_RECORD_ASYNC_RESUME:
         case GT_ASYNC_RESUME_INFO:
+        case GT_TLS_BASE:
         case GT_LABEL:
         case GT_JCC:
         case GT_SETCC:

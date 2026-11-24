@@ -1739,9 +1739,10 @@ GenTree* ObjectAllocator::MorphAllocObjNodeIntoHelperCall(GenTreeAllocObj* alloc
 {
     assert(allocObj != nullptr);
 
-    GenTree*     arg                  = allocObj->gtGetOp1();
-    unsigned int helper               = allocObj->gtNewHelper;
-    bool         helperHasSideEffects = allocObj->gtHelperHasSideEffects;
+    GenTree*             arg                  = allocObj->gtGetOp1();
+    unsigned int         helper               = allocObj->gtNewHelper;
+    bool                 helperHasSideEffects = allocObj->gtHelperHasSideEffects;
+    CORINFO_CLASS_HANDLE clsHnd               = allocObj->gtAllocObjClsHnd;
 
 #ifdef FEATURE_READYTORUN
     CORINFO_CONST_LOOKUP entryPoint = allocObj->gtEntryPoint;
@@ -1753,6 +1754,7 @@ GenTree* ObjectAllocator::MorphAllocObjNodeIntoHelperCall(GenTreeAllocObj* alloc
 
     const bool morphArgs  = false;
     GenTree*   helperCall = m_compiler->fgMorphIntoHelperCall(allocObj, allocObj->gtNewHelper, morphArgs, arg);
+    helperCall->AsCall()->compileTimeHelperArgumentHandle = (CORINFO_GENERIC_HANDLE)clsHnd;
     if (helperHasSideEffects)
     {
         helperCall->AsCall()->gtCallMoreFlags |= GTF_CALL_M_ALLOC_SIDE_EFFECTS;

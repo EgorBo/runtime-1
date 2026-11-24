@@ -1288,6 +1288,15 @@ namespace Internal.JitInterface
         public uint offsetOfBaseOfThreadLocalData;
     };
 
+    public struct CORINFO_ALLOC_CONTEXT_INFO
+    {
+        public uint tlsIndex;
+        public uint offsetOfThreadLocalStoragePointer;
+        public uint offsetOfAllocContext;
+        public uint offsetOfAllocPtr;
+        public uint offsetOfCombinedLimit;
+    };
+
 
     public unsafe struct CORINFO_THREAD_STATIC_INFO_NATIVEAOT
     {

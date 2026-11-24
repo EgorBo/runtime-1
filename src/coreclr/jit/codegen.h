@@ -1219,6 +1219,7 @@ protected:
     void                 genTableBasedSwitch(GenTree* tree);
     void                 genAsyncResumeInfo(GenTreeVal* tree);
     void                 genFtnEntry(GenTree* tree);
+    void                 genTlsBase(GenTreeVal* tree);
     UNATIVE_OFFSET       genEmitAsyncResumeInfoTable(emitter::dataSection** dataSec);
     CORINFO_FIELD_HANDLE genEmitAsyncResumeInfo(unsigned stateNum);
 #if defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
@@ -1247,6 +1248,28 @@ protected:
     void genCodeForJumpCompare(GenTreeOpCC* tree);
     void genCompareImmAndJump(
         GenCondition::Code cond, regNumber reg, ssize_t compareImm, emitAttr size, BasicBlock* target);
+
+    struct AllocSlowPathStub
+    {
+        AllocSlowPathStub* next;
+        BasicBlock*        slowLabel;
+        BasicBlock*        doneLabel;
+        EmitCallParams     callParams;
+        VARSET_TP          ptrVars;
+        regMaskTP          gcrefRegs;
+        regMaskTP          byrefRegs;
+    };
+
+    AllocSlowPathStub* m_allocSlowPathStubsHead = nullptr;
+    AllocSlowPathStub* m_allocSlowPathStubsTail = nullptr;
+
+    bool hasDeferredAllocSlowPaths() const
+    {
+        return m_allocSlowPathStubsHead != nullptr;
+    }
+
+    void genExpandAllocatorCall(GenTreeCall* call, EmitCallParams& params, const Compiler::AllocExpandInfo& expandInfo);
+    void genEmitDeferredAllocSlowPaths();
     void genCodeForBfiz(GenTreeOp* tree);
     void genCodeForBfx(GenTreeBfm* tree);
 #endif // TARGET_ARM64

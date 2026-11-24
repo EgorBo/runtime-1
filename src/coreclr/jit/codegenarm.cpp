@@ -691,6 +691,11 @@ void CodeGen::genFtnEntry(GenTree* treeNode)
     NYI_ARM("GT_FTN_ENTRY is not supported on arm32");
 }
 
+void CodeGen::genTlsBase(GenTreeVal* treeNode)
+{
+    NYI_ARM("GT_TLS_BASE is not supported on arm32");
+}
+
 //------------------------------------------------------------------------
 // genGetInsForOper: Return instruction encoding of the operation tree.
 //

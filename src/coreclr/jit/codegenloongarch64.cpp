@@ -2045,6 +2045,16 @@ void CodeGen::genFtnEntry(GenTree* treeNode)
 }
 
 //------------------------------------------------------------------------
+// genTlsBase: Load thread-local storage base address into target register.
+//
+void CodeGen::genTlsBase(GenTreeVal* treeNode)
+{
+    assert(treeNode->gtVal1 == 0);
+    GetEmitter()->emitIns_R_R_I(INS_ori, EA_PTRSIZE, treeNode->GetRegNum(), REG_TP, 0);
+    genProduceReg(treeNode);
+}
+
+//------------------------------------------------------------------------
 // genNonLocalJmp: Emit jump to the specified address.
 //
 // Parameters:
@@ -4172,6 +4182,10 @@ void CodeGen::genCodeForTreeNode(GenTree* treeNode)
 
         case GT_FTN_ENTRY:
             genFtnEntry(treeNode);
+            break;
+
+        case GT_TLS_BASE:
+            genTlsBase(treeNode->AsVal());
             break;
 
         case GT_NONLOCAL_JMP:

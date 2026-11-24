@@ -1339,6 +1339,27 @@ void CEEInfo::getThreadLocalStaticBlocksInfo (CORINFO_THREAD_STATIC_BLOCKS_INFO*
     EE_TO_JIT_TRANSITION();
 }
 
+bool CEEInfo::getAllocContextInfo(CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+{
+    STANDARD_VM_CONTRACT;
+
+    bool result = false;
+
+    JIT_TO_EE_TRANSITION();
+    memset(pInfo, 0, sizeof(*pInfo));
+#ifdef FEATURE_MULTITHREADING
+    if (!TrackAllocationsEnabled() &&
+        !GCStress<cfg_alloc>::IsEnabled() &&
+        !LoggingOn(LF_GCALLOC, LL_INFO10))
+    {
+        result = GetAllocContextInfo(pInfo);
+    }
+#endif // FEATURE_MULTITHREADING
+    EE_TO_JIT_TRANSITION();
+
+    return result;
+}
+
 /*********************************************************************/
 void CEEInfo::getFieldInfo (CORINFO_RESOLVED_TOKEN * pResolvedToken,
                             CORINFO_METHOD_HANDLE  callerHandle,

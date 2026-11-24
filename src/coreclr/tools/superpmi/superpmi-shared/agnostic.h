@@ -597,6 +597,16 @@ struct Agnostic_GetThreadStaticInfo_NativeAOT
     Agnostic_CORINFO_CONST_LOOKUP tlsGetAddrFtnPtr;
 };
 
+struct Agnostic_GetAllocContextInfo
+{
+    DWORD tlsIndex;
+    DWORD offsetOfThreadLocalStoragePointer;
+    DWORD offsetOfAllocContext;
+    DWORD offsetOfAllocPtr;
+    DWORD offsetOfCombinedLimit;
+    DWORD result;
+};
+
 struct Agnostic_GetClassCtorInitializationInfo
 {
     Agnostic_CORINFO_CONST_LOOKUP addr;

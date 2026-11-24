@@ -226,6 +226,13 @@ void CodeGen::genCodeForFunclet(FuncInfoDsc* funcInfo)
     {
         genCodeForBlock(block);
     }
+
+#if defined(TARGET_ARM64)
+    if ((funcInfo->funKind == FUNC_ROOT) && hasDeferredAllocSlowPaths())
+    {
+        genEmitDeferredAllocSlowPaths();
+    }
+#endif
 }
 
 //------------------------------------------------------------------------

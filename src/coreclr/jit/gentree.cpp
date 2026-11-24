@@ -1601,6 +1601,12 @@ bool CallArgs::GetCustomRegister(Compiler* comp, CorInfoCallConvExtension cc, We
             *reg = REG_R2R_INDIRECT_PARAM;
             return true;
 
+#ifdef REG_ALLOC_CONTEXT
+        case WellKnownArg::AllocContext:
+            *reg = REG_ALLOC_CONTEXT;
+            return true;
+#endif
+
         case WellKnownArg::ValidateIndirectCallTarget:
             if (REG_VALIDATE_INDIRECT_CALL_ADDR != REG_ARG_0)
             {
@@ -2890,6 +2896,7 @@ AGAIN:
 
             case GT_ASYNC_RESUME_INFO:
             case GT_CONTINUATION_MEMBER_OFFSET:
+            case GT_TLS_BASE:
                 return op1->AsVal()->gtVal1 == op2->AsVal()->gtVal1;
 
             case GT_NOP:
@@ -11549,6 +11556,7 @@ GenTree* Compiler::gtCloneExpr(GenTree* tree)
             case GT_RECORD_ASYNC_RESUME:
             case GT_ASYNC_RESUME_INFO:
             case GT_CONTINUATION_MEMBER_OFFSET:
+            case GT_TLS_BASE:
                 copy = new (this, oper) GenTreeVal(oper, tree->gtType, tree->AsVal()->gtVal1);
                 goto DONE;
 
@@ -12303,6 +12311,7 @@ GenTreeUseEdgeIterator::GenTreeUseEdgeIterator(GenTree* node)
         case GT_ASYNC_CONTINUATION:
         case GT_ASYNC_RESUME_INFO:
         case GT_CONTINUATION_MEMBER_OFFSET:
+        case GT_TLS_BASE:
         case GT_LABEL:
         case GT_FTN_ADDR:
         case GT_FTN_ENTRY:
@@ -14596,6 +14605,13 @@ void Compiler::gtDispLeaf(GenTree* tree, IndentStack* indentStack)
         case GT_RECORD_ASYNC_RESUME:
         case GT_ASYNC_RESUME_INFO:
             printf(" state=%zu", tree->AsVal()->gtVal1);
+            break;
+
+        case GT_TLS_BASE:
+            if (tree->AsVal()->gtVal1 != 0)
+            {
+                printf(" offset=0x%zx", tree->AsVal()->gtVal1);
+            }
             break;
 
         case GT_JCC:

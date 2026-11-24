@@ -121,6 +121,7 @@ namespace Internal.JitInterface
                 s_callbacks.getThreadLocalFieldInfo = &_getThreadLocalFieldInfo;
                 s_callbacks.getThreadLocalStaticBlocksInfo = &_getThreadLocalStaticBlocksInfo;
                 s_callbacks.getThreadLocalStaticInfo_NativeAOT = &_getThreadLocalStaticInfo_NativeAOT;
+                s_callbacks.getAllocContextInfo = &_getAllocContextInfo;
                 s_callbacks.isFieldStatic = &_isFieldStatic;
                 s_callbacks.getArrayOrStringLength = &_getArrayOrStringLength;
                 s_callbacks.getBoundaries = &_getBoundaries;
@@ -307,6 +308,7 @@ namespace Internal.JitInterface
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_FIELD_STRUCT_*, byte, uint> getThreadLocalFieldInfo;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_THREAD_STATIC_BLOCKS_INFO*, void> getThreadLocalStaticBlocksInfo;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_THREAD_STATIC_INFO_NATIVEAOT*, void> getThreadLocalStaticInfo_NativeAOT;
+            public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_ALLOC_CONTEXT_INFO*, byte> getAllocContextInfo;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_FIELD_STRUCT_*, byte> isFieldStatic;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_OBJECT_STRUCT_*, int> getArrayOrStringLength;
             public delegate* unmanaged<IntPtr, IntPtr*, CORINFO_METHOD_STRUCT_*, uint*, uint**, BoundaryTypes*, void> getBoundaries;
@@ -1891,6 +1893,21 @@ namespace Internal.JitInterface
             catch (Exception ex)
             {
                 *ppException = _this.AllocException(ex);
+            }
+        }
+
+        [UnmanagedCallersOnly]
+        private static byte _getAllocContextInfo(IntPtr thisHandle, IntPtr* ppException, CORINFO_ALLOC_CONTEXT_INFO* pInfo)
+        {
+            var _this = GetThis(thisHandle);
+            try
+            {
+                return _this.getAllocContextInfo(pInfo) ? (byte)1 : (byte)0;
+            }
+            catch (Exception ex)
+            {
+                *ppException = _this.AllocException(ex);
+                return default;
             }
         }
 
